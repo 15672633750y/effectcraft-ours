@@ -47,37 +47,45 @@ fn render(cx: &EffectCtx, mut buf: Buf) -> Buf {
     let tint = cx.params.color("tint");
     let seed = cx.seed;
 
-    // Classic three-strip dyes, fixed: cyan, magenta and yellow transmittances.
-    let dye_r = [0.92f32, 0.96, 1.00];
-    let dye_g = [1.00f32, 0.94, 0.97];
-    let dye_b = [1.00f32, 0.97, 0.88];
-
     buf.img.data.par_iter_mut().enumerate().for_each(|(i, px)| {
         let (c, a) = unpremul(*px);
         if a <= 0.0 {
             return;
         }
-        let dr = (1.0 - c[0]).clamp(0.0, 1.0);
-        let dg = (1.0 - c[1]).clamp(0.0, 1.0);
-        let db = (1.0 - c[2]).clamp(0.0, 1.0);
+        let l = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+        // Three-strip separation: each channel keeps its own hue but is pulled apart a little,
+        // the way the three dye layers exaggerate the primaries.
+        let sep = 0.45f32;
         let mut o = [0.0f32; 3];
         for k in 0..3 {
-            o[k] = dye_r[k].clamp(0.0001, 1.0).powf(dr)
-                * dye_g[k].clamp(0.0001, 1.0).powf(dg)
-                * dye_b[k].clamp(0.0001, 1.0).powf(db);
+            o[k] = (l + (c[k] - l) * (1.0 + sep)).clamp(0.0, 1.0);
         }
-        let l = 0.2126 * o[0] + 0.7152 * o[1] + 0.0722 * o[2];
+        // Brightness.
         for k in 0..3 {
-            let mut v = (o[k] * brightness).clamp(0.0, 1.0);
-            v = (l + (v - l) * saturation).clamp(0.0, 1.0);
-            // Offset Darks: negative lifts the darks, positive crushes them.
-            v = if offset_darks >= 0.0 { v * (1.0 - offset_darks * 0.5) } else { v + (-offset_darks) * 0.5 * (1.0 - v) };
-            v = (v * tint[k]).clamp(0.0, 1.0);
+            o[k] = (o[k] * brightness).clamp(0.0, 1.0);
+        }
+        // Saturation around the (new) luminance.
+        let l2 = 0.2126 * o[0] + 0.7152 * o[1] + 0.0722 * o[2];
+        for k in 0..3 {
+            o[k] = (l2 + (o[k] - l2) * saturation).clamp(0.0, 1.0);
+        }
+        // Offset Darks: positive crushes the blacks, negative lifts them.
+        if offset_darks != 0.0 {
+            for k in 0..3 {
+                o[k] = if offset_darks > 0.0 {
+                    (o[k] * (1.0 - offset_darks * 0.6)).clamp(0.0, 1.0)
+                } else {
+                    (o[k] + (-offset_darks) * 0.6).clamp(0.0, 1.0)
+                };
+            }
+        }
+        // Tint and grain.
+        for k in 0..3 {
+            o[k] = (o[k] * tint[k]).clamp(0.0, 1.0);
             if grain > 0.0 {
                 let g = (hash((i as u32).wrapping_add(seed)) - 0.5) * grain;
-                v = (v + g).clamp(0.0, 1.0);
+                o[k] = (o[k] + g).clamp(0.0, 1.0);
             }
-            o[k] = v;
         }
         let mixed = [c[0] + (o[0] - c[0]) * amount, c[1] + (o[1] - c[1]) * amount, c[2] + (o[2] - c[2]) * amount];
         *px = premul(mixed, a);

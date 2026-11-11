@@ -13,8 +13,12 @@ MARKER = "EFFECTCRAFT_OURS_PROP_NAMES_ZH_V1"
 
 MODULE = r'''//! Chinese display names for the common transform properties.
 
-/// The Chinese label for a property's stored English name (falls back to the English name).
-pub fn name(en: &str) -> &str {
+/// The Chinese label for a property's stored English name, but only inside the transform
+/// groups: effect parameters keep their English names.
+pub fn name<'a>(en: &'a str, group: &str) -> &'a str {
+    if !matches!(group, "Transform" | "Layer Transform" | "Group") {
+        return en;
+    }
     match en {
         "Transform" => "变换",
         "Layer Transform" => "图层变换",
@@ -59,10 +63,8 @@ def main() -> None:
     targets = [
         ("crates/ui-egui/src/panels/effect_controls/rows.rs",
          "pos2(swr.max.x + 6.0, cy), Align2::LEFT_CENTER, &prop.name, Tokens::ui(12.0)",
-         "pos2(swr.max.x + 6.0, cy), Align2::LEFT_CENTER, crate::i18n::prop::name(&prop.name), Tokens::ui(12.0)"),
-        ("crates/ui-egui/src/panels/timeline.rs",
-         "Align2::LEFT_CENTER, &prop.name, Tokens::ui(11.5)",
-         "Align2::LEFT_CENTER, crate::i18n::prop::name(&prop.name), Tokens::ui(11.5)"),
+         "pos2(swr.max.x + 6.0, cy), Align2::LEFT_CENTER, crate::i18n::prop::name(&prop.name, &group.name), Tokens::ui(12.0)"),
+
     ]
     for rel, old, new in targets:
         p = root / rel

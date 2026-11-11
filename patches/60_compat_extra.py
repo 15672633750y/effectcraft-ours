@@ -72,6 +72,9 @@ fn render_vignette(cx: &EffectCtx, mut buf: Buf) -> Buf {
     let opacity = cx.params.f("opacity").clamp(0.0, 1.0) as f32;
     let iw = buf.img.width.max(1) as usize;
     let ih = buf.img.height.max(1) as usize;
+    // Centre is in layer pixels; the radii are relative, so normalise by half the layer size.
+    let half_w = (cx.layer_size[0].max(1.0) as f32) * 0.5;
+    let half_h = (cx.layer_size[1].max(1.0) as f32) * 0.5;
     let cx0 = center[0] as f32;
     let cy0 = center[1] as f32;
     let (sin_r, cos_r) = rotate.sin_cos();
@@ -85,7 +88,7 @@ fn render_vignette(cx: &EffectCtx, mut buf: Buf) -> Buf {
         let y = (i / iw) as f32 - cy0;
         let rx = x * cos_r - y * sin_r;
         let ry = x * sin_r + y * cos_r;
-        let d = ((rx / rel_w).powi(2) + (ry / rel_h).powi(2)).sqrt();
+        let d = ((rx / (rel_w * half_w)).powi(2) + (ry / (rel_h * half_h)).powi(2)).sqrt();
         // 1 inside the ellipse, falling to 0 across the soft edge.
         let t = ((d - radius) / softness).clamp(0.0, 1.0);
         let fall = 1.0 - t * t * (3.0 - 2.0 * t);
