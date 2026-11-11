@@ -19,7 +19,7 @@ use effectcraft_project::ParamUi;
 use rayon::prelude::*;
 
 use crate::util::{premul, unpremul};
-use crate::{Buf, EffectCtx, EffectSpec, col, num, p, slider};
+use crate::{Buf, EffectCtx, EffectSpec, col, num, p, popup, slider};
 
 const CATEGORY: &str = "Color Correction";
 
