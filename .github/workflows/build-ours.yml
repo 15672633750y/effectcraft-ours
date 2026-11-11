@@ -56,7 +56,7 @@ jobs:
           if [ -d ours/patches ]; then
             for p in ours/patches/*.py; do
               [ -e "$p" ] || continue
-              EFFECTCRAFT_DIR="$GITHUB_WORKSPACE/artcraft/source/effectcraft" python3 "$p"
+              EFFECTCRAFT_DIR="$GITHUB_WORKSPACE/artcraft/source/effectcraft" ARTCRAFT_DIR="$GITHUB_WORKSPACE/artcraft" python3 "$p"
             done
           else
             echo "No patches directory; building vanilla upstream."
