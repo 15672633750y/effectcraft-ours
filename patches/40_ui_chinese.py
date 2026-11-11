@@ -16,6 +16,16 @@ ROWS = [
     ("Layer Name", "图层名称"),
     ("All", "全部"),
     ("None", "无"),
+    ("Layer Transform", "图层变换"),
+    ("Transform", "变换"),
+    ("Contents", "内容"),
+    ("Add:", "添加："),
+    ("Layer Name", "图层名称"),
+    ("In Point", "入点"),
+    ("Out Point", "出点"),
+    ("Duration", "持续时间"),
+    ("Stretch", "伸缩"),
+
 ]
 
 EDITS = [
