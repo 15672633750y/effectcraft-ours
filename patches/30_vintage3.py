@@ -54,8 +54,8 @@ fn render(cx: &EffectCtx, mut buf: Buf) -> Buf {
     let sep = 0.15 + density * 0.85;
     // Saturation and brightness are blended toward their extremes instead of multiplied, so the
     // whole slider travel is smooth (1.0 = untouched).
-    let sat_w = ((saturation - 1.0) / 9.0).clamp(-1.0, 1.0);
-    let bright_w = ((brightness - 1.0) / 9.0).clamp(-1.0, 1.0);
+    let sat_w = ((saturation - 1.0) / 99.0).clamp(-1.0, 1.0);
+    let bright_w = ((brightness - 1.0) / 99.0).clamp(-1.0, 1.0);
 
     buf.img.data.par_iter_mut().enumerate().for_each(|(i, px)| {
         let (c, a) = unpremul(*px);

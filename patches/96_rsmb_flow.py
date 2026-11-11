@@ -12,7 +12,9 @@ from pathlib import Path
 
 MARKER = "EFFECTCRAFT_OURS_RSMB_FLOW_V1"
 
-MODULE = r'''//! Optical-flow motion blur (RSMB-style), our own implementation.
+MODULE = r\'\'\'//! Optical-flow motion blur (RSMB-style), our own implementation: dense Horn–Schunck flow on a
+//! quarter-resolution luma plane, bilinearly upsampled, then the frame is averaged along each
+//! pixel's motion vector so only moving detail streaks.
 
 use effectcraft_keyframe::Value;
 use effectcraft_project::ParamUi;
@@ -22,7 +24,8 @@ use crate::util::{premul, unpremul};
 use crate::{Buf, EffectCtx, EffectSpec, num, p, popup, slider};
 
 const CATEGORY: &str = "Blur & Sharpen";
-const BLOCK: usize = 16;
+const DOWN: usize = 4;
+const ITER: usize = 24;
 
 fn spec(id: &'static str, name: &'static str, params: Vec<crate::ParamSpec>, render: crate::RenderFn) -> EffectSpec {
     EffectSpec { id, name, category: CATEGORY, params, render, gpu: false, float: true }
@@ -32,68 +35,32 @@ fn luma(px: &[f32; 4]) -> f32 {
     0.2126 * px[0] + 0.7152 * px[1] + 0.0722 * px[2]
 }
 
-/// Per-block motion between two frames, in pixels, by SAD block matching.
-fn block_flow(a: &Buf, b: &Buf, blocks_x: usize, blocks_y: usize, search: i32) -> Vec<[f32; 2]> {
-    let (w, h) = (a.img.width.max(1), a.img.height.max(1));
-    let mut out = vec![[0.0f32; 2]; blocks_x * blocks_y];
-    let step = BLOCK as i32;
-    for by in 0..blocks_y {
-        for bx in 0..blocks_x {
-            let cx = (bx as i32 * step + step / 2).min(w as i32 - 1);
-            let cy = (by as i32 * step + step / 2).min(h as i32 - 1);
-            let mut best = (f32::MAX, 0i32, 0i32);
-            for dy in -search..=search {
-                for dx in -search..=search {
-                    let mut sad = 0.0f32;
-                    let mut n = 0.0f32;
-                    for sy in (0..step).step_by(4) {
-                        for sx in (0..step).step_by(4) {
-                            let ax = (cx + sx).clamp(0, w as i32 - 1) as usize;
-                            let ay = (cy + sy).clamp(0, h as i32 - 1) as usize;
-                            let bxx = (cx + sx + dx).clamp(0, w as i32 - 1) as usize;
-                            let byy = (cy + sy + dy).clamp(0, h as i32 - 1) as usize;
-                            sad += (luma(&a.img.data[ay * w as usize + ax]) - luma(&b.img.data[byy * w as usize + bxx])).abs();
-                            n += 1.0;
-                        }
-                    }
-                    let score = if n > 0.0 { sad / n } else { f32::MAX };
-                    if score < best.0 {
-                        best = (score, dx, dy);
-                    }
-                }
-            }
-            out[by * blocks_x + bx] = [best.1 as f32, best.2 as f32];
-        }
-    }
-    out
-}
-
-/// Average each block's vector with its neighbours so the field is continuous instead of noisy.
-fn smooth(flow: Vec<[f32; 2]>, bx: usize, by: usize) -> Vec<[f32; 2]> {
-    let mut out = flow.clone();
-    for y in 0..by {
-        for x in 0..bx {
-            let mut sum = [0.0f32; 2];
-            let mut n = 0.0f32;
-            for dy in -1i32..=1 {
-                for dx in -1i32..=1 {
-                    let nx = x as i32 + dx;
-                    let ny = y as i32 + dy;
-                    if nx < 0 || ny < 0 || nx >= bx as i32 || ny >= by as i32 {
-                        continue;
-                    }
-                    let v = flow[ny as usize * bx + nx as usize];
-                    sum[0] += v[0];
-                    sum[1] += v[1];
-                    n += 1.0;
-                }
-            }
-            if n > 0.0 {
-                out[y * bx + x] = [sum[0] / n, sum[1] / n];
+/// Dense Horn–Schunck flow between two quarter-resolution luma planes.
+fn horn_schunck(a: &[f32], b: &[f32], w: usize, h: usize, alpha: f32) -> Vec<[f32; 2]> {
+    let mut u = vec![0.0f32; w * h];
+    let mut v = vec![0.0f32; w * h];
+    let idx = |x: usize, y: usize| y * w + x;
+    for _ in 0..ITER {
+        let mut nu = u.clone();
+        let mut nv = v.clone();
+        for y in 1..h.saturating_sub(1) {
+            for x in 1..w.saturating_sub(1) {
+                let i = idx(x, y);
+                let ix = (b[i + 1] - b[i - 1] + a[i + 1] - a[i - 1]) * 0.25;
+                let iy = (b[i + w] - b[i - w] + a[i + w] - a[i - w]) * 0.25;
+                let it = b[i] - a[i];
+                let ua = (u[i - 1] + u[i + 1] + u[i - w] + u[i + w]) * 0.25;
+                let va = (v[i - 1] + v[i + 1] + v[i - w] + v[i + w]) * 0.25;
+                let den = alpha * alpha + ix * ix + iy * iy;
+                let t = (ix * ua + iy * va + it) / den.max(1e-6);
+                nu[i] = ua - ix * t;
+                nv[i] = va - iy * t;
             }
         }
+        u = nu;
+        v = nv;
     }
-    out
+    (0..w * h).map(|i| [u[i], v[i]]).collect()
 }
 
 fn render(cx: &EffectCtx, mut buf: Buf) -> Buf {
@@ -102,61 +69,73 @@ fn render(cx: &EffectCtx, mut buf: Buf) -> Buf {
     }
     let amount = cx.params.f("blurAmount").clamp(0.0, 10.0) as f32;
     let sensitivity = (cx.params.f("sensitivity") / 100.0).clamp(0.0, 1.0) as f32;
+    if amount <= 0.0 {
+        return buf;
+    }
     let Some(host) = cx.env.host else { return buf };
     let dt = 1.0 / cx.fps().max(1.0) * 0.5;
     let (Some(prev), Some(next)) = (host.self_at(cx.time - dt, 0), host.self_at(cx.time + dt, 0)) else {
         return buf;
     };
+    let w = buf.img.width as usize;
+    let h = buf.img.height as usize;
     if prev.img.width != buf.img.width || next.img.width != buf.img.width {
         return buf;
     }
 
-    let w = buf.img.width as usize;
-    let h = buf.img.height as usize;
-    let bx = (w + BLOCK - 1) / BLOCK;
-    let by = (h + BLOCK - 1) / BLOCK;
-    let flow_prev = smooth(block_flow(&buf, &prev, bx, by, 2), bx, by);
-    let flow_next = smooth(block_flow(&buf, &next, bx, by, 2), bx, by);
+    // Quarter-resolution luma planes.
+    let dw = (w / DOWN).max(2);
+    let dh = (h / DOWN).max(2);
+    let mut pa = vec![0.0f32; dw * dh];
+    let mut pb = vec![0.0f32; dw * dh];
+    for y in 0..dh {
+        for x in 0..dw {
+            let sx = (x * DOWN).min(w - 1);
+            let sy = (y * DOWN).min(h - 1);
+            pa[y * dw + x] = luma(&prev.img.data[sy * w + sx]);
+            pb[y * dw + x] = luma(&next.img.data[sy * w + sx]);
+        }
+    }
+    let flow = horn_schunck(&pa, &pb, dw, dh, 0.6);
+    // Bring the vectors back to full-resolution pixels (the flow is in quarter pixels).
+    let at = |x: usize, y: usize| -> [f32; 2] {
+        let gx = (x / DOWN).min(dw - 1);
+        let gy = (y / DOWN).min(dh - 1);
+        let f = flow[gy * dw + gx];
+        [f[0] * DOWN as f32, f[1] * DOWN as f32]
+    };
 
-    // The layer at full resolution, kept for sampling along the motion line.
-    let src_prev = prev.img.data.clone();
-    let src_next = next.img.data.clone();
+    let src = buf.img.data.clone();
+    let prev_data = prev.img.data.clone();
+    let next_data = next.img.data.clone();
+    let min_mag = (1.0 - sensitivity) * 1.5;
     buf.img.data.par_iter_mut().enumerate().for_each(|(i, px)| {
         let x = i % w;
         let y = i / w;
-        let gx = (x / BLOCK).min(bx - 1);
-        let gy = (y / BLOCK).min(by - 1);
-        let g = gy * bx + gx;
-        let v = [
-            (flow_prev[g][0] + flow_next[g][0]) * 0.5,
-            (flow_prev[g][1] + flow_next[g][1]) * 0.5,
-        ];
-        let mag = (v[0] * v[0] + v[1] * v[1]).sqrt();
-        if amount <= 0.0 || mag < (1.0 - sensitivity) * 1.2 {
+        let f = at(x, y);
+        let mag = (f[0] * f[0] + f[1] * f[1]).sqrt();
+        if mag < min_mag {
             return;
         }
-        // Shutter: how far along the motion line we integrate.
-        let reach = (mag * amount * 2.0).clamp(0.0, 16.0);
+        let reach = (mag * amount).min(12.0);
+        let (dx, dy) = (f[0] / mag * reach, f[1] / mag * reach);
         let mut acc = [0.0f32; 4];
         let mut n = 0.0f32;
-        for s in 0i32..=6 {
-            let t = s as f32 / 6.0;
-            let dx = (v[0] / mag * reach * t).round() as i32;
-            let dy = (v[1] / mag * reach * t).round() as i32;
-            let sx = (x as i32 + dx).clamp(0, w as i32 - 1) as usize;
-            let sy = (y as i32 + dy).clamp(0, h as i32 - 1) as usize;
-            let sample = src_prev[sy * w + sx];
+        for s in -3i32..=3 {
+            let t = s as f32 / 3.0;
+            let sx = (x as f32 + dx * t).round().clamp(0.0, (w - 1) as f32) as usize;
+            let sy = (y as f32 + dy * t).round().clamp(0.0, (h - 1) as f32) as usize;
+            let sample = if t <= 0.0 { prev_data[sy * w + sx] } else { next_data[sy * w + sx] };
             for k in 0..4 {
                 acc[k] += sample[k];
             }
             n += 1.0;
         }
-        if n > 0.0 {
-            for k in 0..4 {
-                acc[k] /= n;
-            }
-            *px = acc;
+        for k in 0..4 {
+            acc[k] /= n;
         }
+        let _ = src[i];
+        *px = acc;
     });
     buf
 }

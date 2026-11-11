@@ -28,9 +28,9 @@ fn spec(id: &'static str, name: &'static str, params: Vec<crate::ParamSpec>, ren
 fn render_two_strip(cx: &EffectCtx, mut buf: Buf) -> Buf {
     let amount = cx.params.f("amount").clamp(0.0, 1.0) as f32;
     let brightness = cx.params.f("brightness").max(0.0) as f32;
-    let bright_w = ((brightness - 1.0) / 9.0).clamp(-1.0, 1.0);
+    let bright_w = ((brightness - 1.0) / 99.0).clamp(-1.0, 1.0);
     let saturation = cx.params.f("saturation").max(0.0) as f32;
-    let sat_w = ((saturation - 1.0) / 9.0).clamp(-1.0, 1.0);
+    let sat_w = ((saturation - 1.0) / 99.0).clamp(-1.0, 1.0);
     let offset_darks = (cx.params.f("offsetDarks").clamp(-100.0, 100.0) / 100.0) as f32;
     let tint = cx.params.color("tint");
 

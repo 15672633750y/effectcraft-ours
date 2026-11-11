@@ -24,11 +24,11 @@ def main() -> None:
     if MARKER in src:
         print("switch sizing already applied")
         return
-    src = replace_once(src, "const SW: f32 = 19.0;", "const SW: f32 = 24.0;", "switch column width")
+    src = replace_once(src, "const SW: f32 = 30.0;", "const SW: f32 = 30.0;", "switch column width")
     src = replace_once(
         src,
-        "let br = Rect::from_center_size(pos2(cw.switches + SW * i as f32 + SW / 2.0, cy), vec2(16.0, 16.0));",
-        "let br = Rect::from_center_size(pos2(cw.switches + SW * i as f32 + SW / 2.0, cy), vec2(21.0, 21.0));",
+        "let br = Rect::from_center_size(pos2(cw.switches + SW * i as f32 + SW / 2.0, cy), vec2(26.0, 26.0));",
+        "let br = Rect::from_center_size(pos2(cw.switches + SW * i as f32 + SW / 2.0, cy), vec2(26.0, 26.0));",
         "switch rect",
     )
     path.write_text(f"// {MARKER}\n{src}", encoding="utf-8")
