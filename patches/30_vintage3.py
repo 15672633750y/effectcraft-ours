@@ -39,13 +39,23 @@ fn hash(n: u32) -> f32 {
 }
 
 fn render(cx: &EffectCtx, mut buf: Buf) -> Buf {
-    let amount = cx.params.f("amount").clamp(0.0, 1.0) as f32;
+    // Slider values follow Sapphire's ranges, but every step is mapped through a bounded
+    // weight so a large number never blows the frame to white or grey.
+    let amount = (cx.params.f("amount") / 100.0).clamp(0.0, 1.0) as f32;
+    let density = cx.params.f("keyLayerDensity").clamp(0.0, 1.0) as f32;
     let brightness = cx.params.f("brightness").max(0.0) as f32;
     let saturation = cx.params.f("saturation").max(0.0) as f32;
-    let offset_darks = (cx.params.f("offsetDarks").clamp(-100.0, 100.0) / 100.0) as f32;
-    let grain = (cx.params.f("grainAmp").max(0.0) / 100.0) as f32;
+    let offset_darks = cx.params.f("offsetDarks").clamp(-100.0, 100.0) as f32 / 100.0;
+    let grain = (cx.params.f("grainAmp") / 100.0).clamp(0.0, 1.0) as f32;
     let tint = cx.params.color("tint");
     let seed = cx.seed;
+
+    // How hard the three dyes push the primaries apart (0.1 default, 1.0 = full).
+    let sep = 0.15 + density * 0.85;
+    // Saturation and brightness are blended toward their extremes instead of multiplied, so the
+    // whole slider travel is smooth (1.0 = untouched).
+    let sat_w = ((saturation - 1.0) / 9.0).clamp(-1.0, 1.0);
+    let bright_w = ((brightness - 1.0) / 9.0).clamp(-1.0, 1.0);
 
     buf.img.data.par_iter_mut().enumerate().for_each(|(i, px)| {
         let (c, a) = unpremul(*px);
@@ -53,24 +63,11 @@ fn render(cx: &EffectCtx, mut buf: Buf) -> Buf {
             return;
         }
         let l = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
-        // Three-strip separation: each channel keeps its own hue but is pulled apart a little,
-        // the way the three dye layers exaggerate the primaries.
-        let key = cx.params.f("keyLayerDensity").clamp(0.0, 3.0) as f32;
-        let sep = 0.45f32 * (key / 0.1).clamp(0.0, 3.0);
         let mut o = [0.0f32; 3];
         for k in 0..3 {
             o[k] = (l + (c[k] - l) * (1.0 + sep)).clamp(0.0, 1.0);
         }
-        // Brightness.
-        for k in 0..3 {
-            o[k] = (o[k] * brightness).clamp(0.0, 1.0);
-        }
-        // Saturation around the (new) luminance.
-        let l2 = 0.2126 * o[0] + 0.7152 * o[1] + 0.0722 * o[2];
-        for k in 0..3 {
-            o[k] = (l2 + (o[k] - l2) * saturation).clamp(0.0, 1.0);
-        }
-        // Offset Darks: positive crushes the blacks, negative lifts them.
+        // Offset Darks: negative lifts the shadows, positive crushes them.
         if offset_darks != 0.0 {
             for k in 0..3 {
                 o[k] = if offset_darks > 0.0 {
@@ -80,9 +77,17 @@ fn render(cx: &EffectCtx, mut buf: Buf) -> Buf {
                 };
             }
         }
-        // Tint and grain.
+        let l2 = 0.2126 * o[0] + 0.7152 * o[1] + 0.0722 * o[2];
         for k in 0..3 {
-            o[k] = (o[k] * tint[k]).clamp(0.0, 1.0);
+            // Saturation: 1.0 untouched, below 1 towards grey, above 1 towards the pure hue.
+            let v = if sat_w >= 0.0 {
+                l2 + (o[k] - l2) * (1.0 + sat_w * 2.0)
+            } else {
+                l2 + (o[k] - l2) * (1.0 + sat_w)
+            };
+            // Brightness: 1.0 untouched, above 1 towards white, below 1 towards black.
+            let v = if bright_w >= 0.0 { v + (1.0 - v) * bright_w * 0.5 } else { v * (1.0 + bright_w) };
+            o[k] = (v * tint[k]).clamp(0.0, 1.0);
             if grain > 0.0 {
                 let g = (hash((i as u32).wrapping_add(seed)) - 0.5) * grain;
                 o[k] = (o[k] + g).clamp(0.0, 1.0);
@@ -99,7 +104,7 @@ pub fn specs() -> Vec<EffectSpec> {
         "org.effectcraft.compat.sapphire.vintagecolor3strip",
         "复古三条彩 (S_VintageColor3Strip)",
         vec![
-            p("amount", "Amount", num(1.0), slider(0.0, 100.0, 0.0, 100.0, 3)),
+            p("amount", "Amount", num(100.0), slider(0.0, 100.0, 0.0, 100.0, 3)),
             p("keyLayerDensity", "Key Layer Density", num(0.1), slider(0.0, 100.0, 0.0, 100.0, 3)),
             p("grainAmp", "Grain Amp", num(0.0), slider(0.0, 100.0, 0.0, 100.0, 3)),
             p("grainBlur", "Grain Blur", num(0.0), slider(0.0, 100.0, 0.0, 100.0, 2)),

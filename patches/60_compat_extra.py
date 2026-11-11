@@ -28,7 +28,9 @@ fn spec(id: &'static str, name: &'static str, params: Vec<crate::ParamSpec>, ren
 fn render_two_strip(cx: &EffectCtx, mut buf: Buf) -> Buf {
     let amount = cx.params.f("amount").clamp(0.0, 1.0) as f32;
     let brightness = cx.params.f("brightness").max(0.0) as f32;
+    let bright_w = ((brightness - 1.0) / 9.0).clamp(-1.0, 1.0);
     let saturation = cx.params.f("saturation").max(0.0) as f32;
+    let sat_w = ((saturation - 1.0) / 9.0).clamp(-1.0, 1.0);
     let offset_darks = (cx.params.f("offsetDarks").clamp(-100.0, 100.0) / 100.0) as f32;
     let tint = cx.params.color("tint");
 
@@ -48,7 +50,8 @@ fn render_two_strip(cx: &EffectCtx, mut buf: Buf) -> Buf {
             let db = (1.0 - c[2]).clamp(0.0, 1.0);
             let v = dye_a[k].clamp(0.0001, 1.0).powf(da) * dye_b[k].clamp(0.0001, 1.0).powf(db);
             let mut v = (v * brightness).clamp(0.0, 1.0);
-            v = (l + (v - l) * saturation).clamp(0.0, 1.0);
+            v = (l + (v - l) * (1.0 + sat_w * 2.0)).clamp(0.0, 1.0);
+            v = (v + (1.0 - v) * bright_w.max(0.0) * 0.5).clamp(0.0, 1.0);
             v = if offset_darks >= 0.0 { v * (1.0 - offset_darks * 0.5) } else { v + (-offset_darks) * 0.5 * (1.0 - v) };
             o[k] = (v * tint[k]).clamp(0.0, 1.0);
         }
