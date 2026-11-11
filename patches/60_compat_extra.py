@@ -75,8 +75,11 @@ fn render_vignette(cx: &EffectCtx, mut buf: Buf) -> Buf {
     // Centre is in layer pixels; the radii are relative, so normalise by half the layer size.
     let half_w = (cx.layer_size[0].max(1.0) as f32) * 0.5;
     let half_h = (cx.layer_size[1].max(1.0) as f32) * 0.5;
-    let cx0 = center[0] as f32;
-    let cy0 = center[1] as f32;
+    // The Centre field arrives either in layer pixels (960,540) or as a fraction (0.5,0.5).
+    let fx = if (center[0] as f32).abs() > 2.0 { (center[0] as f32) / (half_w * 2.0) } else { center[0] as f32 };
+    let fy = if (center[1] as f32).abs() > 2.0 { (center[1] as f32) / (half_h * 2.0) } else { center[1] as f32 };
+    let cx0 = fx.clamp(-2.0, 3.0) * half_w * 2.0;
+    let cy0 = fy.clamp(-2.0, 3.0) * half_h * 2.0;
     let (sin_r, cos_r) = rotate.sin_cos();
 
     buf.img.data.par_iter_mut().enumerate().for_each(|(i, px)| {

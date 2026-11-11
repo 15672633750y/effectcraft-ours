@@ -55,7 +55,8 @@ fn render(cx: &EffectCtx, mut buf: Buf) -> Buf {
         let l = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
         // Three-strip separation: each channel keeps its own hue but is pulled apart a little,
         // the way the three dye layers exaggerate the primaries.
-        let sep = 0.45f32;
+        let key = cx.params.f("keyLayerDensity").clamp(0.0, 3.0) as f32;
+        let sep = 0.45f32 * (key / 0.1).clamp(0.0, 3.0);
         let mut o = [0.0f32; 3];
         for k in 0..3 {
             o[k] = (l + (c[k] - l) * (1.0 + sep)).clamp(0.0, 1.0);
@@ -99,12 +100,12 @@ pub fn specs() -> Vec<EffectSpec> {
         "复古三条彩 (S_VintageColor3Strip)",
         vec![
             p("amount", "Amount", num(1.0), slider(0.0, 1.0, 0.0, 1.0, 3)),
-            p("keyLayerDensity", "Key Layer Density", num(0.1), slider(0.0, 1.0, 0.0, 1.0, 3)),
+            p("keyLayerDensity", "Key Layer Density", num(0.1), slider(0.0, 100.0, 0.0, 100.0, 3)),
             p("grainAmp", "Grain Amp", num(0.0), slider(0.0, 1.0, 0.0, 1.0, 3)),
             p("grainBlur", "Grain Blur", num(0.0), slider(0.0, 100.0, 0.0, 100.0, 2)),
-            p("brightness", "Brightness", num(1.0), slider(0.0, 3.0, 0.0, 3.0, 3)),
+            p("brightness", "Brightness", num(1.0), slider(0.0, 10.0, 0.0, 10.0, 3)),
             p("tint", "Tint", col(1.0, 1.0, 1.0), ParamUi::Color),
-            p("saturation", "Saturation", num(1.0), slider(0.0, 3.0, 0.0, 3.0, 3)),
+            p("saturation", "Saturation", num(1.0), slider(0.0, 100.0, 0.0, 100.0, 3)),
             p("offsetDarks", "Offset Darks", num(0.0), slider(-1.0, 1.0, -1.0, 1.0, 3)),
             p("show", "Show", Value::Enum(0), popup(&["Result", "Source"])),
             p("maskUse", "Mask Use", Value::Enum(0), popup(&["Luma", "Alpha"])),
