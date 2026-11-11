@@ -12,6 +12,10 @@ ROWS = [
     ("New Folder", "新建文件夹"),
     ("Import File…", "导入文件…"),
     ("Open in Essential Graphics", "在基本图形中打开"),
+    ("Select an item to see its details", "选择一个项目以查看详情"),
+    ("Layer Name", "图层名称"),
+    ("All", "全部"),
+    ("None", "无"),
 ]
 
 EDITS = [
