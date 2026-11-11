@@ -39,6 +39,7 @@ fn export_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
     let fmt_id = egui::Id::new("ours-export-fmt");
     let mut fmt = ctx.data(|d| d.get_temp::<usize>(fmt_id).unwrap_or(0));
     let mut start = false;
+    let mut cancel = false;
     let mut keep_open = open;
     egui::Window::new("导出视频")
         .open(&mut keep_open)
@@ -81,10 +82,13 @@ fn export_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
                     start = true;
                 }
                 if ui.button("取消").clicked() {
-                    keep_open = false;
+                    cancel = true;
                 }
             });
         });
+    if cancel {
+        keep_open = false;
+    }
     open = keep_open;
     ctx.data_mut(|d| {
         d.insert_temp(open_id, open);
