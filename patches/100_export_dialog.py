@@ -44,9 +44,7 @@ fn export_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
             ui.label("请先打开一个合成工程");
             ui.add_space(6.0);
             ui.label("视频格式");
-            egui::ComboBox::from_id_salt("ours-export-fmt")
-                .selected_text("MP4 · H.264")
-                .show_ui(ui, |_ui| {});
+            ui.label(egui::RichText::new("MP4 · H.264").strong());
             ui.add_space(6.0);
             ui.label("导出分辨率");
             egui::ComboBox::from_id_salt("ours-export-res-combo")
@@ -83,6 +81,7 @@ fn export_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
         ctx.data_mut(|d| d.insert_temp(open_id, false));
     }
 }
+'''
 
 
 def main() -> None:
@@ -95,8 +94,7 @@ def main() -> None:
     if src.count(CALL_OLD) != 1:
         raise SystemExit(f"header call anchor: expected 1, found {src.count(CALL_OLD)}")
     src = src.replace(CALL_OLD, CALL_NEW, 1)
-    src = src + CODE
-    path.write_text(src, encoding="utf-8")
+    path.write_text(src + CODE, encoding="utf-8")
     print("export button and dialog installed")
 
 
