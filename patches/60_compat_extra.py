@@ -26,10 +26,10 @@ fn spec(id: &'static str, name: &'static str, params: Vec<crate::ParamSpec>, ren
 }
 
 fn render_two_strip(cx: &EffectCtx, mut buf: Buf) -> Buf {
-    let amount = cx.params.f("amount").clamp(0.0, 1.0) as f32;
-    let brightness = cx.params.f("brightness").max(0.0) as f32;
-    let saturation = cx.params.f("saturation").max(0.0) as f32;
-    let offset_darks = cx.params.f("offsetDarks").clamp(-1.0, 1.0) as f32;
+    let amount = (cx.params.f("amount").clamp(0.0, 100.0) / 100.0) as f32;
+    let brightness = (cx.params.f("brightness").max(0.0) / 100.0) as f32;
+    let saturation = (cx.params.f("saturation").max(0.0) / 100.0) as f32;
+    let offset_darks = (cx.params.f("offsetDarks").clamp(-100.0, 100.0) / 100.0) as f32;
     let tint = cx.params.color("tint");
 
     // Two-strip: a red-orange and a blue-green dye, the early Technicolor pair.
@@ -113,14 +113,14 @@ pub fn specs() -> Vec<EffectSpec> {
             "org.effectcraft.compat.sapphire.vintagecolor2strip",
             "复古双条彩 (S_VintageColor2Strip)",
             vec![
-                p("amount", "Amount", num(1.0), slider(0.0, 1.0, 0.0, 1.0, 3)),
+                p("amount", "Amount", num(100.0), slider(0.0, 100.0, 0.0, 100.0, 3)),
                 p("keyLayerDensity", "Key Layer Density", num(0.1), slider(0.0, 1.0, 0.0, 1.0, 3)),
-                p("grainAmp", "Grain Amp", num(0.0), slider(0.0, 1.0, 0.0, 1.0, 3)),
+                p("grainAmp", "Grain Amp", num(0.0), slider(0.0, 100.0, 0.0, 100.0, 3)),
                 p("grainBlur", "Grain Blur", num(0.0), slider(0.0, 100.0, 0.0, 100.0, 2)),
-                p("brightness", "Brightness", num(1.0), slider(0.0, 3.0, 0.0, 3.0, 3)),
+                p("brightness", "Brightness", num(100.0), slider(0.0, 100.0, 0.0, 100.0, 3)),
                 p("tint", "Tint", col(1.0, 1.0, 1.0), ParamUi::Color),
-                p("saturation", "Saturation", num(1.0), slider(0.0, 3.0, 0.0, 3.0, 3)),
-                p("offsetDarks", "Offset Darks", num(0.0), slider(-1.0, 1.0, -1.0, 1.0, 3)),
+                p("saturation", "Saturation", num(100.0), slider(0.0, 100.0, 0.0, 100.0, 3)),
+                p("offsetDarks", "Offset Darks", num(0.0), slider(-100.0, 100.0, -100.0, 100.0, 3)),
                 p("show", "Show", Value::Enum(0), popup(&["Result", "Source"])),
                 p("maskUse", "Mask Use", Value::Enum(0), popup(&["Luma", "Alpha"])),
                 p("blurMask", "Blur Mask", num(12.0), slider(0.0, 100.0, 0.0, 100.0, 2)),
