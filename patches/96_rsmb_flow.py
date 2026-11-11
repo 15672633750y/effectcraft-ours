@@ -22,7 +22,7 @@ use crate::util::{premul, unpremul};
 use crate::{Buf, EffectCtx, EffectSpec, num, p, popup, slider};
 
 const CATEGORY: &str = "Blur & Sharpen";
-const BLOCK: usize = 8;
+const BLOCK: usize = 16;
 
 fn spec(id: &'static str, name: &'static str, params: Vec<crate::ParamSpec>, render: crate::RenderFn) -> EffectSpec {
     EffectSpec { id, name, category: CATEGORY, params, render, gpu: false, float: true }
@@ -132,11 +132,11 @@ fn render(cx: &EffectCtx, mut buf: Buf) -> Buf {
             (flow_prev[g][1] + flow_next[g][1]) * 0.5,
         ];
         let mag = (v[0] * v[0] + v[1] * v[1]).sqrt();
-        if mag < 0.25 || amount <= 0.0 {
+        if amount <= 0.0 || mag < (1.0 - sensitivity) * 1.2 {
             return;
         }
         // Shutter: how far along the motion line we integrate.
-        let reach = (mag * amount * (0.5 + sensitivity * 1.5)).clamp(0.0, 10.0);
+        let reach = (mag * amount * 2.0).clamp(0.0, 16.0);
         let mut acc = [0.0f32; 4];
         let mut n = 0.0f32;
         for s in 0i32..=6 {
