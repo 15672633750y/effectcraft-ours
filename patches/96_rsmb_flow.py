@@ -28,8 +28,8 @@ fn render(cx: &EffectCtx, mut buf: Buf) -> Buf {
     if !cx.params.b("activation") {
         return buf;
     }
-    let amount = cx.params.f("blurAmount").clamp(0.0, 10.0) as f32;
-    let sensitivity = (cx.params.f("sensitivity") / 100.0).clamp(0.0, 1.0) as f32;
+    let amount = cx.params.f("blurAmount").clamp(0.0, 10.0);
+    let sensitivity = (cx.params.f("sensitivity") / 100.0).clamp(0.0, 1.0);
     if amount <= 0.0 {
         return buf;
     }
@@ -38,7 +38,7 @@ fn render(cx: &EffectCtx, mut buf: Buf) -> Buf {
     // 敏感度 decides how many frames are averaged; 模糊程度 decides how wide the shutter is.
     let samples = (3.0 + sensitivity * 21.0).round() as usize;
     let fps = cx.fps().max(1.0);
-    let window = (amount * 0.5 / fps).max(1.0 / fps * 0.05);
+    let window = (amount * 0.5 / fps).max(0.05 / fps);
 
     let mut acc: Option<Vec<[f32; 4]>> = None;
     let mut used = 0usize;
