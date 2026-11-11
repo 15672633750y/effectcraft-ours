@@ -12,7 +12,7 @@ from pathlib import Path
 
 MARKER = "EFFECTCRAFT_OURS_RSMB_FLOW_V1"
 
-MODULE = r\'\'\'//! Optical-flow motion blur (RSMB-style), our own implementation: dense Horn–Schunck flow on a
+MODULE = r'''//! Optical-flow motion blur (RSMB-style), our own implementation: dense Horn–Schunck flow on a
 //! quarter-resolution luma plane, bilinearly upsampled, then the frame is averaged along each
 //! pixel's motion vector so only moving detail streaks.
 
