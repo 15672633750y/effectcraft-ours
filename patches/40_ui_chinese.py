@@ -11,6 +11,7 @@ ROWS = [
     ("New Composition…", "新建合成…"),
     ("New Folder", "新建文件夹"),
     ("Import File…", "导入文件…"),
+    ("Open in Essential Graphics", "在基本图形中打开"),
 ]
 
 EDITS = [
