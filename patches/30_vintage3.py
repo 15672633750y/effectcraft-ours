@@ -107,7 +107,7 @@ fn render(cx: &EffectCtx, mut buf: Buf) -> Buf {
 pub fn specs() -> Vec<EffectSpec> {
     vec![spec(
         "org.effectcraft.compat.sapphire.vintagecolor3strip",
-        "S_VintageColor3Strip",
+        "复古三条彩 (S_VintageColor3Strip)",
         vec![
             p("amount", "Amount", num(100.0), pct()),
             p("contrast", "Contrast", num(0.35), slider(-1.0, 1.0, -1.0, 1.0, 2)),

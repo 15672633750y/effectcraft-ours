@@ -14,6 +14,8 @@ ROWS = [
 ]
 
 EDITS = [
+    ("crates/ui-egui/src/panels/dialogs.rs", 'format!("Comp {n}")', 'format!("合成 {n}")'),
+    ("crates/ui-egui/src/panels/precomp.rs", 'format!("{} Comp 1", l.name)', 'format!("{} 合成 1", l.name)'),
     ("crates/engine/src/cmd/layer/create.rs", '"Adjustment Layer 1".to_string()', '"调整图层 1".to_string()'),
     ("crates/engine/src/cmd/layer/create.rs", '"Solid 1".to_string()', '"纯色 1".to_string()'),
     ("crates/engine/src/cmd/layer/create.rs", '.unwrap_or("Shape Layer 1")', '.unwrap_or("形状图层 1")'),
