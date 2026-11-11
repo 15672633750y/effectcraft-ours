@@ -36,15 +36,25 @@ fn export_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
     }
     let mut res = ctx.data(|d| d.get_temp::<usize>(res_id).unwrap_or(0));
     let mut fps = ctx.data(|d| d.get_temp::<usize>(fps_id).unwrap_or(0));
+    let fmt_id = egui::Id::new("ours-export-fmt");
+    let mut fmt = ctx.data(|d| d.get_temp::<usize>(fmt_id).unwrap_or(0));
     let mut start = false;
+    let mut keep_open = open;
     egui::Window::new("导出视频")
+        .open(&mut keep_open)
         .collapsible(false)
         .resizable(false)
         .show(ctx, |ui| {
             ui.label("请先打开一个合成工程");
             ui.add_space(6.0);
             ui.label("视频格式");
-            ui.label(egui::RichText::new("MP4 · H.264").strong());
+            egui::ComboBox::from_id_salt("ours-export-fmt-combo")
+                .selected_text(["MP4 · H.264", "MOV · ProRes", "GIF 动图", "PNG 序列"][fmt.min(3)])
+                .show_ui(ui, |ui| {
+                    for (i, name) in ["MP4 · H.264", "MOV · ProRes", "GIF 动图", "PNG 序列"].iter().enumerate() {
+                        ui.selectable_value(&mut fmt, i, *name);
+                    }
+                });
             ui.add_space(6.0);
             ui.label("导出分辨率");
             egui::ComboBox::from_id_salt("ours-export-res-combo")
@@ -66,14 +76,21 @@ fn export_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
             ui.add_space(8.0);
             ui.label("导出完成后自动保存到手机相册 DCIM/EffectCraft，无需手动选择位置。");
             ui.add_space(8.0);
-            if ui.button("开始导出").clicked() {
-                start = true;
-            }
+            ui.horizontal(|ui| {
+                if ui.button("开始导出").clicked() {
+                    start = true;
+                }
+                if ui.button("取消").clicked() {
+                    keep_open = false;
+                }
+            });
         });
+    open = keep_open;
     ctx.data_mut(|d| {
         d.insert_temp(open_id, open);
         d.insert_temp(res_id, res);
         d.insert_temp(fps_id, fps);
+        d.insert_temp(fmt_id, fmt);
     });
     if start {
         let _ = crate::menus::invoke(app, ctx, "renderQueue.add", serde_json::json!({}));
