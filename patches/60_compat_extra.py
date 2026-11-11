@@ -133,7 +133,7 @@ pub fn specs() -> Vec<EffectSpec> {
             "暗角 (S_Vignette)",
             vec![
                 p("effect", "Effect", Value::Enum(0), popup(&["Vignette"])),
-                p("center", "Center XY", Value::Vec2([960.0, 540.0]), ParamUi::Point),
+                p("center", "Center XY", Value::Vec2([0.5, 0.5]), ParamUi::Point),
                 p("squareness", "Squareness", num(0.0), slider(0.0, 1.0, 0.0, 1.0, 4)),
                 p("radius", "Radius", num(1.03), slider(0.0, 3.0, 0.0, 3.0, 3)),
                 p("relHeight", "Rel Height", num(0.75), slider(0.01, 4.0, 0.01, 4.0, 3)),
