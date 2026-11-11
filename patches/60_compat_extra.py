@@ -28,7 +28,7 @@ fn spec(id: &'static str, name: &'static str, params: Vec<crate::ParamSpec>, ren
 fn render_two_strip(cx: &EffectCtx, mut buf: Buf) -> Buf {
     let amount = (cx.params.f("amount").clamp(0.0, 100.0) / 100.0) as f32;
     let brightness = (cx.params.f("brightness").max(0.0) / 100.0) as f32;
-    let saturation = (cx.params.f("saturation").max(0.0) / 100.0) as f32;
+    let saturation = 1.0 + cx.params.f("saturation").max(0.0) as f32;
     let offset_darks = (cx.params.f("offsetDarks").clamp(-100.0, 100.0) / 100.0) as f32;
     let tint = cx.params.color("tint");
 
@@ -65,44 +65,38 @@ fn render_vignette(cx: &EffectCtx, mut buf: Buf) -> Buf {
     let radius = cx.params.f("radius").max(0.01) as f32;
     let rel_w = cx.params.f("relWidth").max(0.01) as f32;
     let rel_h = cx.params.f("relHeight").max(0.01) as f32;
-    let rotate = cx.params.f("rotate") as f32 * std::f32::consts::PI / 180.0;
     let softness = cx.params.f("edgeSoftness").max(0.001) as f32;
-    let smooth = cx.params.f("smoothCurve").clamp(0.0, 1.0) as f32;
+    let rotate = cx.params.f("rotate") as f32 * std::f32::consts::PI / 180.0;
     let colour = cx.params.color("color");
     let opacity = cx.params.f("opacity").clamp(0.0, 1.0) as f32;
+
     let iw = buf.img.width.max(1) as usize;
     let ih = buf.img.height.max(1) as usize;
-    // Centre is in layer pixels; the radii are relative, so normalise by half the layer size.
-    let half_w = (cx.layer_size[0].max(1.0) as f32) * 0.5;
-    let half_h = (cx.layer_size[1].max(1.0) as f32) * 0.5;
-    // The Centre field arrives either in layer pixels (960,540) or as a fraction (0.5,0.5).
-    let fx = if (center[0] as f32).abs() > 2.0 { (center[0] as f32) / (half_w * 2.0) } else { center[0] as f32 };
-    let fy = if (center[1] as f32).abs() > 2.0 { (center[1] as f32) / (half_h * 2.0) } else { center[1] as f32 };
-    let cx0 = fx.clamp(-2.0, 3.0) * half_w * 2.0;
-    let cy0 = fy.clamp(-2.0, 3.0) * half_h * 2.0;
     let (sin_r, cos_r) = rotate.sin_cos();
+    // Centre arrives either as a fraction (0.5,0.5) or in layer pixels.
+    let fx = if (center[0] as f32).abs() > 2.0 { (center[0] as f32) / (iw as f32) } else { center[0] as f32 };
+    let fy = if (center[1] as f32).abs() > 2.0 { (center[1] as f32) / (ih as f32) } else { center[1] as f32 };
 
     buf.img.data.par_iter_mut().enumerate().for_each(|(i, px)| {
         let (c, a) = unpremul(*px);
         if a <= 0.0 {
             return;
         }
-        let x = (i % iw) as f32 - cx0;
-        let y = (i / iw) as f32 - cy0;
+        // Normalised coordinates: -1..1 across the frame, so the mask is a true ellipse.
+        let x = (i % iw) as f32 / iw as f32 * 2.0 - 1.0 - (fx * 2.0 - 1.0);
+        let y = (i / iw) as f32 / ih as f32 * 2.0 - 1.0 - (fy * 2.0 - 1.0);
         let rx = x * cos_r - y * sin_r;
         let ry = x * sin_r + y * cos_r;
-        let d = ((rx / (rel_w * half_w)).powi(2) + (ry / (rel_h * half_h)).powi(2)).sqrt();
-        // 1 inside the ellipse, falling to 0 across the soft edge.
+        let d = ((rx / rel_w).powi(2) + (ry / rel_h).powi(2)).sqrt();
         let t = ((d - radius) / softness).clamp(0.0, 1.0);
-        let fall = 1.0 - t * t * (3.0 - 2.0 * t);
-        let w = (fall.powf(1.0 + smooth * 3.0) * opacity).clamp(0.0, 1.0);
+        let smooth = t * t * (3.0 - 2.0 * t);
+        let w = (smooth * opacity).clamp(0.0, 1.0);
         let o = [
             c[0] + (colour[0] - c[0]) * w,
             c[1] + (colour[1] - c[1]) * w,
             c[2] + (colour[2] - c[2]) * w,
         ];
         *px = premul(o, a);
-        let _ = ih;
     });
     buf
 }

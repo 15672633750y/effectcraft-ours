@@ -41,7 +41,7 @@ fn hash(n: u32) -> f32 {
 fn render(cx: &EffectCtx, mut buf: Buf) -> Buf {
     let amount = (cx.params.f("amount").clamp(0.0, 100.0) / 100.0) as f32;
     let brightness = (cx.params.f("brightness").max(0.0) / 100.0) as f32;
-    let saturation = (cx.params.f("saturation").max(0.0) / 100.0) as f32;
+    let saturation = 1.0 + cx.params.f("saturation").max(0.0) as f32;
     let offset_darks = (cx.params.f("offsetDarks").clamp(-100.0, 100.0) / 100.0) as f32;
     let grain = (cx.params.f("grainAmp").max(0.0) / 100.0) as f32;
     let tint = cx.params.color("tint");
@@ -105,7 +105,7 @@ pub fn specs() -> Vec<EffectSpec> {
             p("grainBlur", "Grain Blur", num(0.0), slider(0.0, 100.0, 0.0, 100.0, 2)),
             p("brightness", "Brightness", num(100.0), slider(0.0, 100.0, 0.0, 100.0, 3)),
             p("tint", "Tint", col(1.0, 1.0, 1.0), ParamUi::Color),
-            p("saturation", "Saturation", num(100.0), slider(0.0, 100.0, 0.0, 100.0, 3)),
+            p("saturation", "Saturation", num(0.0), slider(0.0, 100.0, 0.0, 100.0, 3)),
             p("offsetDarks", "Offset Darks", num(0.0), slider(-100.0, 100.0, -100.0, 100.0, 3)),
             p("show", "Show", Value::Enum(0), popup(&["Result", "Source"])),
             p("maskUse", "Mask Use", Value::Enum(0), popup(&["Luma", "Alpha"])),
