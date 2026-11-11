@@ -28,10 +28,14 @@ fn export_button(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Painter,
 
 fn export_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
     let open_id = egui::Id::new("ours-export-open");
+    let res_id = egui::Id::new("ours-export-res");
+    let fps_id = egui::Id::new("ours-export-fps");
     let mut open = ctx.data(|d| d.get_temp::<bool>(open_id).unwrap_or(false));
     if !open {
         return;
     }
+    let mut res = ctx.data(|d| d.get_temp::<usize>(res_id).unwrap_or(0));
+    let mut fps = ctx.data(|d| d.get_temp::<usize>(fps_id).unwrap_or(0));
     let mut start = false;
     egui::Window::new("导出视频")
         .collapsible(false)
@@ -40,13 +44,27 @@ fn export_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
             ui.label("请先打开一个合成工程");
             ui.add_space(6.0);
             ui.label("视频格式");
-            ui.label(egui::RichText::new("MP4 · H.264").strong());
+            egui::ComboBox::from_id_salt("ours-export-fmt")
+                .selected_text("MP4 · H.264")
+                .show_ui(ui, |_ui| {});
             ui.add_space(6.0);
             ui.label("导出分辨率");
-            ui.label(egui::RichText::new("跟随工程").strong());
+            egui::ComboBox::from_id_salt("ours-export-res-combo")
+                .selected_text(["跟随工程", "480P", "720P", "1080P", "2K", "4K"][res.min(5)])
+                .show_ui(ui, |ui| {
+                    for (i, name) in ["跟随工程", "480P", "720P", "1080P", "2K", "4K"].iter().enumerate() {
+                        ui.selectable_value(&mut res, i, *name);
+                    }
+                });
             ui.add_space(6.0);
             ui.label("导出帧率");
-            ui.label(egui::RichText::new("跟随工程帧率").strong());
+            egui::ComboBox::from_id_salt("ours-export-fps-combo")
+                .selected_text(["跟随工程帧率", "24 FPS", "30 FPS", "60 FPS", "120 FPS", "144 FPS", "240 FPS"][fps.min(6)])
+                .show_ui(ui, |ui| {
+                    for (i, name) in ["跟随工程帧率", "24 FPS", "30 FPS", "60 FPS", "120 FPS", "144 FPS", "240 FPS"].iter().enumerate() {
+                        ui.selectable_value(&mut fps, i, *name);
+                    }
+                });
             ui.add_space(8.0);
             ui.label("导出完成后自动保存到手机相册 DCIM/EffectCraft，无需手动选择位置。");
             ui.add_space(8.0);
@@ -54,14 +72,17 @@ fn export_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
                 start = true;
             }
         });
-    ctx.data_mut(|d| d.insert_temp(open_id, open));
+    ctx.data_mut(|d| {
+        d.insert_temp(open_id, open);
+        d.insert_temp(res_id, res);
+        d.insert_temp(fps_id, fps);
+    });
     if start {
         let _ = crate::menus::invoke(app, ctx, "renderQueue.add", serde_json::json!({}));
         let _ = crate::menus::invoke(app, ctx, "renderQueue.render", serde_json::json!({}));
         ctx.data_mut(|d| d.insert_temp(open_id, false));
     }
 }
-'''
 
 
 def main() -> None:
