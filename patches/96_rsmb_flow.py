@@ -1,20 +1,15 @@
 #!/usr/bin/env python3
-"""Add a motion-blur effect that uses real optical flow between neighbouring frames.
-
-The effect samples the layer at two nearby times, estimates a per-block motion vector by block
-matching on a downsampled luma plane, then averages the layer along each pixel's motion line. Only
-moving detail smears; the static background stays sharp.
-"""
+"""Motion blur by accumulating the layer over the shutter interval (the way RSMB/Bread actually look)."""
 from __future__ import annotations
 
 import os
 from pathlib import Path
 
-MARKER = "EFFECTCRAFT_OURS_RSMB_FLOW_V1"
+MARKER = "EFFECTCRAFT_OURS_RSMB_ACCUM_V1"
 
-MODULE = r'''//! Optical-flow motion blur (RSMB-style), our own implementation: dense Horn–Schunck flow on a
-//! quarter-resolution luma plane, bilinearly upsampled, then the frame is averaged along each
-//! pixel's motion vector so only moving detail streaks.
+MODULE = r'''//! Motion blur by shutter accumulation: sample the layer at several times inside the shutter
+//! window and average them. Static content is identical in every sample and stays sharp; anything
+//! that moves leaves a continuous streak.
 
 use effectcraft_keyframe::Value;
 use effectcraft_project::ParamUi;
@@ -24,43 +19,9 @@ use crate::util::{premul, unpremul};
 use crate::{Buf, EffectCtx, EffectSpec, num, p, popup, slider};
 
 const CATEGORY: &str = "Blur & Sharpen";
-const DOWN: usize = 4;
-const ITER: usize = 24;
 
 fn spec(id: &'static str, name: &'static str, params: Vec<crate::ParamSpec>, render: crate::RenderFn) -> EffectSpec {
     EffectSpec { id, name, category: CATEGORY, params, render, gpu: false, float: true }
-}
-
-fn luma(px: &[f32; 4]) -> f32 {
-    0.2126 * px[0] + 0.7152 * px[1] + 0.0722 * px[2]
-}
-
-/// Dense Horn–Schunck flow between two quarter-resolution luma planes.
-fn horn_schunck(a: &[f32], b: &[f32], w: usize, h: usize, alpha: f32) -> Vec<[f32; 2]> {
-    let mut u = vec![0.0f32; w * h];
-    let mut v = vec![0.0f32; w * h];
-    let idx = |x: usize, y: usize| y * w + x;
-    for _ in 0..ITER {
-        let mut nu = u.clone();
-        let mut nv = v.clone();
-        for y in 1..h.saturating_sub(1) {
-            for x in 1..w.saturating_sub(1) {
-                let i = idx(x, y);
-                let ix = (b[i + 1] - b[i - 1] + a[i + 1] - a[i - 1]) * 0.25;
-                let iy = (b[i + w] - b[i - w] + a[i + w] - a[i - w]) * 0.25;
-                let it = b[i] - a[i];
-                let ua = (u[i - 1] + u[i + 1] + u[i - w] + u[i + w]) * 0.25;
-                let va = (v[i - 1] + v[i + 1] + v[i - w] + v[i + w]) * 0.25;
-                let den = alpha * alpha + ix * ix + iy * iy;
-                let t = (ix * ua + iy * va + it) / den.max(1e-6);
-                nu[i] = ua - ix * t;
-                nv[i] = va - iy * t;
-            }
-        }
-        u = nu;
-        v = nv;
-    }
-    (0..w * h).map(|i| [u[i], v[i]]).collect()
 }
 
 fn render(cx: &EffectCtx, mut buf: Buf) -> Buf {
@@ -73,69 +34,48 @@ fn render(cx: &EffectCtx, mut buf: Buf) -> Buf {
         return buf;
     }
     let Some(host) = cx.env.host else { return buf };
-    let dt = 1.0 / cx.fps().max(1.0) * 0.5;
-    let (Some(prev), Some(next)) = (host.self_at(cx.time - dt, 0), host.self_at(cx.time + dt, 0)) else {
-        return buf;
-    };
-    let w = buf.img.width as usize;
-    let h = buf.img.height as usize;
-    if prev.img.width != buf.img.width || next.img.width != buf.img.width {
-        return buf;
-    }
 
-    // Quarter-resolution luma planes.
-    let dw = (w / DOWN).max(2);
-    let dh = (h / DOWN).max(2);
-    let mut pa = vec![0.0f32; dw * dh];
-    let mut pb = vec![0.0f32; dw * dh];
-    for y in 0..dh {
-        for x in 0..dw {
-            let sx = (x * DOWN).min(w - 1);
-            let sy = (y * DOWN).min(h - 1);
-            pa[y * dw + x] = luma(&prev.img.data[sy * w + sx]);
-            pb[y * dw + x] = luma(&next.img.data[sy * w + sx]);
-        }
-    }
-    let flow = horn_schunck(&pa, &pb, dw, dh, 0.6);
-    // Bring the vectors back to full-resolution pixels (the flow is in quarter pixels).
-    let at = |x: usize, y: usize| -> [f32; 2] {
-        let gx = (x / DOWN).min(dw - 1);
-        let gy = (y / DOWN).min(dh - 1);
-        let f = flow[gy * dw + gx];
-        [f[0] * DOWN as f32, f[1] * DOWN as f32]
-    };
+    // 敏感度 decides how many frames are averaged; 模糊程度 decides how wide the shutter is.
+    let samples = (3.0 + sensitivity * 21.0).round() as usize;
+    let fps = cx.fps().max(1.0);
+    let window = (amount * 0.5 / fps).max(1.0 / fps * 0.05);
 
-    let src = buf.img.data.clone();
-    let prev_data = prev.img.data.clone();
-    let next_data = next.img.data.clone();
-    let min_mag = (1.0 - sensitivity) * 1.5;
-    buf.img.data.par_iter_mut().enumerate().for_each(|(i, px)| {
-        let x = i % w;
-        let y = i / w;
-        let f = at(x, y);
-        let mag = (f[0] * f[0] + f[1] * f[1]).sqrt();
-        if mag < min_mag {
-            return;
+    let mut acc: Option<Vec<[f32; 4]>> = None;
+    let mut used = 0usize;
+    for k in 0..samples {
+        let t = if samples <= 1 {
+            cx.time
+        } else {
+            cx.time - window * 0.5 + window * (k as f64) / ((samples - 1) as f64)
+        };
+        let Some(frame) = host.self_at(t, 0) else { continue };
+        if frame.img.width != buf.img.width || frame.img.height != buf.img.height {
+            continue;
         }
-        let reach = (mag * amount).min(12.0);
-        let (dx, dy) = (f[0] / mag * reach, f[1] / mag * reach);
-        let mut acc = [0.0f32; 4];
-        let mut n = 0.0f32;
-        for s in -3i32..=3 {
-            let t = s as f32 / 3.0;
-            let sx = (x as f32 + dx * t).round().clamp(0.0, (w - 1) as f32) as usize;
-            let sy = (y as f32 + dy * t).round().clamp(0.0, (h - 1) as f32) as usize;
-            let sample = if t <= 0.0 { prev_data[sy * w + sx] } else { next_data[sy * w + sx] };
-            for k in 0..4 {
-                acc[k] += sample[k];
+        match acc.as_mut() {
+            None => acc = Some(frame.img.data.clone()),
+            Some(a) => {
+                for (dst, src) in a.iter_mut().zip(frame.img.data.iter()) {
+                    for c in 0..4 {
+                        dst[c] += src[c];
+                    }
+                }
             }
-            n += 1.0;
         }
-        for k in 0..4 {
-            acc[k] /= n;
+        used += 1;
+    }
+    let Some(sum) = acc else { return buf };
+    if used == 0 {
+        return buf;
+    }
+    let inv = 1.0 / used as f32;
+    buf.img.data.par_iter_mut().zip(sum.par_iter()).for_each(|(px, s)| {
+        let mut out = [0.0f32; 4];
+        for c in 0..4 {
+            out[c] = s[c] * inv;
         }
-        let _ = src[i];
-        *px = acc;
+        let _ = unpremul(*px);
+        *px = premul([out[0], out[1], out[2]], out[3].clamp(0.0, 1.0));
     });
     buf
 }
@@ -172,7 +112,7 @@ def main() -> None:
     src = lib.read_text(encoding="utf-8")
     (root / "crates/effects/src/rsmb_flow.rs").write_text(MODULE, encoding="utf-8")
     if MARKER in src:
-        print("rsmb flow refreshed")
+        print("rsmb accumulation refreshed")
         return
     if src.count("mod color3;\n") != 1:
         raise SystemExit("module anchor not found")
@@ -185,7 +125,7 @@ def main() -> None:
         1,
     )
     lib.write_text(f"// {MARKER}\n{src}", encoding="utf-8")
-    print("added the optical-flow motion blur effect")
+    print("motion blur is now shutter accumulation")
 
 
 if __name__ == "__main__":
