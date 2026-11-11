@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 MARKER = "EFFECTCRAFT_OURS_CRASH_LOG_V1"
-ANCHOR = "    protected void onCreate(Bundle savedInstanceState) {\n        super.onCreate(savedInstanceState);\n"
+ANCHOR = "    @Override\n    protected void onCreate(Bundle savedInstanceState) {\n        super.onCreate(savedInstanceState);\n"
 
 HANDLER = '''    // EFFECTCRAFT_OURS_CRASH_LOG_V1
     private void installCrashLogger() {
