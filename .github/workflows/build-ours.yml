@@ -24,6 +24,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 120
     env:
+      APP_NAME: 'EffectCraft Sx'
       ARTCRAFT_BUILD_TOOLS_VERSION: '35.0.0'
       CARGO_PROFILE_RELEASE_CODEGEN_UNITS: '16'
       CARGO_PROFILE_RELEASE_LTO: 'false'
@@ -126,12 +127,20 @@ jobs:
             echo "NDK_HOME=$LATEST_NDK" >> "$GITHUB_ENV"
           fi
 
+      - name: Render the temporary launcher icon
+        run: |
+          set -euo pipefail
+          python3 ours/tools/make_icon.py "$GITHUB_WORKSPACE/app-icon.png"
+          ls -l "$GITHUB_WORKSPACE/app-icon.png"
+
       - name: Build the APK
         run: |
           set -o pipefail
           cd artcraft
           mkdir -p logs output
-          bash build.sh -effectcraft --noupdate 2>&1 | tee logs/effectcraft-build.log
+          bash build.sh -effectcraft --noupdate \
+            -appname="${APP_NAME}" \
+            -appicon="$GITHUB_WORKSPACE/app-icon.png" 2>&1 | tee logs/effectcraft-build.log
 
       - name: Save the signing key
         if: always()
