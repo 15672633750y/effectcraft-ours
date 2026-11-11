@@ -68,6 +68,34 @@ fn block_flow(a: &Buf, b: &Buf, blocks_x: usize, blocks_y: usize, search: i32) -
     out
 }
 
+/// Average each block's vector with its neighbours so the field is continuous instead of noisy.
+fn smooth(flow: Vec<[f32; 2]>, bx: usize, by: usize) -> Vec<[f32; 2]> {
+    let mut out = flow.clone();
+    for y in 0..by {
+        for x in 0..bx {
+            let mut sum = [0.0f32; 2];
+            let mut n = 0.0f32;
+            for dy in -1i32..=1 {
+                for dx in -1i32..=1 {
+                    let nx = x as i32 + dx;
+                    let ny = y as i32 + dy;
+                    if nx < 0 || ny < 0 || nx >= bx as i32 || ny >= by as i32 {
+                        continue;
+                    }
+                    let v = flow[ny as usize * bx + nx as usize];
+                    sum[0] += v[0];
+                    sum[1] += v[1];
+                    n += 1.0;
+                }
+            }
+            if n > 0.0 {
+                out[y * bx + x] = [sum[0] / n, sum[1] / n];
+            }
+        }
+    }
+    out
+}
+
 fn render(cx: &EffectCtx, mut buf: Buf) -> Buf {
     if !cx.params.b("activation") {
         return buf;
@@ -87,8 +115,8 @@ fn render(cx: &EffectCtx, mut buf: Buf) -> Buf {
     let h = buf.img.height as usize;
     let bx = (w + BLOCK - 1) / BLOCK;
     let by = (h + BLOCK - 1) / BLOCK;
-    let flow_prev = block_flow(&buf, &prev, bx, by, 4);
-    let flow_next = block_flow(&buf, &next, bx, by, 4);
+    let flow_prev = smooth(block_flow(&buf, &prev, bx, by, 2), bx, by);
+    let flow_next = smooth(block_flow(&buf, &next, bx, by, 2), bx, by);
 
     // The layer at full resolution, kept for sampling along the motion line.
     let src_prev = prev.img.data.clone();
@@ -108,16 +136,16 @@ fn render(cx: &EffectCtx, mut buf: Buf) -> Buf {
             return;
         }
         // Shutter: how far along the motion line we integrate.
-        let reach = (mag * amount * (0.2 + sensitivity)).min(24.0);
+        let reach = (mag * amount * (0.5 + sensitivity * 1.5)).clamp(0.0, 10.0);
         let mut acc = [0.0f32; 4];
         let mut n = 0.0f32;
-        for s in -4i32..=4 {
-            let t = s as f32 / 4.0;
+        for s in 0i32..=6 {
+            let t = s as f32 / 6.0;
             let dx = (v[0] / mag * reach * t).round() as i32;
             let dy = (v[1] / mag * reach * t).round() as i32;
             let sx = (x as i32 + dx).clamp(0, w as i32 - 1) as usize;
             let sy = (y as i32 + dy).clamp(0, h as i32 - 1) as usize;
-            let sample = if t <= 0.0 { src_prev[sy * w + sx] } else { src_next[sy * w + sx] };
+            let sample = src_prev[sy * w + sx];
             for k in 0..4 {
                 acc[k] += sample[k];
             }
