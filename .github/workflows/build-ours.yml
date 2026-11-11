@@ -140,7 +140,8 @@ jobs:
           mkdir -p logs output
           bash build.sh -effectcraft --noupdate \
             -appname="${APP_NAME}" \
-            -appicon="$GITHUB_WORKSPACE/app-icon.png" 2>&1 | tee logs/effectcraft-build.log
+            -appicon="$GITHUB_WORKSPACE/app-icon.png" \
+            -packagename=com.artcraft.effectcraft.sx 2>&1 | tee logs/effectcraft-build.log
 
       - name: Save the signing key
         if: always()
