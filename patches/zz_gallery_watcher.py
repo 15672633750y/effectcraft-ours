@@ -118,7 +118,7 @@ def main() -> None:
         }
     }
 '''
-    anchor2 = "    protected void onCreate(Bundle savedInstanceState) {\n"
+    anchor2 = "    @Override\n    protected void onCreate(Bundle savedInstanceState) {\n"
     if src.count(anchor2) != 1:
         raise SystemExit(f"method anchor: expected 1, found {src.count(anchor2)}")
     src = src.replace(anchor2, method + "\n" + anchor2, 1)
