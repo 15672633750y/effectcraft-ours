@@ -51,6 +51,16 @@ public final class KeepAlive extends android.app.Service {
         } catch (Throwable ignored) {
             // Without the notification permission the app keeps running as before.
         }
+        try {
+            android.os.PowerManager pm = (android.os.PowerManager) getSystemService(POWER_SERVICE);
+            if (pm != null && !pm.isIgnoringBatteryOptimizations(getPackageName())) {
+                android.content.Intent ask = new android.content.Intent(
+                    android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    android.net.Uri.parse("package:" + getPackageName()));
+                ask.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(ask);
+            }
+        } catch (Throwable ignored) { }
         return START_STICKY;
     }
 
@@ -96,6 +106,7 @@ def patch_manifest(path: Path) -> bool:
         '    lines.append("    <uses-permission android:name=\\"android.permission.FOREGROUND_SERVICE\\" />")\n'
         '    lines.append("    <uses-permission android:name=\\"android.permission.FOREGROUND_SERVICE_DATA_SYNC\\" />")\n'
         '    lines.append("    <uses-permission android:name=\\"android.permission.POST_NOTIFICATIONS\\" />")\n'
+            '    lines.append("    <uses-permission android:name=\\"android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS\\" />")\n'
         + perm_anchor,
         1,
     )
