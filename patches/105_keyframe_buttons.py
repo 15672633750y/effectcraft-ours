@@ -43,6 +43,17 @@ fn keyframe_buttons(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Paint
         ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("ours-curve-open"), true));
     }
     x += 50.0;
+    let plug_rect = Rect::from_min_size(pos2(x, cy - 13.0), vec2(44.0, 26.0));
+    let plug_resp = ui.interact(plug_rect, egui::Id::unique("ours-plugin-button"), Sense::click());
+    p.rect_filled(plug_rect, 4.0, t.switch_well);
+    p.text(plug_rect.center(), Align2::CENTER_CENTER, "插件", Tokens::ui(12.0), t.text);
+    if plug_resp.clicked() {
+        let id = egui::Id::new("ours-plugin-open");
+        let now: bool = ui.ctx().data(|d| d.get_temp::<bool>(id).unwrap_or(false));
+        ui.ctx().data_mut(|d| d.insert_temp(id, !now));
+    }
+    plugin_window(app, ui.ctx());
+    x += 48.0;
 
     curve_menu(app, ui.ctx(), ui.max_rect());
     x += 4.0;
@@ -258,6 +269,41 @@ fn draw_ease_curve(p: &egui::Painter, r: Rect, kind: u8, color: egui::Color32) {
 }
 
 /// A curved undo (or, mirrored, redo) arrow drawn with lines, so it never depends on a font glyph.
+
+fn plugin_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
+    let id = egui::Id::new("ours-plugin-open");
+    let mut open = ctx.data(|d| d.get_temp::<bool>(id).unwrap_or(false));
+    if !open {
+        return;
+    }
+    let mut close = false;
+    egui::Window::new("导入插件")
+        .default_pos(egui::pos2(100.0, 150.0))
+        .default_width(430.0)
+        .show(ctx, |ui| {
+            ui.heading("能装的格式");
+            ui.label("• .wasm —— EffectCraft 效果插件（唯一能真正跑的效果格式）");
+            ui.label("• .jsx / .js —— AE 脚本，装好后在 文件 → 脚本 里运行");
+            ui.label("• .zip —— 里面是上面两种时会解开安装");
+            ui.separator();
+            ui.heading("怎么装");
+            ui.label("把文件放进手机这两个文件夹（没有就新建）：");
+            ui.label("  Download/EffectCraftPlugins —— .wasm / .zip");
+            ui.label("  Download/EffectCraftScripts —— .jsx / .js");
+            ui.label("然后完全退出 App 再打开，会自动装好。");
+            ui.separator();
+            ui.heading("装不了的格式");
+            ui.label("• .aex / .dll / CEP 面板（Adobe 电脑版插件）手机跑不了，装了也不会出现在效果列表。");
+            ui.separator();
+            if ui.button("知道了").clicked() {
+                close = true;
+            }
+        });
+    if close {
+        open = false;
+    }
+    ctx.data_mut(|d| d.insert_temp(id, open));
+}
 fn draw_history_arrow(p: &egui::Painter, r: Rect, mirror: bool, color: egui::Color32) {
     // Fixed size, centred on the button, so it lines up with the neighbouring buttons and the
     // pair is an exact mirror of itself.
