@@ -103,54 +103,72 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
         .movable(true)
         .default_width(232.0)
         .show(ctx, |ui| {
-            // One grab point pulls the whole curve: drag down and it bows down, drag up and it
-            // arches over, drag sideways and it leans that way.
-            ui.label("自定义缓动（按住方块拖动）");
-            let gx = egui::Id::new("ours-c-gx");
-            let gy = egui::Id::new("ours-c-gy");
-            let mut q = ctx.data(|d| d.get_temp::<egui::Pos2>(gx));
-            let cur = q.unwrap_or(pos2(0.5, 0.5));
+            // The curve is a set of draggable points: pull any of them down and the curve
+            // dips there, pull one up and it arches. Left/right dragging shifts the peak.
+            ui.label("自定义缓动（拖动曲线上的点）");
+            let pts_id = egui::Id::new("ours-curve-points");
+            let mut ys: [f32; 5] = ctx.data(|d| d.get_temp::<[f32; 5]>(pts_id)).unwrap_or([0.1, 0.4, 0.75, 0.45, 0.1]);
             let (canvas, _) = ui.allocate_exact_size(vec2(248.0, 248.0), Sense::hover());
             ui.painter().rect_filled(canvas, 6.0, t.switch_well);
             let plot = canvas.shrink2(vec2(18.0, 18.0));
-            let drag = ui.interact(canvas, egui::Id::unique("ours-curve-drag"), Sense::drag());
-            let mut nq = cur;
-            if drag.dragged() {
-                let d = drag.drag_delta();
-                nq.x = (nq.x + d.x / plot.width() * 1.8).clamp(-0.6, 1.6);
-                nq.y = (nq.y - d.y / plot.height() * 1.8).clamp(0.0, 1.0);
+            let px = |i: usize| plot.left() + plot.width() * (i as f32 / 4.0);
+            let py = |v: f32| plot.bottom() - plot.height() * v.clamp(0.0, 1.0);
+            // Smooth curve through the points (Catmull-Rom).
+            let mut path: Vec<egui::Pos2> = Vec::new();
+            for seg in 0..4 {
+                let (a, b, c, d) = (
+                    ys[seg.saturating_sub(1)],
+                    ys[seg],
+                    ys[seg + 1],
+                    ys[(seg + 2).min(4)],
+                );
+                let steps = 16;
+                for k in 0..steps {
+                    let u = k as f32 / steps as f32;
+                    let u2 = u * u;
+                    let u3 = u2 * u;
+                    let v = 0.5 * ((2.0 * b)
+                        + (-a + c) * u
+                        + (2.0 * a - 5.0 * b + 4.0 * c - d) * u2
+                        + (-a + 3.0 * b - 3.0 * c + d) * u3);
+                    let x = px(seg) + (px(seg + 1) - px(seg)) * u;
+                    path.push(pos2(x, py(v)));
+                }
             }
-            // A bell, like the reference panel: drag up to raise the peak, sideways to move it.
-            let h = nq.y.clamp(0.0, 1.0);
-            let skew = (nq.x.clamp(0.05, 0.95)) as f32;
-            let mut pts: Vec<egui::Pos2> = Vec::new();
-            for k in 0..=60 {
-                let t = k as f32 / 60.0;
-                // Shift the sine so its peak sits where the grab point is.
-                let u = if t < skew { 0.5 * t / skew } else { 0.5 + 0.5 * (t - skew) / (1.0 - skew) };
-                let v = (std::f32::consts::PI * u).sin();
-                let x = plot.left() + plot.width() * t;
-                let y = plot.bottom() - plot.height() * h * v;
-                pts.push(pos2(x, y.clamp(plot.top(), plot.bottom())));
+            path.push(pos2(px(4), py(ys[4])));
+            ui.painter().add(egui::Shape::line(path, egui::Stroke::new(2.2, t.accent)));
+            let mut moved = false;
+            let mut stopped = false;
+            for i in 0..5 {
+                let at = pos2(px(i), py(ys[i]));
+                let r = ui.interact(Rect::from_center_size(at, vec2(26.0, 26.0)), egui::Id::unique(("ours-cpt", i)), Sense::drag());
+                if r.dragged() {
+                    ys[i] = (ys[i] - r.drag_delta().y / plot.height()).clamp(0.0, 1.0);
+                    moved = true;
+                }
+                if r.drag_stopped() {
+                    stopped = true;
+                }
+                ui.painter().circle_filled(at, if r.hovered() || r.dragged() { 6.5 } else { 4.5 }, t.text);
             }
-            ui.painter().add(egui::Shape::line(pts, egui::Stroke::new(2.2, t.accent)));
-            let knob = pos2(plot.left() + plot.width() * nq.x.clamp(0.0, 1.0), plot.bottom() - plot.height() * nq.y.clamp(0.0, 1.0));
-            ui.painter().circle_filled(knob, if drag.dragged() || drag.hovered() { 7.0 } else { 5.0 }, t.text);
-            ctx.data_mut(|d| d.insert_temp(gx, nq));
-            if drag.drag_stopped() {
+            ctx.data_mut(|d| d.insert_temp(pts_id, ys));
+            if stopped {
                 if app.session.state.selected_keys.is_empty() {
                     app.ui.status = "请先选中关键帧，再应用缓动".into();
                 } else {
-                    let out_inf = (0.5 + (nq.x - 0.5) * 0.9).clamp(0.02, 1.0);
-                    let in_inf = (0.5 - (nq.x - 0.5) * 0.9).clamp(0.02, 1.0);
-                    let slope = (nq.y - 0.5) * 2.4;
+                    // Slope at each end becomes the keyframe speed; the middle sets the influence.
+                    let out_speed = (ys[1] - ys[0]) * 3.0;
+                    let in_speed = (ys[4] - ys[3]) * 3.0;
+                    let peak = ys[2].clamp(0.05, 1.0);
+                    let out_inf = (0.5 + (peak - 0.5) * 1.4).clamp(0.02, 1.0);
+                    let in_inf = (0.5 + (peak - 0.5) * 1.4).clamp(0.02, 1.0);
                     let _ = crate::menus::invoke(
                         app,
                         ctx,
                         "keys.velocity",
                         serde_json::json!({
-                            "outSpeed": slope, "outInfluence": out_inf,
-                            "inSpeed": -slope, "inInfluence": in_inf,
+                            "outSpeed": out_speed, "outInfluence": out_inf,
+                            "inSpeed": in_speed, "inInfluence": in_inf,
                             "continuous": true,
                         }),
                     );
@@ -191,6 +209,50 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
                 if tresp.on_hover_text("应用保存的曲线").clicked() {
                     ctx.data_mut(|d| d.insert_temp(gx, sv));
                 }
+            }
+            let save_id = egui::Id::new("ours-curve-saved");
+            ui.horizontal(|ui| {
+                if ui.button("保存曲线").clicked() {
+                    ctx.data_mut(|d| d.insert_temp(save_id, ys));
+                    app.ui.status = "已保存曲线".into();
+                }
+                if ui.button("删除关键帧").clicked() {
+                    if app.session.state.selected_keys.is_empty() {
+                        app.ui.status = "请先选中关键帧".into();
+                    } else {
+                        let _ = crate::menus::invoke(app, ctx, "keys.delete", serde_json::json!({}));
+                        app.ui.status = "已删除关键帧".into();
+                    }
+                }
+            });
+            let mut restore = None;
+            if let Some(sv) = ctx.data(|d| d.get_temp::<[f32; 5]>(save_id)) {
+                let (thumb, tresp) = ui.allocate_exact_size(vec2(248.0, 54.0), Sense::click());
+                ui.painter().rect_filled(thumb, 5.0, t.switch_well);
+                let p0 = thumb.shrink2(vec2(8.0, 6.0));
+                let mut tp: Vec<egui::Pos2> = Vec::new();
+                for i in 0..=64 {
+                    let u = i as f32 / 64.0;
+                    let seg = ((u * 4.0) as usize).min(3);
+                    let local = u * 4.0 - seg as f32;
+                    let (a, b, c, d) = (sv[seg.saturating_sub(1)], sv[seg], sv[seg + 1], sv[(seg + 2).min(4)]);
+                    let u2 = local * local;
+                    let u3 = u2 * local;
+                    let v = 0.5 * ((2.0 * b)
+                        + (-a + c) * local
+                        + (2.0 * a - 5.0 * b + 4.0 * c - d) * u2
+                        + (-a + 3.0 * b - 3.0 * c + d) * u3);
+                    tp.push(pos2(p0.left() + p0.width() * u, p0.bottom() - p0.height() * v.clamp(0.0, 1.0)));
+                }
+                ui.painter().add(egui::Shape::line(tp, egui::Stroke::new(1.8, t.accent)));
+                ui.painter().text(pos2(thumb.left() + 6.0, thumb.top() + 8.0), Align2::LEFT_TOP, "已保存", Tokens::ui(10.0), t.text_dim);
+                if tresp.on_hover_text("套用保存的曲线").clicked() {
+                    restore = Some(sv);
+                }
+            }
+            if let Some(sv) = restore {
+                ys = sv;
+                ctx.data_mut(|d| d.insert_temp(pts_id, ys));
             }
             ui.label("缓动预设（点击应用）");
             ui.add_space(2.0);
