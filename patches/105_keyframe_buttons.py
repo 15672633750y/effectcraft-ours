@@ -247,34 +247,36 @@ fn draw_ease_curve(p: &egui::Painter, r: Rect, kind: u8, color: egui::Color32) {
 
 /// A curved undo (or, mirrored, redo) arrow drawn with lines, so it never depends on a font glyph.
 fn draw_history_arrow(p: &egui::Painter, r: Rect, mirror: bool, color: egui::Color32) {
-    // Open rounded loop with a short hook: drawn to the same proportions as the reference icons.
+    // Built from local coordinates around the centre, then flipped, so the pair is exactly
+    // symmetric.
     let stroke = egui::Stroke::new(1.9, color);
-    let s = if mirror { -1.0 } else { 1.0 };
     let inner = r.shrink2(vec2(6.5, 6.5));
-    let (left, right) = (inner.left(), inner.right());
+    let cx = inner.center().x;
+    let hw = inner.width() * 0.5;
     let (top, bot) = (inner.top(), inner.bottom());
     let h = inner.height();
-    let w = inner.width();
-    let rr = (h * 0.42).min(w * 0.28);
-    let mut pts: Vec<egui::Pos2> = Vec::new();
-    pts.push(pos2(left + s * w * 0.18, bot));
-    pts.push(pos2(right - rr, bot));
+    let rr = (h * 0.42).min(hw * 0.56);
+    let mut local: Vec<egui::Pos2> = Vec::new();
+    local.push(pos2(-hw * 0.68, bot));
+    local.push(pos2(hw - rr, bot));
     for i in 1..=8 {
         let a = (90.0 - 90.0 * i as f32 / 8.0).to_radians();
-        pts.push(pos2(right - rr + rr * a.cos(), bot - rr + rr * a.sin()));
+        local.push(pos2(hw - rr + rr * a.cos(), bot - rr + rr * a.sin()));
     }
-    pts.push(pos2(right, top + rr));
+    local.push(pos2(hw, top + rr));
     for i in 1..=8 {
         let a = (-90.0 * i as f32 / 8.0).to_radians();
-        pts.push(pos2(right - rr + rr * a.cos(), top + rr + rr * a.sin()));
+        local.push(pos2(hw - rr + rr * a.cos(), top + rr + rr * a.sin()));
     }
-    pts.push(pos2(left + s * w * 0.06, top));
+    local.push(pos2(-hw * 0.9, top));
+    let mut hook = vec![pos2(-hw * 0.9, top), pos2(-hw * 0.38, top - h * 0.34)];
+    let flip = |q: egui::Pos2| {
+        if mirror { pos2(cx - (q.x), q.y) } else { pos2(cx + q.x, q.y) }
+    };
+    let pts: Vec<egui::Pos2> = local.iter().map(|q| flip(*q)).collect();
     p.add(egui::Shape::line(pts, stroke));
-    // The hook leaves the open end upwards and inwards, mirrored for redo.
-    p.add(egui::Shape::line(
-        vec![pos2(left + s * w * 0.06, top), pos2(left + s * w * 0.38, top - h * 0.32)],
-        stroke,
-    ));
+    let hook_pts: Vec<egui::Pos2> = hook.drain(..).map(|q| flip(q)).collect();
+    p.add(egui::Shape::line(hook_pts, stroke));
 }
 '''
 

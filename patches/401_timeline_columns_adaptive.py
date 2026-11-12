@@ -19,18 +19,18 @@ TAIL_NEW = '''        let mut vis = Vis {
 POST_OLD = "            stretch: v(\"stretch\"),\n        }\n    }"
 POST_NEW = '''            stretch: v("stretch"),
         };
-        if extra < -30.0 {
+        if extra < -6.0 {
             vis.comment = false;
             vis.stretch = false;
             vis.in_ = false;
             vis.out = false;
             vis.duration = false;
         }
-        if extra < -120.0 {
+        if extra < -70.0 {
             vis.modes = false;
             vis.parent = false;
         }
-        if extra < -220.0 {
+        if extra < -150.0 {
             vis.num = false;
             vis.label = false;
         }
