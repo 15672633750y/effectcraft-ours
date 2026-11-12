@@ -101,15 +101,16 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
             ui.add_space(6.0);
             ui.label("缓动预设（点击应用）");
             ui.add_space(2.0);
-            // keys.smooth needs three keyframes and is not an easing preset; it is left out.
-            let presets: [(&str, &str, u8); 4] = [
-                ("缓入缓出", "keys.easyEase", 0),
-                ("缓入", "keys.easyEaseIn", 1),
-                ("缓出", "keys.easyEaseOut", 2),
-                ("定格", "keys.toggleHold", 4),
+            // The last number is the minimum number of selected keyframes the command needs.
+            let presets: [(&str, &str, u8, usize); 5] = [
+                ("缓入缓出", "keys.easyEase", 0, 1),
+                ("缓入", "keys.easyEaseIn", 1, 1),
+                ("缓出", "keys.easyEaseOut", 2, 1),
+                ("平滑", "keys.smooth", 3, 3),
+                ("定格", "keys.toggleHold", 4, 1),
             ];
             ui.horizontal_wrapped(|ui| {
-                for (label, cmd, k) in presets {
+                for (label, cmd, k, need) in presets {
                     let (rect, resp) = ui.allocate_exact_size(vec2(66.0, 74.0), Sense::click());
                     let bg = if kind == k { t.accent.gamma_multiply(0.35) } else if resp.hovered() { t.hover } else { t.switch_well };
                     ui.painter().rect_filled(rect, 5.0, bg);
@@ -123,8 +124,13 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
                         t.text,
                     );
                     if resp.on_hover_text(label).clicked() {
-                        if app.session.state.selected_keys.is_empty() {
-                            app.ui.status = "请先选中关键帧，再应用缓动".into();
+                        let have = app.session.state.selected_keys.len();
+                        if have < need {
+                            app.ui.status = if need > 1 {
+                                format!("「{label}」需要选中至少 {need} 个关键帧")
+                            } else {
+                                "请先选中关键帧，再应用缓动".to_string()
+                            };
                         } else {
                             let _ = crate::menus::invoke(app, ctx, cmd, serde_json::json!({}));
                             kind = k;
