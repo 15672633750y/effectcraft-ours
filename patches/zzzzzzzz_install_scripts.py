@@ -66,7 +66,7 @@ def main() -> None:
     }
 '''
     src = src.replace(ANCHOR, ANCHOR + CODE, 1)
-    anchor2 = "    protected void onCreate(Bundle savedInstanceState) {\n"
+    anchor2 = "    @Override\n    protected void onCreate(Bundle savedInstanceState) {\n"
     if src.count(anchor2) != 1:
         raise SystemExit("onCreate anchor missing")
     src = src.replace(anchor2, method + "\n" + anchor2, 1)
