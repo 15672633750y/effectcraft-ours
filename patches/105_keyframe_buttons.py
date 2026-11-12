@@ -78,28 +78,72 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context) {
     if !open {
         return;
     }
+    let t = app.tokens;
     let mut close = false;
     egui::Window::new("曲线")
         .open(&mut open)
         .collapsible(false)
         .resizable(false)
         .show(ctx, |ui| {
-            ui.label("缓动预设");
+            ui.label("缓动预设（点击应用）");
             ui.add_space(4.0);
-            for (label, cmd) in [
-                ("缓入缓出（Easy Ease）", "keys.easyEase"),
-                ("缓入（Easy Ease In）", "keys.easyEaseIn"),
-                ("缓出（Easy Ease Out）", "keys.easyEaseOut"),
-                ("平滑（Smooth）", "keys.smooth"),
-                ("定格（Hold）", "keys.toggleHold"),
-            ] {
-                if ui.button(label).clicked() {
-                    let _ = crate::menus::invoke(app, ctx, cmd, serde_json::json!({}));
-                    close = true;
+            let presets: [(&str, &str, u8); 5] = [
+                ("缓入缓出", "keys.easyEase", 0),
+                ("缓入", "keys.easyEaseIn", 1),
+                ("缓出", "keys.easyEaseOut", 2),
+                ("平滑", "keys.smooth", 3),
+                ("定格", "keys.toggleHold", 4),
+            ];
+            ui.horizontal_wrapped(|ui| {
+                for (label, cmd, kind) in presets {
+                    let (rect, resp) = ui.allocate_exact_size(vec2(66.0, 76.0), Sense::click());
+                    let bg = if resp.hovered() { t.hover } else { t.switch_well };
+                    ui.painter().rect_filled(rect, 5.0, bg);
+                    let plot = Rect::from_min_size(rect.min + vec2(9.0, 8.0), vec2(46.0, 42.0));
+                    draw_ease_curve(ui.painter(), plot, kind, t.text);
+                    ui.painter().text(
+                        pos2(rect.center().x, rect.max.y - 13.0),
+                        Align2::CENTER_CENTER,
+                        label,
+                        Tokens::ui(11.0),
+                        t.text,
+                    );
+                    if resp.on_hover_text(label).clicked() {
+                        let _ = crate::menus::invoke(app, ctx, cmd, serde_json::json!({}));
+                        close = true;
+                    }
                 }
-            }
+            });
         });
     ctx.data_mut(|d| d.insert_temp(open_id, open && !close));
+}
+
+/// A thumbnail of an easing curve: the shape is what makes the preset recognisable.
+fn draw_ease_curve(p: &egui::Painter, r: Rect, kind: u8, color: egui::Color32) {
+    let stroke = egui::Stroke::new(1.8, color);
+    let mut pts: Vec<egui::Pos2> = Vec::new();
+    let steps = 24;
+    for i in 0..=steps {
+        let x = i as f32 / steps as f32;
+        let y = match kind {
+            0 => x * x * (3.0 - 2.0 * x),          // ease in and out
+            1 => x * x,                             // ease in: slow start
+            2 => 1.0 - (1.0 - x) * (1.0 - x),       // ease out: slow finish
+            3 => x,                                 // smooth/linear
+            _ => 0.0,                               // hold
+        };
+        pts.push(pos2(r.min.x + r.width() * x, r.max.y - r.height() * y));
+    }
+    if kind == 4 {
+        // Hold: step at the halfway point.
+        pts = vec![
+            pos2(r.min.x, r.max.y),
+            pos2(r.center().x, r.max.y),
+            pos2(r.center().x, r.min.y),
+            pos2(r.max.x, r.min.y),
+        ];
+    }
+    p.add(egui::Shape::line(pts, stroke));
 }
 
 /// A curved undo (or, mirrored, redo) arrow drawn with lines, so it never depends on a font glyph.
