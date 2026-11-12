@@ -120,6 +120,24 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
                 a2 = (a2 + r2.drag_delta().x / plot.width()).clamp(0.02, 0.99);
                 b2 = (b2 - r2.drag_delta().y / plot.height()).clamp(-0.6, 1.6);
             }
+            // The curve from before this drag stays visible, faint, so the change is comparable.
+            let start_id = egui::Id::new("ours-curve-start");
+            if r1.drag_started() || r2.drag_started() {
+                ctx.data_mut(|d| d.insert_temp(start_id, (a1, b1, a2, b2)));
+            }
+            if let Some((q1, w1, q2, w2)) = ctx.data(|d| d.get_temp::<(f32, f32, f32, f32)>(start_id)) {
+                let g1 = pos2(plot.left() + plot.width() * q1, plot.bottom() - plot.height() * w1);
+                let g2 = pos2(plot.left() + plot.width() * q2, plot.bottom() - plot.height() * w2);
+                let mut old: Vec<egui::Pos2> = Vec::new();
+                for k in 0..=40 {
+                    let u = k as f32 / 40.0;
+                    let v = 1.0 - u;
+                    let x = v * v * v * p0.x + 3.0 * v * v * u * g1.x + 3.0 * v * u * u * g2.x + u * u * u * p3.x;
+                    let y = v * v * v * p0.y + 3.0 * v * v * u * g1.y + 3.0 * v * u * u * g2.y + u * u * u * p3.y;
+                    old.push(pos2(x, y));
+                }
+                ui.painter().add(egui::Shape::line(old, egui::Stroke::new(1.3, t.text_faint)));
+            }
             let mut pts: Vec<egui::Pos2> = Vec::new();
             for k in 0..=40 {
                 let u = k as f32 / 40.0;
