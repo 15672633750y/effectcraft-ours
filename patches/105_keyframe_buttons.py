@@ -92,57 +92,72 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
         .movable(true)
         .default_width(232.0)
         .show(ctx, |ui| {
-            // One square: drag anywhere inside to bend the curve (up/down = strength,
-            // left/right = which side of the motion gets the ease).
-            ui.label("自定义缓动（按住方块拖动）");
-            let bend_id = egui::Id::new("ours-curve-bend");
-            let skew_id = egui::Id::new("ours-curve-skew");
-            let mut bend = ctx.data(|d| d.get_temp::<f32>(bend_id).unwrap_or(0.35));
-            let mut skew = ctx.data(|d| d.get_temp::<f32>(skew_id).unwrap_or(0.0));
+            // Two handles, free in both directions: this is a real cubic easing curve, so shapes
+            // like a strong S or a late snap are reachable.
+            ui.label("自定义缓动（拖动两个手柄）");
+            let h1x = egui::Id::new("ours-c-h1x");
+            let h1y = egui::Id::new("ours-c-h1y");
+            let h2x = egui::Id::new("ours-c-h2x");
+            let h2y = egui::Id::new("ours-c-h2y");
+            let mut a1 = ctx.data(|d| d.get_temp::<f32>(h1x).unwrap_or(0.33));
+            let mut b1 = ctx.data(|d| d.get_temp::<f32>(h1y).unwrap_or(0.0));
+            let mut a2 = ctx.data(|d| d.get_temp::<f32>(h2x).unwrap_or(0.67));
+            let mut b2 = ctx.data(|d| d.get_temp::<f32>(h2y).unwrap_or(1.0));
             let (canvas, _) = ui.allocate_exact_size(vec2(248.0, 248.0), Sense::hover());
             ui.painter().rect_filled(canvas, 6.0, t.switch_well);
             let plot = canvas.shrink2(vec2(18.0, 18.0));
-            let drag = ui.interact(canvas, egui::Id::unique("ours-curve-drag"), Sense::drag());
-            if drag.dragged() {
-                let d = drag.drag_delta();
-                bend = (bend - d.y / plot.height() * 2.6).clamp(0.04, 0.96);
-                skew = (skew + d.x / plot.width() * 2.4).clamp(-0.9, 0.9);
-            }
-            let i1 = (bend * (1.0 - skew * 0.75)).clamp(0.02, 0.98);
-            let i2 = (bend * (1.0 + skew * 0.75)).clamp(0.02, 0.98);
             let p0 = pos2(plot.left(), plot.bottom());
-            let p1 = pos2(plot.left() + plot.width() * i1, plot.bottom());
-            let p2 = pos2(plot.left() + plot.width() * (1.0 - i2), plot.top());
+            let p1 = pos2(plot.left() + plot.width() * a1, plot.bottom() - plot.height() * b1);
+            let p2 = pos2(plot.left() + plot.width() * a2, plot.bottom() - plot.height() * b2);
             let p3 = pos2(plot.right(), plot.top());
+            let r1 = ui.interact(Rect::from_center_size(p1, vec2(24.0, 24.0)), egui::Id::unique("ours-h1"), Sense::drag());
+            let r2 = ui.interact(Rect::from_center_size(p2, vec2(24.0, 24.0)), egui::Id::unique("ours-h2"), Sense::drag());
+            if r1.dragged() {
+                a1 = (a1 + r1.drag_delta().x / plot.width()).clamp(0.02, 0.99);
+                b1 = (b1 - r1.drag_delta().y / plot.height()).clamp(-0.6, 1.6);
+            }
+            if r2.dragged() {
+                a2 = (a2 + r2.drag_delta().x / plot.width()).clamp(0.02, 0.99);
+                b2 = (b2 - r2.drag_delta().y / plot.height()).clamp(-0.6, 1.6);
+            }
             let mut pts: Vec<egui::Pos2> = Vec::new();
-            for k in 0..=32 {
-                let u = k as f32 / 32.0;
+            for k in 0..=40 {
+                let u = k as f32 / 40.0;
                 let v = 1.0 - u;
                 let x = v * v * v * p0.x + 3.0 * v * v * u * p1.x + 3.0 * v * u * u * p2.x + u * u * u * p3.x;
                 let y = v * v * v * p0.y + 3.0 * v * v * u * p1.y + 3.0 * v * u * u * p2.y + u * u * u * p3.y;
                 pts.push(pos2(x, y));
             }
-            if drag.hovered() || drag.dragged() {
-                ui.painter().rect_stroke(canvas, 6.0, egui::Stroke::new(1.0, t.accent), egui::StrokeKind::Inside);
-            }
             ui.painter().add(egui::Shape::line(pts, egui::Stroke::new(2.2, t.accent)));
+            // Handle stems and knobs.
+            ui.painter().line_segment([p0, p1], egui::Stroke::new(1.0, t.text_faint));
+            ui.painter().line_segment([p3, p2], egui::Stroke::new(1.0, t.text_faint));
+            for (rr, at) in [(&r1, p1), (&r2, p2)] {
+                ui.painter().circle_filled(at, if rr.hovered() || rr.dragged() { 7.0 } else { 5.0 }, t.text);
+            }
             ctx.data_mut(|d| {
-                d.insert_temp(bend_id, bend);
-                d.insert_temp(skew_id, skew);
+                d.insert_temp(h1x, a1);
+                d.insert_temp(h1y, b1);
+                d.insert_temp(h2x, a2);
+                d.insert_temp(h2y, b2);
             });
-            // Letting go applies at once.
-            if drag.drag_stopped() {
+            if r1.drag_stopped() || r2.drag_stopped() {
                 if app.session.state.selected_keys.is_empty() {
                     app.ui.status = "请先选中关键帧，再应用缓动".into();
                 } else {
+                    // Influence is the horizontal reach; speed is the slope of the handle.
+                    let out_inf = a1.clamp(0.01, 1.0);
+                    let in_inf = (1.0 - a2).clamp(0.01, 1.0);
+                    let out_speed = if a1 > 0.001 { b1 / a1 } else { 0.0 };
+                    let in_speed = if a2 < 0.999 { (1.0 - b2) / (1.0 - a2) } else { 0.0 };
                     let _ = crate::menus::invoke(
                         app,
                         ctx,
                         "keys.velocity",
                         serde_json::json!({
-                            "outSpeed": 0.0, "outInfluence": i1,
-                            "inSpeed": 0.0, "inInfluence": i2,
-                            "continuous": true,
+                            "outSpeed": out_speed, "outInfluence": out_inf,
+                            "inSpeed": in_speed, "inInfluence": in_inf,
+                            "continuous": false,
                         }),
                     );
                 }
@@ -150,17 +165,18 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
             let clip_id = egui::Id::new("ours-curve-clip");
             ui.horizontal(|ui| {
                 if ui.button("复制曲线").clicked() {
-                    ctx.data_mut(|d| d.insert_temp(clip_id, (bend, skew)));
+                    ctx.data_mut(|d| d.insert_temp(clip_id, (a1, b1, a2, b2)));
                     app.ui.status = "已复制曲线".into();
                 }
                 if ui.button("粘贴曲线").clicked() {
-                    match ctx.data(|d| d.get_temp::<(f32, f32)>(clip_id)) {
-                        Some((q1, q2)) => {
-                            bend = q1;
-                            skew = q2;
+                    match ctx.data(|d| d.get_temp::<(f32, f32, f32, f32)>(clip_id)) {
+                        Some((w1, x1, w2, x2)) => {
+                            a1 = w1; b1 = x1; a2 = w2; b2 = x2;
                             ctx.data_mut(|d| {
-                                d.insert_temp(bend_id, bend);
-                                d.insert_temp(skew_id, skew);
+                                d.insert_temp(h1x, a1);
+                                d.insert_temp(h1y, b1);
+                                d.insert_temp(h2x, a2);
+                                d.insert_temp(h2y, b2);
                             });
                             app.ui.status = "已粘贴曲线".into();
                         }
