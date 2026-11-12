@@ -32,7 +32,7 @@ def main() -> None:
         }
     }
 '''
-    src = src.replace(ANCHOR, body + ANCHOR, 1)
+    src = src.replace(ANCHOR, ANCHOR + body, 1)
     path.write_text(src, encoding="utf-8")
     print("viewer follows the render")
 
