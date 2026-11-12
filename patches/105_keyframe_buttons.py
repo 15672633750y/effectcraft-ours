@@ -27,7 +27,7 @@ fn keyframe_buttons(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Paint
                     app,
                     ui.ctx(),
                     "prop.toggleKey",
-                    serde_json::json!({"layer": layer.0, "uid": uid}),
+                    serde_json::json!({"layer": layer.0, "prop": uid}),
                 );
             }
             None => app.ui.status = "请选择目标后再点击关键帧".into(),
