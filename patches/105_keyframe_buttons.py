@@ -107,20 +107,20 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
             // dips there, pull one up and it arches. Left/right dragging shifts the peak.
             ui.label("自定义缓动（拖动曲线上的点）");
             let pts_id = egui::Id::new("ours-curve-points");
-            let mut ys: [f32; 5] = ctx.data(|d| d.get_temp::<[f32; 5]>(pts_id)).unwrap_or([0.1, 0.4, 0.75, 0.45, 0.1]);
+            let mut ys: [f32; 9] = ctx.data(|d| d.get_temp::<[f32; 9]>(pts_id)).unwrap_or([0.06, 0.22, 0.45, 0.66, 0.8, 0.72, 0.55, 0.35, 0.14]);
             let (canvas, _) = ui.allocate_exact_size(vec2(248.0, 248.0), Sense::hover());
             ui.painter().rect_filled(canvas, 6.0, t.switch_well);
             let plot = canvas.shrink2(vec2(18.0, 18.0));
-            let px = |i: usize| plot.left() + plot.width() * (i as f32 / 4.0);
+            let px = |i: usize| plot.left() + plot.width() * (i as f32 / 8.0);
             let py = |v: f32| plot.bottom() - plot.height() * v.clamp(0.0, 1.0);
             // Smooth curve through the points (Catmull-Rom).
             let mut path: Vec<egui::Pos2> = Vec::new();
-            for seg in 0..4 {
+            for seg in 0..8 {
                 let (a, b, c, d) = (
                     ys[seg.saturating_sub(1)],
                     ys[seg],
                     ys[seg + 1],
-                    ys[(seg + 2).min(4)],
+                    ys[(seg + 2).min(8)],
                 );
                 let steps = 16;
                 for k in 0..steps {
@@ -135,11 +135,11 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
                     path.push(pos2(x, py(v)));
                 }
             }
-            path.push(pos2(px(4), py(ys[4])));
+            path.push(pos2(px(8), py(ys[8])));
             ui.painter().add(egui::Shape::line(path, egui::Stroke::new(2.2, t.accent)));
             let mut moved = false;
             let mut stopped = false;
-            for i in 0..5 {
+            for i in 0..9 {
                 let at = pos2(px(i), py(ys[i]));
                 let r = ui.interact(Rect::from_center_size(at, vec2(26.0, 26.0)), egui::Id::unique(("ours-cpt", i)), Sense::drag());
                 if r.dragged() {
@@ -149,7 +149,8 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
                 if r.drag_stopped() {
                     stopped = true;
                 }
-                ui.painter().circle_filled(at, if r.hovered() || r.dragged() { 6.5 } else { 4.5 }, t.text);
+                // The nine grab points stay invisible: the curve itself shows the result.
+                let _ = at;
             }
             ctx.data_mut(|d| d.insert_temp(pts_id, ys));
             if stopped {
@@ -158,8 +159,8 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
                 } else {
                     // Slope at each end becomes the keyframe speed; the middle sets the influence.
                     let out_speed = (ys[1] - ys[0]) * 3.0;
-                    let in_speed = (ys[4] - ys[3]) * 3.0;
-                    let peak = ys[2].clamp(0.05, 1.0);
+                    let in_speed = (ys[8] - ys[7]) * 3.0;
+                    let peak = ys[4].clamp(0.05, 1.0);
                     let out_inf = (0.5 + (peak - 0.5) * 1.4).clamp(0.02, 1.0);
                     let in_inf = (0.5 + (peak - 0.5) * 1.4).clamp(0.02, 1.0);
                     let _ = crate::menus::invoke(
@@ -226,16 +227,16 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
                 }
             });
             let mut restore = None;
-            if let Some(sv) = ctx.data(|d| d.get_temp::<[f32; 5]>(save_id)) {
+            if let Some(sv) = ctx.data(|d| d.get_temp::<[f32; 9]>(save_id)) {
                 let (thumb, tresp) = ui.allocate_exact_size(vec2(248.0, 54.0), Sense::click());
                 ui.painter().rect_filled(thumb, 5.0, t.switch_well);
                 let p0 = thumb.shrink2(vec2(8.0, 6.0));
                 let mut tp: Vec<egui::Pos2> = Vec::new();
                 for i in 0..=64 {
                     let u = i as f32 / 64.0;
-                    let seg = ((u * 4.0) as usize).min(3);
-                    let local = u * 4.0 - seg as f32;
-                    let (a, b, c, d) = (sv[seg.saturating_sub(1)], sv[seg], sv[seg + 1], sv[(seg + 2).min(4)]);
+                    let seg = ((u * 8.0) as usize).min(7);
+                    let local = u * 8.0 - seg as f32;
+                    let (a, b, c, d) = (sv[seg.saturating_sub(1)], sv[seg], sv[seg + 1], sv[(seg + 2).min(8)]);
                     let u2 = local * local;
                     let u3 = u2 * local;
                     let v = 0.5 * ((2.0 * b)
