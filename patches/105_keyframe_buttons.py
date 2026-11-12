@@ -44,7 +44,7 @@ fn keyframe_buttons(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Paint
     }
     x += 50.0;
 
-    curve_menu(app, ui.ctx());
+    curve_menu(app, ui.ctx(), ui.max_rect());
     x += 4.0;
 
     let undo_ready = !app.session.history.undo.is_empty();
@@ -72,7 +72,7 @@ fn keyframe_buttons(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Paint
     x
 }
 
-fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context) {
+fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
     let open_id = egui::Id::new("ours-curve-open");
     let kind_id = egui::Id::new("ours-curve-kind");
     let mut open = ctx.data(|d| d.get_temp::<bool>(open_id).unwrap_or(false));
@@ -83,7 +83,7 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context) {
     let t = app.tokens;
     let mut close = false;
     // Docked under the toolbar on the left, over the column beside the viewer.
-    let screen = ctx.screen_rect();
+    let screen = host;
     egui::Window::new("曲线")
         .open(&mut open)
         .collapsible(false)
