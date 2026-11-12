@@ -98,6 +98,8 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
             let c2 = egui::Id::new("ours-curve-out");
             let mut i1 = ctx.data(|d| d.get_temp::<f32>(c1).unwrap_or(0.33));
             let mut i2 = ctx.data(|d| d.get_temp::<f32>(c2).unwrap_or(0.33));
+            let dragged_last = ctx.data(|d| d.get_temp::<bool>(egui::Id::new("ours-curve-dragged")).unwrap_or(false));
+            let mut prev_dragged = dragged_last;
             let (canvas, _) = ui.allocate_exact_size(vec2(248.0, 248.0), Sense::hover());
             ui.painter().rect_filled(canvas, 6.0, t.switch_well);
             let plot = canvas.shrink2(vec2(18.0, 18.0));
@@ -122,6 +124,25 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
             if h2.dragged() {
                 i2 = (i2 - h2.drag_delta().x / plot.width()).clamp(0.02, 0.98);
             }
+            // Remember the shape a drag started from, so the previous curve can stay visible.
+            let start_id = egui::Id::new("ours-curve-start");
+            if h1.drag_started() || h2.drag_started() {
+                ctx.data_mut(|d| d.insert_temp(start_id, (i1, i2)));
+            }
+            let ghost = ctx.data(|d| d.get_temp::<(f32, f32)>(start_id));
+            if let Some((q1, q2)) = ghost {
+                let a1 = pos2(plot.left() + plot.width() * q1, plot.bottom());
+                let a2 = pos2(plot.left() + plot.width() * (1.0 - q2), plot.top());
+                let mut ghost_pts: Vec<egui::Pos2> = Vec::new();
+                for k in 0..=32 {
+                    let u = k as f32 / 32.0;
+                    let v = 1.0 - u;
+                    let x = v * v * v * p0.x + 3.0 * v * v * u * a1.x + 3.0 * v * u * u * a2.x + u * u * u * p3.x;
+                    let y = v * v * v * p0.y + 3.0 * v * v * u * a1.y + 3.0 * v * u * u * a2.y + u * u * u * p3.y;
+                    ghost_pts.push(pos2(x, y));
+                }
+                ui.painter().add(egui::Shape::line(ghost_pts, egui::Stroke::new(1.4, t.text_faint)));
+            }
             for (hh, at) in [(h1, p1), (h2, p2)] {
                 ui.painter().circle_filled(at, if hh.hovered() { 7.0 } else { 5.0 }, t.text);
             }
@@ -129,7 +150,8 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
                 d.insert_temp(c1, i1);
                 d.insert_temp(c2, i2);
             });
-            if ui.button("应用自定义缓动").clicked() {
+            // Letting go of a handle applies at once: no second button to remember.
+            if h1.drag_stopped() || h2.drag_stopped() {
                 if app.session.state.selected_keys.is_empty() {
                     app.ui.status = "请先选中关键帧，再应用缓动".into();
                 } else {
@@ -145,6 +167,27 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
                     );
                 }
             }
+            let clip_id = egui::Id::new("ours-curve-clip");
+            ui.horizontal(|ui| {
+                if ui.button("复制曲线").clicked() {
+                    ctx.data_mut(|d| d.insert_temp(clip_id, (i1, i2)));
+                    app.ui.status = "已复制曲线".into();
+                }
+                if ui.button("粘贴曲线").clicked() {
+                    match ctx.data(|d| d.get_temp::<(f32, f32)>(clip_id)) {
+                        Some((q1, q2)) => {
+                            i1 = q1;
+                            i2 = q2;
+                            ctx.data_mut(|d| {
+                                d.insert_temp(c1, i1);
+                                d.insert_temp(c2, i2);
+                            });
+                            app.ui.status = "已粘贴曲线".into();
+                        }
+                        None => app.ui.status = "还没有复制过曲线".into(),
+                    }
+                }
+            });
             ui.add_space(6.0);
             ui.label("缓动预设（点击应用）");
             ui.add_space(2.0);
