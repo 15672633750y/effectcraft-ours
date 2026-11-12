@@ -18,9 +18,9 @@ def main() -> None:
     old = "    let name_w = (width - vis.fixed() + NAME_EXTRA.with(|c| c.get())).max(120.0);"
     if src.count(old) != 1:
         raise SystemExit(f"anchor: {src.count(old)}")
-    src = src.replace(old, "    // " + MARKER + "\n    let name_w = (width - vis.fixed() + NAME_EXTRA.with(|c| c.get())).max(64.0);", 1)
+    src = src.replace(old, "    // " + MARKER + "\n    let name_w = 96.0;", 1)
     path.write_text(src, encoding="utf-8")
-    print("name column minimum is 64px")
+    print("name column is a fixed 96px, so the switches sit right beside it")
 
 
 if __name__ == "__main__":

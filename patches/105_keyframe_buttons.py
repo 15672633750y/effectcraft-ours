@@ -281,15 +281,15 @@ fn draw_ease_curve(p: &egui::Painter, r: Rect, kind: u8, color: egui::Color32) {
 
 /// A curved undo (or, mirrored, redo) arrow drawn with lines, so it never depends on a font glyph.
 fn draw_history_arrow(p: &egui::Painter, r: Rect, mirror: bool, color: egui::Color32) {
-    // Built from local coordinates around the centre, then flipped, so the pair is exactly
-    // symmetric.
-    let stroke = egui::Stroke::new(1.9, color);
-    let inner = r.shrink2(vec2(6.5, 6.5));
-    let cx = inner.center().x;
-    let hw = inner.width() * 0.5;
-    let (top, bot) = (inner.top(), inner.bottom());
-    let h = inner.height();
-    let rr = (h * 0.42).min(hw * 0.56);
+    // Fixed size, centred on the button, so it lines up with the neighbouring buttons and the
+    // pair is an exact mirror of itself.
+    let stroke = egui::Stroke::new(1.8, color);
+    let c = r.center();
+    let bw = 16.0;
+    let bh = 13.0;
+    let (top, bot) = (c.y - bh * 0.5, c.y + bh * 0.5);
+    let hw = bw * 0.5;
+    let rr = (bh * 0.42).min(hw * 0.56);
     let mut local: Vec<egui::Pos2> = Vec::new();
     local.push(pos2(-hw * 0.68, bot));
     local.push(pos2(hw - rr, bot));
@@ -303,14 +303,10 @@ fn draw_history_arrow(p: &egui::Painter, r: Rect, mirror: bool, color: egui::Col
         local.push(pos2(hw - rr + rr * a.cos(), top + rr + rr * a.sin()));
     }
     local.push(pos2(-hw * 0.9, top));
-    let mut hook = vec![pos2(-hw * 0.9, top), pos2(-hw * 0.38, top - h * 0.34)];
-    let flip = |q: egui::Pos2| {
-        if mirror { pos2(cx - (q.x), q.y) } else { pos2(cx + q.x, q.y) }
-    };
-    let pts: Vec<egui::Pos2> = local.iter().map(|q| flip(*q)).collect();
-    p.add(egui::Shape::line(pts, stroke));
-    let hook_pts: Vec<egui::Pos2> = hook.drain(..).map(|q| flip(q)).collect();
-    p.add(egui::Shape::line(hook_pts, stroke));
+    let hook = vec![pos2(-hw * 0.9, top), pos2(-hw * 0.34, top - bh * 0.34)];
+    let flip = |q: egui::Pos2| pos2(if mirror { c.x - q.x } else { c.x + q.x }, q.y);
+    p.add(egui::Shape::line(local.iter().map(|q| flip(*q)).collect::<Vec<_>>(), stroke));
+    p.add(egui::Shape::line(hook.iter().map(|q| flip(*q)).collect::<Vec<_>>(), stroke));
 }
 '''
 
