@@ -64,7 +64,7 @@ fn keyframe_buttons(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Paint
         ("⟲", "edit.undo", "撤销", undo_ready),
         ("⟳", "edit.redo", "恢复", redo_ready),
     ] {
-        let r = Rect::from_min_size(pos2(x, cy - 15.0), vec2(30.0, 26.0));
+        let r = Rect::from_min_size(pos2(x, cy - 13.0), vec2(30.0, 26.0));
         let resp = ui.interact(r, egui::Id::unique(("ours-history", cmd)), Sense::click());
         p.rect_filled(r, 5.0, t.switch_well);
         let tint = if ready { t.text } else { t.text_faint };
