@@ -104,22 +104,23 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context) {
 
 /// A curved undo (or, mirrored, redo) arrow drawn with lines, so it never depends on a font glyph.
 fn draw_history_arrow(p: &egui::Painter, c: egui::Pos2, rad: f32, mirror: bool, color: egui::Color32) {
-    // A thin hook: most of a ring, open at the bottom, with a short diagonal tip.
-    let stroke = egui::Stroke::new(1.8, color);
+    // A rounded loop with a flat tail and a small hook, as in the reference icon.
+    let stroke = egui::Stroke::new(2.0, color);
     let sign = if mirror { -1.0 } else { 1.0 };
     let mut pts: Vec<egui::Pos2> = Vec::new();
-    let steps = 22;
+    let steps = 28;
     for i in 0..=steps {
         let t = i as f32 / steps as f32;
-        let a = std::f32::consts::PI * (0.08 + 1.05 * t);
-        pts.push(pos2(c.x + sign * rad * a.sin(), c.y + rad * 0.78 * a.cos()));
+        // Most of a circle, open just above the left shoulder.
+        let a = std::f32::consts::PI * (0.55 + 1.55 * t);
+        pts.push(pos2(c.x + sign * rad * a.cos(), c.y + rad * 0.85 * a.sin()));
     }
     p.add(egui::Shape::line(pts.clone(), stroke));
-    let tip = pts[pts.len() - 1];
-    let prev = pts[pts.len() - 2];
-    let dir = (tip - prev).normalized();
-    let hook = egui::vec2(-dir.y, dir.x) * (rad * 0.55);
-    p.add(egui::Shape::line(vec![tip, tip + hook], stroke));
+    // Flat tail running out of the opening, then a short hook upward.
+    let tail = pts[pts.len() - 1];
+    let out = pos2(tail.x - sign * rad * 0.9, tail.y);
+    p.add(egui::Shape::line(vec![tail, out], stroke));
+    p.add(egui::Shape::line(vec![out, pos2(out.x, out.y - rad * 0.5)], stroke));
 }
 '''
 
