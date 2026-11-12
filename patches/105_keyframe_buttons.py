@@ -143,7 +143,7 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
                 }
                 ui.painter().add(egui::Shape::line(ghost_pts, egui::Stroke::new(1.4, t.text_faint)));
             }
-            for (hh, at) in [(h1, p1), (h2, p2)] {
+            for (hh, at) in [(&h1, p1), (&h2, p2)] {
                 ui.painter().circle_filled(at, if hh.hovered() { 7.0 } else { 5.0 }, t.text);
             }
             ctx.data_mut(|d| {
