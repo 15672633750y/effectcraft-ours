@@ -107,10 +107,10 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
             if drag.dragged() {
                 let d = drag.drag_delta();
                 nq.x = (nq.x + d.x / plot.width() * 1.8).clamp(-0.6, 1.6);
-                nq.y = (nq.y - d.y / plot.height() * 1.8).clamp(-1.2, 2.2);
+                nq.y = (nq.y - d.y / plot.height() * 1.8).clamp(0.0, 1.0);
             }
             // A bell, like the reference panel: drag up to raise the peak, sideways to move it.
-            let h = (nq.y.clamp(0.05, 1.6)) as f32;
+            let h = nq.y.clamp(0.0, 1.0);
             let skew = (nq.x.clamp(0.05, 0.95)) as f32;
             let mut pts: Vec<egui::Pos2> = Vec::new();
             for k in 0..=60 {
@@ -120,7 +120,7 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
                 let v = (std::f32::consts::PI * u).sin();
                 let x = plot.left() + plot.width() * t;
                 let y = plot.bottom() - plot.height() * h * v;
-                pts.push(pos2(x, y.clamp(plot.top() - plot.height() * 0.35, plot.bottom())));
+                pts.push(pos2(x, y.clamp(plot.top(), plot.bottom())));
             }
             ui.painter().add(egui::Shape::line(pts, egui::Stroke::new(2.2, t.accent)));
             let knob = pos2(plot.left() + plot.width() * nq.x.clamp(0.0, 1.0), plot.bottom() - plot.height() * nq.y.clamp(0.0, 1.0));
@@ -166,14 +166,14 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
                 let (thumb, tresp) = ui.allocate_exact_size(vec2(248.0, 62.0), Sense::click());
                 ui.painter().rect_filled(thumb, 5.0, t.switch_well);
                 let pad = thumb.shrink2(vec2(10.0, 8.0));
-                let hh = sv.y.clamp(0.05, 1.6);
+                let hh = sv.y.clamp(0.0, 1.0);
                 let sk = sv.x.clamp(0.05, 0.95);
                 let mut tp: Vec<egui::Pos2> = Vec::new();
                 for k in 0..=40 {
                     let tt = k as f32 / 40.0;
                     let u = if tt < sk { 0.5 * tt / sk } else { 0.5 + 0.5 * (tt - sk) / (1.0 - sk) };
                     let v = (std::f32::consts::PI * u).sin();
-                    tp.push(pos2(pad.left() + pad.width() * tt, (pad.bottom() - pad.height() * hh * v).clamp(pad.top() - 6.0, pad.bottom())));
+                    tp.push(pos2(pad.left() + pad.width() * tt, (pad.bottom() - pad.height() * hh * v).clamp(pad.top(), pad.bottom())));
                 }
                 ui.painter().add(egui::Shape::line(tp, egui::Stroke::new(1.8, t.accent)));
                 ui.painter().text(pos2(thumb.left() + 6.0, thumb.top() + 9.0), Align2::LEFT_TOP, "已保存", Tokens::ui(10.0), t.text_dim);
@@ -263,8 +263,8 @@ fn draw_history_arrow(p: &egui::Painter, r: Rect, mirror: bool, color: egui::Col
     // pair is an exact mirror of itself.
     let stroke = egui::Stroke::new(1.8, color);
     let c = r.center();
-    let bw = 16.0;
-    let bh = 13.0;
+    let bw = 18.0;
+    let bh = 14.0;
     let (top, bot) = (c.y - bh * 0.5, c.y + bh * 0.5);
     let hw = bw * 0.5;
     let rr = (bh * 0.42).min(hw * 0.56);

@@ -15,10 +15,7 @@ MODULE = r'''//! Chinese display names for the common transform properties.
 
 /// The Chinese label for a property's stored English name, but only inside the transform
 /// groups: effect parameters keep their English names.
-pub fn name<'a>(en: &'a str, group: &str) -> &'a str {
-    if !matches!(group, "Transform" | "Layer Transform" | "Group") {
-        return en;
-    }
+pub fn name<'a>(en: &'a str, _group: &str) -> &'a str {
     match en {
         "Transform" => "变换",
         "Layer Transform" => "图层变换",
@@ -34,6 +31,11 @@ pub fn name<'a>(en: &'a str, group: &str) -> &'a str {
         "Skew" => "倾斜",
         "Skew Axis" => "倾斜轴",
         "Material Options" => "材质选项",
+        "Contents" => "内容",
+        "Text" => "文本",
+        "Shape" => "形状",
+        "Mask" => "遮罩",
+        "Masks" => "遮罩",
         "Position X" => "X 位置",
         "Position Y" => "Y 位置",
         "Scale X" => "X 缩放",

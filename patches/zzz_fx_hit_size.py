@@ -33,11 +33,11 @@ def main() -> None:
     timeline = root / "crates/ui-egui/src/panels/timeline.rs"
     tl = timeline.read_text(encoding="utf-8")
     if "const SW: f32 = 30.0;" in tl:
-        tl = tl.replace("const SW: f32 = 30.0;", "const SW: f32 = 34.0;", 1)
-        print("switch column is 34px wide")
+        tl = tl.replace("const SW: f32 = 30.0;", "const SW: f32 = 27.0;", 1)
+        print("switch column is 27px wide")
     if "vec2(26.0, 26.0)" in tl:
-        tl = tl.replace("vec2(26.0, 26.0)", "vec2(30.0, 30.0)", 1)
-        print("switch icons are 30px")
+        tl = tl.replace("vec2(26.0, 26.0)", "vec2(23.0, 23.0)", 1)
+        print("switch icons are 23px")
     timeline.write_text(tl, encoding="utf-8")
 
 
