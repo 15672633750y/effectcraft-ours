@@ -247,31 +247,26 @@ fn draw_ease_curve(p: &egui::Painter, r: Rect, kind: u8, color: egui::Color32) {
 
 /// A curved undo (or, mirrored, redo) arrow drawn with lines, so it never depends on a font glyph.
 fn draw_history_arrow(p: &egui::Painter, c: egui::Pos2, rad: f32, mirror: bool, color: egui::Color32) {
-    // A flat-bottomed loop open at the top, with a short tick: the reference icon, mirrored.
-    let stroke = egui::Stroke::new(1.7, color);
+    // A hoop with an arrowhead on one side and a long tail on the other: the familiar undo arrow.
+    let stroke = egui::Stroke::new(2.0, color);
     let sign = if mirror { -1.0 } else { 1.0 };
     let mut pts: Vec<egui::Pos2> = Vec::new();
-    let steps = 26;
-    // From just past the top opening, clockwise round the bottom, back up to the opening.
+    let steps = 24;
     for i in 0..=steps {
         let t = i as f32 / steps as f32;
-        let a = std::f32::consts::PI * (-0.72 + 1.44 * t);
-        let x = c.x + sign * rad * a.cos();
-        let y = c.y + rad * 0.72 * a.sin();
-        pts.push(pos2(x, y));
-    }
-    // Flatten the bottom: the reference has a straight base.
-    let n = pts.len();
-    for (i, q) in pts.iter_mut().enumerate() {
-        let t = i as f32 / (n - 1) as f32;
-        let flat = (1.0 - (2.0 * t - 1.0).abs()).powi(2);
-        let base_y = c.y + rad * 0.72;
-        q.y = q.y * (1.0 - flat * 0.55) + base_y * flat * 0.55;
+        // From the arrow side, round the bottom, up to the tail side.
+        let a = std::f32::consts::PI * (1.0 - t);
+        pts.push(pos2(c.x + sign * rad * a.cos(), c.y + rad * 0.85 * a.sin()));
     }
     p.add(egui::Shape::line(pts.clone(), stroke));
-    // The tick at the open end.
-    let end_pt = pts[0];
-    p.add(egui::Shape::line(vec![end_pt, pos2(end_pt.x + sign * rad * 0.42, end_pt.y - rad * 0.42)], stroke));
+    // Tail: keep going down from the far end, as in the sketch.
+    let tail = pts[pts.len() - 1];
+    p.add(egui::Shape::line(vec![tail, pos2(tail.x + sign * rad * 0.55, tail.y + rad * 0.35)], stroke));
+    // Arrowhead on the other end, pointing outwards.
+    let tip = pts[0];
+    let h = rad * 0.55;
+    p.add(egui::Shape::line(vec![tip, pos2(tip.x - sign * h * 0.8, tip.y - h * 0.55)], stroke));
+    p.add(egui::Shape::line(vec![tip, pos2(tip.x, tip.y + h * 0.95)], stroke));
 }
 '''
 
