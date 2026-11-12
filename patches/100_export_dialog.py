@@ -41,12 +41,18 @@ fn export_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
     let mut start = false;
     let mut cancel = false;
     let mut keep_open = open;
+    let comp_info = app
+        .session
+        .active_comp()
+        .map(|c| format!("当前工程：{}×{} · {:.2} fps", c.width, c.height, c.frame_rate.as_f64()))
+        .unwrap_or_else(|| "未打开合成".to_string());
     egui::Window::new("导出视频")
         .open(&mut keep_open)
         .collapsible(false)
         .resizable(false)
         .show(ctx, |ui| {
             ui.label("请先打开一个合成工程");
+            ui.label(egui::RichText::new(comp_info.clone()).weak());
             ui.add_space(6.0);
             ui.label("视频格式");
             egui::ComboBox::from_id_salt("ours-export-fmt-combo")
