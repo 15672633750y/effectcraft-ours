@@ -16,7 +16,7 @@ thread_local! {
 '''
 
 OLD_W = "    let left_w = (vis.fixed() + 190.0).clamp(420.0, (rect.width() * 0.72).max(420.0));"
-NEW_W = "    let left_w = (vis.fixed() + 190.0 + LEFT_EXTRA.with(|c| c.get())).clamp(300.0, (rect.width() * 0.9).max(300.0));"
+NEW_W = "    let left_w = (vis.fixed() + 190.0 + LEFT_EXTRA.with(|c| c.get())).clamp(vis.fixed() + 90.0, (rect.width() * 0.9).max(vis.fixed() + 90.0));"
 
 OLD_G = "    let graph_x0 = rect.min.x + left_w + 1.0;\n"
 NEW_G = OLD_G + '''    // The handle lives in a foreground area: the rows underneath would otherwise take the press.
