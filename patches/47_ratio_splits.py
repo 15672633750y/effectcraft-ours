@@ -7,8 +7,9 @@ from pathlib import Path
 
 MARKER = "EFFECTCRAFT_OURS_RATIO_SPLITS_V1"
 REPLACEMENTS = [
-    ("FixedFirst(300.0)", "FixedFirst(190.0)"),
-    ("FixedFirst(340.0)", "FixedFirst(200.0)"),
+    ("FixedFirst(300.0)", "FixedFirst(170.0)"),
+    ("FixedFirst(340.0)", "FixedFirst(180.0)"),
+    ("FixedFirst(240.0)", "FixedFirst(150.0)"),
     ("FixedSecond(300.0)", "Ratio(0.78)"),
 ]
 
@@ -39,8 +40,8 @@ def main() -> None:
     # version, which makes the app fall back to the defaults below.
     state = root / "crates/ui-egui/src/workspace_state.rs"
     src = state.read_text(encoding="utf-8")
-    if "const VERSION: u32 = 2;" in src:
-        state.write_text(src.replace("const VERSION: u32 = 2;", "const VERSION: u32 = 3;", 1), encoding="utf-8")
+    if "const VERSION: u32 = 3;" in src:
+        state.write_text(src.replace("const VERSION: u32 = 2;", "const VERSION: u32 = 4;", 1), encoding="utf-8")
         print("workspace snapshot version bumped, saved layouts are rebuilt")
 
 
