@@ -92,90 +92,55 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
         .movable(true)
         .default_width(232.0)
         .show(ctx, |ui| {
-            // Two handles, free in both directions: this is a real cubic easing curve, so shapes
-            // like a strong S or a late snap are reachable.
-            ui.label("自定义缓动（拖动两个手柄）");
-            let h1x = egui::Id::new("ours-c-h1x");
-            let h1y = egui::Id::new("ours-c-h1y");
-            let h2x = egui::Id::new("ours-c-h2x");
-            let h2y = egui::Id::new("ours-c-h2y");
-            let mut a1 = ctx.data(|d| d.get_temp::<f32>(h1x).unwrap_or(0.33));
-            let mut b1 = ctx.data(|d| d.get_temp::<f32>(h1y).unwrap_or(0.0));
-            let mut a2 = ctx.data(|d| d.get_temp::<f32>(h2x).unwrap_or(0.67));
-            let mut b2 = ctx.data(|d| d.get_temp::<f32>(h2y).unwrap_or(1.0));
+            // One grab point pulls the whole curve: drag down and it bows down, drag up and it
+            // arches over, drag sideways and it leans that way.
+            ui.label("自定义缓动（按住方块拖动）");
+            let gx = egui::Id::new("ours-c-gx");
+            let gy = egui::Id::new("ours-c-gy");
+            let mut q = ctx.data(|d| d.get_temp::<egui::Pos2>(gx));
+            let cur = q.unwrap_or(pos2(0.5, 0.5));
             let (canvas, _) = ui.allocate_exact_size(vec2(248.0, 248.0), Sense::hover());
             ui.painter().rect_filled(canvas, 6.0, t.switch_well);
             let plot = canvas.shrink2(vec2(18.0, 18.0));
+            let drag = ui.interact(canvas, egui::Id::unique("ours-curve-drag"), Sense::drag());
+            let mut nq = cur;
+            if drag.dragged() {
+                let d = drag.drag_delta();
+                nq.x = (nq.x + d.x / plot.width() * 1.8).clamp(-0.6, 1.6);
+                nq.y = (nq.y - d.y / plot.height() * 1.8).clamp(-1.2, 2.2);
+            }
+            // Both control points follow the grab point, so a single drag reshapes the whole curve.
             let p0 = pos2(plot.left(), plot.bottom());
-            let p1 = pos2(plot.left() + plot.width() * a1, plot.bottom() - plot.height() * b1);
-            let p2 = pos2(plot.left() + plot.width() * a2, plot.bottom() - plot.height() * b2);
             let p3 = pos2(plot.right(), plot.top());
-            let r1 = ui.interact(Rect::from_center_size(p1, vec2(24.0, 24.0)), egui::Id::unique("ours-h1"), Sense::drag());
-            let r2 = ui.interact(Rect::from_center_size(p2, vec2(24.0, 24.0)), egui::Id::unique("ours-h2"), Sense::drag());
-            if r1.dragged() {
-                a1 = (a1 + r1.drag_delta().x / plot.width()).clamp(0.02, 0.99);
-                b1 = (b1 - r1.drag_delta().y / plot.height()).clamp(-0.6, 1.6);
-            }
-            if r2.dragged() {
-                a2 = (a2 + r2.drag_delta().x / plot.width()).clamp(0.02, 0.99);
-                b2 = (b2 - r2.drag_delta().y / plot.height()).clamp(-0.6, 1.6);
-            }
-            // The curve from before this drag stays visible, faint, so the change is comparable.
-            let start_id = egui::Id::new("ours-curve-start");
-            if r1.drag_started() || r2.drag_started() {
-                ctx.data_mut(|d| d.insert_temp(start_id, (a1, b1, a2, b2)));
-            }
-            if let Some((q1, w1, q2, w2)) = ctx.data(|d| d.get_temp::<(f32, f32, f32, f32)>(start_id)) {
-                let g1 = pos2(plot.left() + plot.width() * q1, plot.bottom() - plot.height() * w1);
-                let g2 = pos2(plot.left() + plot.width() * q2, plot.bottom() - plot.height() * w2);
-                let mut old: Vec<egui::Pos2> = Vec::new();
-                for k in 0..=40 {
-                    let u = k as f32 / 40.0;
-                    let v = 1.0 - u;
-                    let x = v * v * v * p0.x + 3.0 * v * v * u * g1.x + 3.0 * v * u * u * g2.x + u * u * u * p3.x;
-                    let y = v * v * v * p0.y + 3.0 * v * v * u * g1.y + 3.0 * v * u * u * g2.y + u * u * u * p3.y;
-                    old.push(pos2(x, y));
-                }
-                ui.painter().add(egui::Shape::line(old, egui::Stroke::new(1.3, t.text_faint)));
-            }
+            let c1 = pos2(plot.left() + plot.width() * (nq.x * 0.55), plot.bottom() - plot.height() * nq.y);
+            let c2 = pos2(plot.left() + plot.width() * (1.0 - (1.0 - nq.x) * 0.55), plot.bottom() - plot.height() * nq.y);
             let mut pts: Vec<egui::Pos2> = Vec::new();
             for k in 0..=40 {
                 let u = k as f32 / 40.0;
                 let v = 1.0 - u;
-                let x = v * v * v * p0.x + 3.0 * v * v * u * p1.x + 3.0 * v * u * u * p2.x + u * u * u * p3.x;
-                let y = v * v * v * p0.y + 3.0 * v * v * u * p1.y + 3.0 * v * u * u * p2.y + u * u * u * p3.y;
+                let x = v * v * v * p0.x + 3.0 * v * v * u * c1.x + 3.0 * v * u * u * c2.x + u * u * u * p3.x;
+                let y = v * v * v * p0.y + 3.0 * v * v * u * c1.y + 3.0 * v * u * u * c2.y + u * u * u * p3.y;
                 pts.push(pos2(x, y));
             }
             ui.painter().add(egui::Shape::line(pts, egui::Stroke::new(2.2, t.accent)));
-            // Handle stems and knobs.
-            ui.painter().line_segment([p0, p1], egui::Stroke::new(1.0, t.text_faint));
-            ui.painter().line_segment([p3, p2], egui::Stroke::new(1.0, t.text_faint));
-            for (rr, at) in [(&r1, p1), (&r2, p2)] {
-                ui.painter().circle_filled(at, if rr.hovered() || rr.dragged() { 7.0 } else { 5.0 }, t.text);
-            }
-            ctx.data_mut(|d| {
-                d.insert_temp(h1x, a1);
-                d.insert_temp(h1y, b1);
-                d.insert_temp(h2x, a2);
-                d.insert_temp(h2y, b2);
-            });
-            if r1.drag_stopped() || r2.drag_stopped() {
+            let knob = pos2(plot.left() + plot.width() * nq.x.clamp(0.0, 1.0), plot.bottom() - plot.height() * nq.y.clamp(0.0, 1.0));
+            ui.painter().circle_filled(knob, if drag.dragged() || drag.hovered() { 7.0 } else { 5.0 }, t.text);
+            ctx.data_mut(|d| d.insert_temp(gx, nq));
+            if drag.drag_stopped() {
                 if app.session.state.selected_keys.is_empty() {
                     app.ui.status = "请先选中关键帧，再应用缓动".into();
                 } else {
-                    // Influence is the horizontal reach; speed is the slope of the handle.
-                    let out_inf = a1.clamp(0.01, 1.0);
-                    let in_inf = (1.0 - a2).clamp(0.01, 1.0);
-                    let out_speed = if a1 > 0.001 { b1 / a1 } else { 0.0 };
-                    let in_speed = if a2 < 0.999 { (1.0 - b2) / (1.0 - a2) } else { 0.0 };
+                    let out_inf = (0.5 + (nq.x - 0.5) * 0.9).clamp(0.02, 1.0);
+                    let in_inf = (0.5 - (nq.x - 0.5) * 0.9).clamp(0.02, 1.0);
+                    let slope = (nq.y - 0.5) * 2.4;
                     let _ = crate::menus::invoke(
                         app,
                         ctx,
                         "keys.velocity",
                         serde_json::json!({
-                            "outSpeed": out_speed, "outInfluence": out_inf,
-                            "inSpeed": in_speed, "inInfluence": in_inf,
-                            "continuous": false,
+                            "outSpeed": slope, "outInfluence": out_inf,
+                            "inSpeed": -slope, "inInfluence": in_inf,
+                            "continuous": true,
                         }),
                     );
                 }
@@ -183,19 +148,13 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
             let clip_id = egui::Id::new("ours-curve-clip");
             ui.horizontal(|ui| {
                 if ui.button("复制曲线").clicked() {
-                    ctx.data_mut(|d| d.insert_temp(clip_id, (a1, b1, a2, b2)));
+                    ctx.data_mut(|d| d.insert_temp(clip_id, nq));
                     app.ui.status = "已复制曲线".into();
                 }
                 if ui.button("粘贴曲线").clicked() {
-                    match ctx.data(|d| d.get_temp::<(f32, f32, f32, f32)>(clip_id)) {
-                        Some((w1, x1, w2, x2)) => {
-                            a1 = w1; b1 = x1; a2 = w2; b2 = x2;
-                            ctx.data_mut(|d| {
-                                d.insert_temp(h1x, a1);
-                                d.insert_temp(h1y, b1);
-                                d.insert_temp(h2x, a2);
-                                d.insert_temp(h2y, b2);
-                            });
+                    match ctx.data(|d| d.get_temp::<egui::Pos2>(clip_id)) {
+                        Some(v) => {
+                            ctx.data_mut(|d| d.insert_temp(gx, v));
                             app.ui.status = "已粘贴曲线".into();
                         }
                         None => app.ui.status = "还没有复制过曲线".into(),
