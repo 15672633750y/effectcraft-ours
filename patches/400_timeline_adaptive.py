@@ -11,7 +11,7 @@ OLD = '    let sr = Rect::from_min_size(pos2(tc_rect.max.x + 14.0, top + 12.0), 
 
 NEW = '''    // The row shrinks with the column: the search field narrows, then disappears, and the
     // switches stop before they run into it.
-    let room = (left_w.total - 250.0).clamp(0.0, 220.0);
+    let room = (left_w - 250.0).clamp(0.0, 220.0);
     let sr = Rect::from_min_size(pos2(tc_rect.max.x + 14.0, top + 12.0), vec2(room.max(1.0), 22.0));
     if room >= 90.0 {
         let mut search = app.ui.timeline.search.clone();
