@@ -137,20 +137,30 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
             }
             path.push(pos2(px(8), py(ys[8])));
             ui.painter().add(egui::Shape::line(path, egui::Stroke::new(2.2, t.accent)));
-            let mut moved = false;
+            // Drag anywhere: the nearest of the nine points follows the finger 1:1, which keeps
+            // the curve under the pointer instead of lagging behind it.
+            let canvas_resp = ui.interact(canvas, egui::Id::unique("ours-curve-drag"), Sense::drag());
             let mut stopped = false;
-            for i in 0usize..9 {
-                let at = pos2(px(i), py(ys[i]));
-                let r = ui.interact(Rect::from_center_size(at, vec2(26.0, 26.0)), egui::Id::unique(("ours-cpt", i)), Sense::drag());
-                if r.dragged() {
-                    ys[i] = (ys[i] - r.drag_delta().y / plot.height()).clamp(0.0, 1.0);
-                    moved = true;
+            if canvas_resp.dragged() || canvas_resp.drag_started() {
+                if let Some(pos) = canvas_resp.interact_pointer_pos() {
+                    let t = ((pos.x - plot.left()) / plot.width()).clamp(0.0, 1.0);
+                    let idx = ((t * 8.0).round() as usize).min(8);
+                    // Between two points, blend so the curve bends smoothly rather than snapping.
+                    let exact = t * 8.0;
+                    let lo = exact.floor() as usize;
+                    let hi = (lo + 1).min(8);
+                    let frac = exact - lo as f32;
+                    let y = ((plot.bottom() - pos.y) / plot.height()).clamp(0.0, 1.0);
+                    if frac < 0.5 {
+                        ys[lo] = y;
+                    } else {
+                        ys[hi] = y;
+                    }
+                    let _ = idx;
                 }
-                if r.drag_stopped() {
-                    stopped = true;
-                }
-                // The nine grab points stay invisible: the curve itself shows the result.
-                let _ = at;
+            }
+            if canvas_resp.drag_stopped() {
+                stopped = true;
             }
             ctx.data_mut(|d| d.insert_temp(pts_id, ys));
             if stopped {
