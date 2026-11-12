@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The divider between the timeline's left columns and the tracks drags, and the tracks adapt."""
+"""The divider between the timeline's layer columns and the tracks drags; the tracks adapt."""
 from __future__ import annotations
 
 import os
@@ -19,15 +19,22 @@ OLD_W = "    let left_w = (vis.fixed() + 190.0).clamp(420.0, (rect.width() * 0.7
 NEW_W = "    let left_w = (vis.fixed() + 190.0 + LEFT_EXTRA.with(|c| c.get())).clamp(220.0, (rect.width() * 0.9).max(220.0));"
 
 OLD_G = "    let graph_x0 = rect.min.x + left_w + 1.0;\n"
-NEW_G = OLD_G + '''    // Drag this divider: the columns keep their width, the tracks take the rest.
-    let split = Rect::from_center_size(pos2(graph_x0 - 1.0, rect.center().y), vec2(16.0, rect.height()));
-    let split_resp = ui.interact(split, egui::Id::unique("tl-left-split"), Sense::click_and_drag());
-    if split_resp.hovered() || split_resp.dragged() {
-        ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeColumn);
-    }
-    if split_resp.dragged() {
-        LEFT_EXTRA.with(|c| c.set((c.get() + split_resp.drag_delta().x).clamp(-600.0, 900.0)));
-    }
+NEW_G = OLD_G + '''    // The handle lives in a foreground area: the rows underneath would otherwise take the press.
+    egui::Area::new(egui::Id::unique("tl-left-split"))
+        .order(egui::Order::Foreground)
+        .fixed_pos(pos2(graph_x0 - 6.0, rect.min.y))
+        .show(ui.ctx(), |area_ui| {
+            let (handle, resp) = area_ui.allocate_exact_size(vec2(12.0, rect.height()), Sense::drag());
+            if resp.hovered() || resp.dragged() {
+                area_ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeColumn);
+            }
+            if resp.dragged() {
+                LEFT_EXTRA.with(|c| c.set((c.get() + resp.drag_delta().x).clamp(-600.0, 900.0)));
+            }
+            if resp.hovered() {
+                area_ui.painter().rect_filled(handle, 0.0, app.tokens.accent.gamma_multiply(0.35));
+            }
+        });
 '''
 
 
@@ -46,7 +53,7 @@ def main() -> None:
         raise SystemExit("Cols anchor missing")
     src = src.replace("struct Cols {", DECL + "\nstruct Cols {", 1)
     path.write_text(src, encoding="utf-8")
-    print("timeline divider drags and the tracks adapt")
+    print("timeline divider drags (foreground handle) and the tracks adapt")
 
 
 if __name__ == "__main__":
