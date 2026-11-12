@@ -115,7 +115,7 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
             let py = |v: f32| plot.bottom() - plot.height() * v.clamp(0.0, 1.0);
             // Smooth curve through the points (Catmull-Rom).
             let mut path: Vec<egui::Pos2> = Vec::new();
-            for seg in 0..8 {
+            for seg in 0usize..8 {
                 let (a, b, c, d) = (
                     ys[seg.saturating_sub(1)],
                     ys[seg],
@@ -139,7 +139,7 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
             ui.painter().add(egui::Shape::line(path, egui::Stroke::new(2.2, t.accent)));
             let mut moved = false;
             let mut stopped = false;
-            for i in 0..9 {
+            for i in 0usize..9 {
                 let at = pos2(px(i), py(ys[i]));
                 let r = ui.interact(Rect::from_center_size(at, vec2(26.0, 26.0)), egui::Id::unique(("ours-cpt", i)), Sense::drag());
                 if r.dragged() {
