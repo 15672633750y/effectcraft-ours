@@ -35,6 +35,14 @@ def main() -> None:
     path.write_text(src, encoding="utf-8")
     print(f"{changed} panels set: left column fixed and narrow, right column proportional")
 
+    # Existing installs keep their saved layout; offer the new one by bumping the snapshot
+    # version, which makes the app fall back to the defaults below.
+    state = root / "crates/ui-egui/src/workspace_state.rs"
+    src = state.read_text(encoding="utf-8")
+    if "const VERSION: u32 = 2;" in src:
+        state.write_text(src.replace("const VERSION: u32 = 2;", "const VERSION: u32 = 3;", 1), encoding="utf-8")
+        print("workspace snapshot version bumped, saved layouts are rebuilt")
+
 
 if __name__ == "__main__":
     main()
