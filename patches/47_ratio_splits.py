@@ -7,8 +7,8 @@ from pathlib import Path
 
 MARKER = "EFFECTCRAFT_OURS_RATIO_SPLITS_V1"
 REPLACEMENTS = [
-    ("FixedFirst(300.0)", "Ratio(0.22)"),
-    ("FixedFirst(340.0)", "Ratio(0.25)"),
+    ("FixedFirst(300.0)", "FixedFirst(190.0)"),
+    ("FixedFirst(340.0)", "FixedFirst(200.0)"),
     ("FixedSecond(300.0)", "Ratio(0.78)"),
 ]
 
@@ -33,7 +33,7 @@ def main() -> None:
         1,
     )
     path.write_text(src, encoding="utf-8")
-    print(f"{changed} fixed panel widths became ratios")
+    print(f"{changed} panels set: left column fixed and narrow, right column proportional")
 
 
 if __name__ == "__main__":
