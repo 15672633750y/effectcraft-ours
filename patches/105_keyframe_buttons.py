@@ -20,11 +20,17 @@ fn keyframe_buttons(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Paint
     p.rect_filled(add, 4.0, t.switch_well);
     p.text(add.center(), Align2::CENTER_CENTER, "添加关键帧", Tokens::ui(12.0), t.text);
     if add_resp.clicked() {
-        if app.session.state.selected_props.is_empty() {
-            app.ui.status = "请选择目标后再点击关键帧".into();
-        } else {
+        match app.session.state.selected_props.first().copied() {
             // Only the selected parameter gets a key, exactly like the stopwatch.
-            let _ = crate::menus::invoke(app, ui.ctx(), "prop.toggleKey", serde_json::json!({}));
+            Some((layer, uid)) => {
+                let _ = crate::menus::invoke(
+                    app,
+                    ui.ctx(),
+                    "prop.toggleKey",
+                    serde_json::json!({"layer": layer.0, "uid": uid}),
+                );
+            }
+            None => app.ui.status = "请选择目标后再点击关键帧".into(),
         }
     }
     x += 94.0;

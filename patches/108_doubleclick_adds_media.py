@@ -14,14 +14,14 @@ NEW = """        // With a composition open, a double click puts the footage on 
         // still opens the Footage panel.
         ItemKind::Footage(f) if f.kind != effectcraft_engine::project::FootageKind::Data => {
             if app.session.active_comp_id().is_some() {
-                actions.push(("layer.addItem".into(), json!({"item": id.0, "index": 0})));
+                actions.push(("layer.addItem".into(), json!({"item": id.0, "index": 1})));
             } else {
                 actions.push(("footage.open".into(), json!({"item": id.0})));
             }
         }
         ItemKind::Solid(_) => {
             if app.session.active_comp_id().is_some() {
-                actions.push(("layer.addItem".into(), json!({"item": id.0, "index": 0})));
+                actions.push(("layer.addItem".into(), json!({"item": id.0, "index": 1})));
             } else {
                 actions.push(("footage.open".into(), json!({"item": id.0})));
             }
