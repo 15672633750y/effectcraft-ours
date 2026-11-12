@@ -50,14 +50,17 @@ fn keyframe_buttons(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Paint
     let undo_ready = !app.session.history.undo.is_empty();
     let redo_ready = !app.session.history.redo.is_empty();
     for (label, cmd, tip, ready) in [
-        ("←", "edit.undo", "撤销", undo_ready),
-        ("→", "edit.redo", "恢复", redo_ready),
+        ("⟲", "edit.undo", "撤销", undo_ready),
+        ("⟳", "edit.redo", "恢复", redo_ready),
     ] {
         let r = Rect::from_min_size(pos2(x, cy - 15.0), vec2(34.0, 28.0));
         let resp = ui.interact(r, egui::Id::unique(("ours-history", cmd)), Sense::click());
         p.rect_filled(r, 5.0, t.switch_well);
         let tint = if ready { t.text } else { t.text_faint };
-        p.text(r.center(), Align2::CENTER_CENTER, label, Tokens::ui(18.0), tint);
+        // The curved arrows are drawn as vectors: the bundled font has no ↶/↷ glyph, and a
+        // missing glyph would show as a narrow box.
+        let _ = label;
+        draw_history_arrow(&p, r.center(), r.width() * 0.32, cmd == "edit.redo", tint);
         let resp = resp.on_hover_text(tip);
         if resp.clicked() && ready {
             let _ = crate::menus::invoke(app, ui.ctx(), cmd, serde_json::json!({}));
@@ -95,6 +98,26 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context) {
             }
         });
     ctx.data_mut(|d| d.insert_temp(open_id, open && !close));
+}
+
+/// A curved undo (or, mirrored, redo) arrow drawn with lines, so it never depends on a font glyph.
+fn draw_history_arrow(p: &egui::Painter, c: egui::Pos2, rad: f32, mirror: bool, color: egui::Color32) {
+    let stroke = egui::Stroke::new(2.0, color);
+    let sign = if mirror { -1.0 } else { 1.0 };
+    let mut pts: Vec<egui::Pos2> = Vec::new();
+    for i in 0..=14 {
+        let t = i as f32 / 14.0;
+        let a = std::f32::consts::PI * (0.15 + 0.7 * t);
+        pts.push(pos2(c.x + sign * rad * a.cos(), c.y + rad * 0.75 * a.sin()));
+    }
+    p.add(egui::Shape::line(pts.clone(), stroke));
+    let tip = pts[0];
+    let h = rad * 0.55;
+    p.add(egui::Shape::convex_polygon(
+        vec![tip + vec2(0.0, -h * 0.7), tip + vec2(0.0, h * 0.7), tip + vec2(-sign * h, 0.0)],
+        color,
+        egui::Stroke::NONE,
+    ));
 }
 '''
 
