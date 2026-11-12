@@ -53,7 +53,7 @@ fn keyframe_buttons(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Paint
         ("⟲", "edit.undo", "撤销", undo_ready),
         ("⟳", "edit.redo", "恢复", redo_ready),
     ] {
-        let r = Rect::from_min_size(pos2(x, cy - 15.0), vec2(34.0, 28.0));
+        let r = Rect::from_min_size(pos2(x, cy - 15.0), vec2(30.0, 26.0));
         let resp = ui.interact(r, egui::Id::unique(("ours-history", cmd)), Sense::click());
         p.rect_filled(r, 5.0, t.switch_well);
         let tint = if ready { t.text } else { t.text_faint };
@@ -67,7 +67,7 @@ fn keyframe_buttons(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Paint
                 app.ui.status = if cmd == "edit.undo" { "已撤销".into() } else { "已恢复".into() };
             }
         }
-        x += 38.0;
+        x += 34.0;
     }
     x
 }
@@ -247,38 +247,31 @@ fn draw_ease_curve(p: &egui::Painter, r: Rect, kind: u8, color: egui::Color32) {
 
 /// A curved undo (or, mirrored, redo) arrow drawn with lines, so it never depends on a font glyph.
 fn draw_history_arrow(p: &egui::Painter, c: egui::Pos2, rad: f32, mirror: bool, color: egui::Color32) {
-    // Rounded square loop, open on the left, with a short tick: the reference icon mirrored.
-    let stroke = egui::Stroke::new(2.0, color);
+    // A flat-bottomed loop open at the top, with a short tick: the reference icon, mirrored.
+    let stroke = egui::Stroke::new(1.7, color);
     let sign = if mirror { -1.0 } else { 1.0 };
-    let w = rad * 0.9;
-    let h = rad * 0.75;
-    let r = rad * 0.35;
-    let left = c.x - sign * w;
-    let right = c.x + sign * w;
-    let top = c.y - h;
-    let bottom = c.y + h;
     let mut pts: Vec<egui::Pos2> = Vec::new();
-    // Top edge, from the tick to the rounded top corner.
-    pts.push(pos2(left + sign * r * 0.4, top));
-    pts.push(pos2(right - sign * r, top));
-    // Rounded top-right corner.
-    for i in 0..=6 {
-        let a = -std::f32::consts::FRAC_PI_2 + std::f32::consts::FRAC_PI_2 * (i as f32 / 6.0);
-        pts.push(pos2(right - sign * r + sign * r * a.cos(), top + r + r * a.sin()));
+    let steps = 26;
+    // From just past the top opening, clockwise round the bottom, back up to the opening.
+    for i in 0..=steps {
+        let t = i as f32 / steps as f32;
+        let a = std::f32::consts::PI * (-0.72 + 1.44 * t);
+        let x = c.x + sign * rad * a.cos();
+        let y = c.y + rad * 0.72 * a.sin();
+        pts.push(pos2(x, y));
     }
-    // Down the right side, round the bottom corner, along the bottom to the left.
-    pts.push(pos2(right, bottom - r));
-    for i in 0..=6 {
-        let a = std::f32::consts::FRAC_PI_2 * (i as f32 / 6.0);
-        pts.push(pos2(right - sign * r + sign * r * a.cos(), bottom - r + r * a.sin()));
+    // Flatten the bottom: the reference has a straight base.
+    let n = pts.len();
+    for (i, q) in pts.iter_mut().enumerate() {
+        let t = i as f32 / (n - 1) as f32;
+        let flat = (1.0 - (2.0 * t - 1.0).abs()).powi(2);
+        let base_y = c.y + rad * 0.72;
+        q.y = q.y * (1.0 - flat * 0.55) + base_y * flat * 0.55;
     }
-    pts.push(pos2(left + sign * r, bottom));
-    p.add(egui::Shape::line(pts, stroke));
-    // The tick at the opening.
-    p.add(egui::Shape::line(
-        vec![pos2(left + sign * r * 0.4, top), pos2(left + sign * r * 0.4, top - rad * 0.35)],
-        stroke,
-    ));
+    p.add(egui::Shape::line(pts.clone(), stroke));
+    // The tick at the open end.
+    let end_pt = pts[0];
+    p.add(egui::Shape::line(vec![end_pt, pos2(end_pt.x + sign * rad * 0.42, end_pt.y - rad * 0.42)], stroke));
 }
 '''
 
