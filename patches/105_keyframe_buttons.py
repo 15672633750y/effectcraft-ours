@@ -45,6 +45,19 @@ fn keyframe_buttons(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Paint
     x += 58.0;
 
     curve_menu(app, ui.ctx());
+    x += 4.0;
+
+    for (label, cmd, tip) in [("↶", "edit.undo", "撤销"), ("↷", "edit.redo", "恢复")] {
+        let r = Rect::from_min_size(pos2(x, cy - 13.0), vec2(30.0, 26.0));
+        let resp = ui.interact(r, egui::Id::unique(("ours-history", cmd)), Sense::click());
+        p.rect_filled(r, 4.0, t.switch_well);
+        p.text(r.center(), Align2::CENTER_CENTER, label, Tokens::ui(15.0), t.text);
+        let resp = resp.on_hover_text(tip);
+        if resp.clicked() {
+            let _ = crate::menus::invoke(app, ui.ctx(), cmd, serde_json::json!({}));
+        }
+        x += 34.0;
+    }
     x
 }
 
