@@ -81,6 +81,10 @@ fn export_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
                     }
                 });
             ui.add_space(8.0);
+            let mut follow = ctx.data(|d| d.get_temp::<bool>(egui::Id::new("ours-preview-follow")).unwrap_or(true));
+            if ui.checkbox(&mut follow, "渲染时预览跟随").changed() {
+                ctx.data_mut(|d| d.insert_temp(egui::Id::new("ours-preview-follow"), follow));
+            }
             ui.label("导出完成后自动保存到手机相册 DCIM/EffectCraft，无需手动选择位置。");
             ui.add_space(8.0);
             ui.horizontal(|ui| {
