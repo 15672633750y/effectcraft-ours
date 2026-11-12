@@ -105,8 +105,8 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
             let drag = ui.interact(canvas, egui::Id::unique("ours-curve-drag"), Sense::drag());
             if drag.dragged() {
                 let d = drag.drag_delta();
-                bend = (bend - d.y / plot.height() * 1.4).clamp(0.06, 0.94);
-                skew = (skew + d.x / plot.width() * 1.6).clamp(-0.85, 0.85);
+                bend = (bend - d.y / plot.height() * 2.6).clamp(0.04, 0.96);
+                skew = (skew + d.x / plot.width() * 2.4).clamp(-0.9, 0.9);
             }
             let i1 = (bend * (1.0 - skew * 0.75)).clamp(0.02, 0.98);
             let i2 = (bend * (1.0 + skew * 0.75)).clamp(0.02, 0.98);
