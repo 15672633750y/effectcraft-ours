@@ -48,6 +48,9 @@ fn render(cx: &EffectCtx, mut buf: Buf) -> Buf {
         } else {
             cx.time - window * 0.5 + window * (k as f64) / ((samples - 1) as f64)
         };
+        // Never ask for a time before the composition starts: that path is where the first
+        // preview frame used to stall.
+        let t = t.max(0.0);
         let Some(frame) = host.self_at(t, 0) else { continue };
         if frame.img.width != buf.img.width || frame.img.height != buf.img.height {
             continue;
