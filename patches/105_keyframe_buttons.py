@@ -80,10 +80,13 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context) {
     }
     let t = app.tokens;
     let mut close = false;
+    // Sit just under the toolbar at the right edge, so the viewer stays visible.
+    let screen = ctx.screen_rect();
     egui::Window::new("曲线")
         .open(&mut open)
         .collapsible(false)
         .resizable(false)
+        .fixed_pos(pos2((screen.right() - 260.0).max(screen.left() + 8.0), screen.top() + 74.0))
         .show(ctx, |ui| {
             ui.label("缓动预设（点击应用）");
             ui.add_space(4.0);
