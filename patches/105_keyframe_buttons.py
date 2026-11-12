@@ -150,17 +150,17 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
             let clip_id = egui::Id::new("ours-curve-clip");
             ui.horizontal(|ui| {
                 if ui.button("复制曲线").clicked() {
-                    ctx.data_mut(|d| d.insert_temp(clip_id, (i1, i2)));
+                    ctx.data_mut(|d| d.insert_temp(clip_id, (bend, skew)));
                     app.ui.status = "已复制曲线".into();
                 }
                 if ui.button("粘贴曲线").clicked() {
                     match ctx.data(|d| d.get_temp::<(f32, f32)>(clip_id)) {
                         Some((q1, q2)) => {
-                            i1 = q1;
-                            i2 = q2;
+                            bend = q1;
+                            skew = q2;
                             ctx.data_mut(|d| {
-                                d.insert_temp(c1, i1);
-                                d.insert_temp(c2, i2);
+                                d.insert_temp(bend_id, bend);
+                                d.insert_temp(skew_id, skew);
                             });
                             app.ui.status = "已粘贴曲线".into();
                         }
