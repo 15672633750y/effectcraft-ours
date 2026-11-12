@@ -20,7 +20,7 @@ def main() -> None:
         return
     if src.count(ANCHOR) != 1:
         raise SystemExit(f"header show anchor: {src.count(ANCHOR)}")
-    body = ANCHOR + '''    // Rendering happens on a worker thread; moving the playhead along the finished frames lets
+    body = '''    // Rendering happens on a worker thread; moving the playhead along the finished frames lets
     // the viewer show progress instead of a frozen image.
     if app.session.is_rendering() {
         let follow = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("ours-preview-follow")).unwrap_or(true));
