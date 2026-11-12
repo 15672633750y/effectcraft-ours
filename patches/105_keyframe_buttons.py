@@ -101,11 +101,11 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
             ui.add_space(6.0);
             ui.label("缓动预设（点击应用）");
             ui.add_space(2.0);
-            let presets: [(&str, &str, u8); 5] = [
+            // keys.smooth needs three keyframes and is not an easing preset; it is left out.
+            let presets: [(&str, &str, u8); 4] = [
                 ("缓入缓出", "keys.easyEase", 0),
                 ("缓入", "keys.easyEaseIn", 1),
                 ("缓出", "keys.easyEaseOut", 2),
-                ("平滑", "keys.smooth", 3),
                 ("定格", "keys.toggleHold", 4),
             ];
             ui.horizontal_wrapped(|ui| {
@@ -123,8 +123,12 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
                         t.text,
                     );
                     if resp.on_hover_text(label).clicked() {
-                        let _ = crate::menus::invoke(app, ctx, cmd, serde_json::json!({}));
-                        kind = k;
+                        if app.session.state.selected_keys.is_empty() {
+                            app.ui.status = "请先选中关键帧，再应用缓动".into();
+                        } else {
+                            let _ = crate::menus::invoke(app, ctx, cmd, serde_json::json!({}));
+                            kind = k;
+                        }
                     }
                 }
             });
