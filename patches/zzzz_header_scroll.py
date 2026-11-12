@@ -17,7 +17,7 @@ NEW = """    let x = brand_and_home(app, ui, &p, x, cy);
     let pan_resp = ui.interact(pan, egui::Id::unique("ours-header-pan"), Sense::drag());
     if pan_resp.dragged() {
         // Dragging left reveals what is off the right edge, so the offset is negative.
-        scroll = (scroll - pan_resp.drag_delta().x).clamp(-1400.0, 0.0);
+        scroll = (scroll - pan_resp.drag_delta().x).clamp(-1600.0, 160.0);
         ui.ctx().data_mut(|d| d.insert_temp(scroll_id, scroll));
     }
     let x = x + scroll;

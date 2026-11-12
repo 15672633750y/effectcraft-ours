@@ -14,7 +14,7 @@ CODE = r'''
 /// One-tap export: a small dialog, then the normal render queue does the work.
 fn export_button(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Painter, x: f32, cy: f32) -> f32 {
     let t = app.tokens;
-    let r = Rect::from_min_size(pos2(x, cy - 13.0), vec2(64.0, 26.0));
+    let r = Rect::from_min_size(pos2(x, cy - 13.0), vec2(56.0, 26.0));
     let resp = ui.interact(r, egui::Id::unique("ours-export-button"), Sense::click());
     p.rect_filled(r, 4.0, t.switch_well);
     p.text(r.center(), Align2::CENTER_CENTER, "导出", Tokens::ui(12.0), t.text);
@@ -23,7 +23,7 @@ fn export_button(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Painter,
     }
     resp.on_hover_text("导出视频到相册（DCIM/EffectCraft）");
     export_window(app, ui.ctx());
-    x + 72.0
+    x + 62.0
 }
 
 fn export_window(app: &mut EffectcraftApp, ctx: &egui::Context) {

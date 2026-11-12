@@ -15,7 +15,7 @@ fn keyframe_buttons(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Paint
     let t = app.tokens;
     let mut x = x;
 
-    let add = Rect::from_min_size(pos2(x, cy - 13.0), vec2(88.0, 26.0));
+    let add = Rect::from_min_size(pos2(x, cy - 13.0), vec2(78.0, 26.0));
     let add_resp = ui.interact(add, egui::Id::unique("ours-add-keyframe"), Sense::click());
     p.rect_filled(add, 4.0, t.switch_well);
     p.text(add.center(), Align2::CENTER_CENTER, "添加关键帧", Tokens::ui(12.0), t.text);
@@ -33,16 +33,16 @@ fn keyframe_buttons(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Paint
             None => app.ui.status = "请选择目标后再点击关键帧".into(),
         }
     }
-    x += 94.0;
+    x += 82.0;
 
-    let curve = Rect::from_min_size(pos2(x, cy - 13.0), vec2(52.0, 26.0));
+    let curve = Rect::from_min_size(pos2(x, cy - 13.0), vec2(44.0, 26.0));
     let curve_resp = ui.interact(curve, egui::Id::unique("ours-curve-button"), Sense::click());
     p.rect_filled(curve, 4.0, t.switch_well);
     p.text(curve.center(), Align2::CENTER_CENTER, "曲线", Tokens::ui(12.0), t.text);
     if curve_resp.clicked() {
         ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("ours-curve-open"), true));
     }
-    x += 58.0;
+    x += 50.0;
 
     curve_menu(app, ui.ctx());
     x += 4.0;
@@ -50,19 +50,19 @@ fn keyframe_buttons(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Paint
     let undo_ready = !app.session.history.undo.is_empty();
     let redo_ready = !app.session.history.redo.is_empty();
     for (label, cmd, tip, ready) in [
-        ("↶", "edit.undo", "撤销", undo_ready),
-        ("↷", "edit.redo", "恢复", redo_ready),
+        ("←", "edit.undo", "撤销", undo_ready),
+        ("→", "edit.redo", "恢复", redo_ready),
     ] {
-        let r = Rect::from_min_size(pos2(x, cy - 15.0), vec2(38.0, 30.0));
+        let r = Rect::from_min_size(pos2(x, cy - 15.0), vec2(34.0, 28.0));
         let resp = ui.interact(r, egui::Id::unique(("ours-history", cmd)), Sense::click());
         p.rect_filled(r, 5.0, t.switch_well);
         let tint = if ready { t.text } else { t.text_faint };
-        p.text(r.center(), Align2::CENTER_CENTER, label, Tokens::ui(19.0), tint);
+        p.text(r.center(), Align2::CENTER_CENTER, label, Tokens::ui(18.0), tint);
         let resp = resp.on_hover_text(tip);
         if resp.clicked() && ready {
             let _ = crate::menus::invoke(app, ui.ctx(), cmd, serde_json::json!({}));
         }
-        x += 42.0;
+        x += 38.0;
     }
     x
 }
