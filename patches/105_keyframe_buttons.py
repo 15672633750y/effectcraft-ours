@@ -178,42 +178,6 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
             let save_id = egui::Id::new("ours-curve-saved");
             ui.horizontal(|ui| {
                 if ui.button("保存曲线").clicked() {
-                    ctx.data_mut(|d| d.insert_temp(save_id, nq));
-                    app.ui.status = "已保存曲线".into();
-                }
-                if ui.button("删除关键帧").clicked() {
-                    if app.session.state.selected_keys.is_empty() {
-                        app.ui.status = "请先选中关键帧".into();
-                    } else {
-                        let _ = crate::menus::invoke(app, ctx, "keys.delete", serde_json::json!({}));
-                        app.ui.status = "已删除关键帧".into();
-                    }
-                }
-            });
-            ui.add_space(6.0);
-            // The saved curve shows here; click it to apply again.
-            if let Some(sv) = ctx.data(|d| d.get_temp::<egui::Pos2>(save_id)) {
-                let (thumb, tresp) = ui.allocate_exact_size(vec2(248.0, 62.0), Sense::click());
-                ui.painter().rect_filled(thumb, 5.0, t.switch_well);
-                let pad = thumb.shrink2(vec2(10.0, 8.0));
-                let hh = sv.y.clamp(0.0, 1.0);
-                let sk = sv.x.clamp(0.05, 0.95);
-                let mut tp: Vec<egui::Pos2> = Vec::new();
-                for k in 0..=40 {
-                    let tt = k as f32 / 40.0;
-                    let u = if tt < sk { 0.5 * tt / sk } else { 0.5 + 0.5 * (tt - sk) / (1.0 - sk) };
-                    let v = (std::f32::consts::PI * u).sin();
-                    tp.push(pos2(pad.left() + pad.width() * tt, (pad.bottom() - pad.height() * hh * v).clamp(pad.top(), pad.bottom())));
-                }
-                ui.painter().add(egui::Shape::line(tp, egui::Stroke::new(1.8, t.accent)));
-                ui.painter().text(pos2(thumb.left() + 6.0, thumb.top() + 9.0), Align2::LEFT_TOP, "已保存", Tokens::ui(10.0), t.text_dim);
-                if tresp.on_hover_text("应用保存的曲线").clicked() {
-                    ctx.data_mut(|d| d.insert_temp(gx, sv));
-                }
-            }
-            let save_id = egui::Id::new("ours-curve-saved");
-            ui.horizontal(|ui| {
-                if ui.button("保存曲线").clicked() {
                     ctx.data_mut(|d| d.insert_temp(save_id, ys));
                     app.ui.status = "已保存曲线".into();
                 }
