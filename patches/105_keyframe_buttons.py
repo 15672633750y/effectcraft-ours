@@ -20,7 +20,7 @@ fn keyframe_buttons(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Paint
     p.rect_filled(add, 4.0, t.switch_well);
     p.text(add.center(), Align2::CENTER_CENTER, "添加关键帧", Tokens::ui(12.0), t.text);
     if add_resp.clicked() {
-        let _ = crate::menus::invoke(app, ui.ctx(), "anim.addKeyframe", serde_json::json!({}));
+        let _ = crate::menus::invoke(app, ui.ctx(), "prop.toggleKey", serde_json::json!({}));
     }
     x += 94.0;
 
