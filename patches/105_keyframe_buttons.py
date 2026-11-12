@@ -109,18 +109,18 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
                 nq.x = (nq.x + d.x / plot.width() * 1.8).clamp(-0.6, 1.6);
                 nq.y = (nq.y - d.y / plot.height() * 1.8).clamp(-1.2, 2.2);
             }
-            // Both control points follow the grab point, so a single drag reshapes the whole curve.
-            let p0 = pos2(plot.left(), plot.bottom());
-            let p3 = pos2(plot.right(), plot.top());
-            let c1 = pos2(plot.left() + plot.width() * (nq.x * 0.55), plot.bottom() - plot.height() * nq.y);
-            let c2 = pos2(plot.left() + plot.width() * (1.0 - (1.0 - nq.x) * 0.55), plot.bottom() - plot.height() * nq.y);
+            // A bell, like the reference panel: drag up to raise the peak, sideways to move it.
+            let h = (nq.y.clamp(0.05, 1.6)) as f32;
+            let skew = (nq.x.clamp(0.05, 0.95)) as f32;
             let mut pts: Vec<egui::Pos2> = Vec::new();
-            for k in 0..=40 {
-                let u = k as f32 / 40.0;
-                let v = 1.0 - u;
-                let x = v * v * v * p0.x + 3.0 * v * v * u * c1.x + 3.0 * v * u * u * c2.x + u * u * u * p3.x;
-                let y = v * v * v * p0.y + 3.0 * v * v * u * c1.y + 3.0 * v * u * u * c2.y + u * u * u * p3.y;
-                pts.push(pos2(x, y));
+            for k in 0..=60 {
+                let t = k as f32 / 60.0;
+                // Shift the sine so its peak sits where the grab point is.
+                let u = if t < skew { 0.5 * t / skew } else { 0.5 + 0.5 * (t - skew) / (1.0 - skew) };
+                let v = (std::f32::consts::PI * u).sin();
+                let x = plot.left() + plot.width() * t;
+                let y = plot.bottom() - plot.height() * h * v;
+                pts.push(pos2(x, y.clamp(plot.top() - plot.height() * 0.35, plot.bottom())));
             }
             ui.painter().add(egui::Shape::line(pts, egui::Stroke::new(2.2, t.accent)));
             let knob = pos2(plot.left() + plot.width() * nq.x.clamp(0.0, 1.0), plot.bottom() - plot.height() * nq.y.clamp(0.0, 1.0));
