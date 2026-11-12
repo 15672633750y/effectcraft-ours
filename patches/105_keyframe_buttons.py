@@ -92,12 +92,59 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
         .movable(true)
         .default_width(232.0)
         .show(ctx, |ui| {
-            // Top: a large preview of the chosen easing, the place a handle editor would live.
-            ui.label("曲线预览");
-            let (canvas, _) = ui.allocate_exact_size(vec2(214.0, 92.0), Sense::hover());
-            ui.painter().rect_filled(canvas, 4.0, t.switch_well);
-            let plot = canvas.shrink2(vec2(14.0, 12.0));
-            draw_ease_curve(ui.painter(), plot, kind, t.accent);
+            // Top: a square custom curve. The two handles are the keyframe influences.
+            ui.label("自定义缓动（拖动手柄）");
+            let c1 = egui::Id::new("ours-curve-in");
+            let c2 = egui::Id::new("ours-curve-out");
+            let mut i1 = ctx.data(|d| d.get_temp::<f32>(c1).unwrap_or(0.33));
+            let mut i2 = ctx.data(|d| d.get_temp::<f32>(c2).unwrap_or(0.33));
+            let (canvas, _) = ui.allocate_exact_size(vec2(248.0, 248.0), Sense::hover());
+            ui.painter().rect_filled(canvas, 6.0, t.switch_well);
+            let plot = canvas.shrink2(vec2(18.0, 18.0));
+            let p0 = pos2(plot.left(), plot.bottom());
+            let p1 = pos2(plot.left() + plot.width() * i1, plot.bottom());
+            let p2 = pos2(plot.left() + plot.width() * (1.0 - i2), plot.top());
+            let p3 = pos2(plot.right(), plot.top());
+            let mut pts: Vec<egui::Pos2> = Vec::new();
+            for k in 0..=32 {
+                let u = k as f32 / 32.0;
+                let v = 1.0 - u;
+                let x = v * v * v * p0.x + 3.0 * v * v * u * p1.x + 3.0 * v * u * u * p2.x + u * u * u * p3.x;
+                let y = v * v * v * p0.y + 3.0 * v * v * u * p1.y + 3.0 * v * u * u * p2.y + u * u * u * p3.y;
+                pts.push(pos2(x, y));
+            }
+            ui.painter().add(egui::Shape::line(pts, egui::Stroke::new(2.0, t.accent)));
+            let h1 = ui.interact(Rect::from_center_size(p1, vec2(22.0, 22.0)), egui::Id::unique("ours-c1"), Sense::drag());
+            let h2 = ui.interact(Rect::from_center_size(p2, vec2(22.0, 22.0)), egui::Id::unique("ours-c2"), Sense::drag());
+            if h1.dragged() {
+                i1 = (i1 + h1.drag_delta().x / plot.width()).clamp(0.02, 0.98);
+            }
+            if h2.dragged() {
+                i2 = (i2 - h2.drag_delta().x / plot.width()).clamp(0.02, 0.98);
+            }
+            for (hh, at) in [(h1, p1), (h2, p2)] {
+                ui.painter().circle_filled(at, if hh.hovered() { 7.0 } else { 5.0 }, t.text);
+            }
+            ctx.data_mut(|d| {
+                d.insert_temp(c1, i1);
+                d.insert_temp(c2, i2);
+            });
+            if ui.button("应用自定义缓动").clicked() {
+                if app.session.state.selected_keys.is_empty() {
+                    app.ui.status = "请先选中关键帧，再应用缓动".into();
+                } else {
+                    let _ = crate::menus::invoke(
+                        app,
+                        ctx,
+                        "keys.velocity",
+                        serde_json::json!({
+                            "outSpeed": 0.0, "outInfluence": i1,
+                            "inSpeed": 0.0, "inInfluence": i2,
+                            "continuous": true,
+                        }),
+                    );
+                }
+            }
             ui.add_space(6.0);
             ui.label("缓动预设（点击应用）");
             ui.add_space(2.0);
