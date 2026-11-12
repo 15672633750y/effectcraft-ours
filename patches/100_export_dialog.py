@@ -65,9 +65,9 @@ fn export_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
             ui.add_space(6.0);
             ui.label("导出分辨率");
             egui::ComboBox::from_id_salt("ours-export-res-combo")
-                .selected_text(["跟随工程", "480P", "720P", "1080P", "2K", "4K"][res.min(5)])
+                .selected_text(["跟随工程", "480p", "720p (HD)", "1080p (FHD)", "1440p (QHD)", "2160p (4K)"][res.min(5)])
                 .show_ui(ui, |ui| {
-                    for (i, name) in ["跟随工程", "480P", "720P", "1080P", "2K", "4K"].iter().enumerate() {
+                    for (i, name) in ["跟随工程", "480p", "720p (HD)", "1080p (FHD)", "1440p (QHD)", "2160p (4K)"].iter().enumerate() {
                         ui.selectable_value(&mut res, i, *name);
                     }
                 });
