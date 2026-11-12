@@ -42,7 +42,9 @@ def main() -> None:
         if src.count(old) != 1:
             raise SystemExit(f"anchor: expected 1, found {src.count(old)}: {old[:40]}")
         src = src.replace(old, new, 1)
-    src = TL_DECL + src
+    if src.count("struct Cols {") != 1:
+        raise SystemExit("Cols anchor missing")
+    src = src.replace("struct Cols {", TL_DECL + "\nstruct Cols {", 1)
     path.write_text(src, encoding="utf-8")
     print("timeline name column edge is draggable")
 
