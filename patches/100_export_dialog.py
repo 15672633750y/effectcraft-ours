@@ -109,48 +109,31 @@ fn export_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
             3 => "png",
             _ => "h264",
         };
-        if crate::menus::invoke(app, ctx, "renderQueue.add", serde_json::json!({})).is_ok() {
-            // The chosen settings are pushed onto the queued item before it renders, so the dialog
-            // actually changes what comes out instead of only describing it.
-            let _ = crate::menus::invoke(
-                app,
-                ctx,
-                "renderQueue.setOutputModule",
-                serde_json::json!({"module": 1, "format": format}),
-            );
-            let size = match res {
-                1 => Some((854u32, 480u32)),
-                2 => Some((1280, 720)),
-                3 => Some((1920, 1080)),
-                4 => Some((2560, 1440)),
-                5 => Some((3840, 2160)),
-                _ => None,
-            };
-            if let Some((w, h)) = size {
-                let _ = crate::menus::invoke(
-                    app,
-                    ctx,
-                    "renderQueue.setOutputModule",
-                    serde_json::json!({"module": 1, "resize": {"width": w, "height": h}}),
-                );
-            }
-            let rate = match fps {
-                1 => Some(24.0),
-                2 => Some(30.0),
-                3 => Some(60.0),
-                4 => Some(120.0),
-                5 => Some(144.0),
-                6 => Some(240.0),
-                _ => None,
-            };
-            if let Some(r) = rate {
-                let _ = crate::menus::invoke(
-                    app,
-                    ctx,
-                    "renderQueue.setRenderSettings",
-                    serde_json::json!({"frameRate": r}),
-                );
-            }
+        let mut params = serde_json::json!({"format": format});
+        if let Some((w, h)) = match res {
+            1 => Some((854u32, 480u32)),
+            2 => Some((1280, 720)),
+            3 => Some((1920, 1080)),
+            4 => Some((2560, 1440)),
+            5 => Some((3840, 2160)),
+            _ => None,
+        } {
+            params["resize"] = serde_json::json!({"width": w, "height": h});
+        }
+        if let Some(r) = match fps {
+            1 => Some(24.0),
+            2 => Some(30.0),
+            3 => Some(60.0),
+            4 => Some(120.0),
+            5 => Some(144.0),
+            6 => Some(240.0),
+            _ => None,
+        } {
+            params["frameRate"] = serde_json::json!(r);
+        }
+        // One call carries the whole setup: the queue item is created with these settings, so
+        // the file that comes out really is PNG/4K/120 as chosen.
+        if crate::menus::invoke(app, ctx, "renderQueue.add", params).is_ok() {
             let _ = crate::menus::invoke(app, ctx, "renderQueue.render", serde_json::json!({}));
         }
         ctx.data_mut(|d| d.insert_temp(open_id, false));
