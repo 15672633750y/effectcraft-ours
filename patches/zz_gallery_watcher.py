@@ -24,6 +24,7 @@ def main() -> None:
     src = src.replace(ANCHOR, ANCHOR + CODE, 1)
     method = '''
     // EFFECTCRAFT_OURS_GALLERY_WATCHER_V1
+    private static final java.util.Map<String, Long> PENDING_SIZES = new java.util.HashMap<>();
     /** Poll the app's own output folder and push finished videos into DCIM/EffectCraft. */
     private void startGalleryWatcher() {
         Thread thread = new Thread(() -> {
@@ -107,11 +108,21 @@ def main() -> None:
             if (!video || entry.length() <= 0) {
                 continue;
             }
-            String key = entry.getAbsolutePath() + ":" + entry.length();
+            // Only publish a file once its size has stopped changing: a render still being
+            // written would otherwise land in the gallery half finished.
+            String path = entry.getAbsolutePath();
+            long size = entry.length();
+            Long last = PENDING_SIZES.get(path);
+            if (last == null || last != size) {
+                PENDING_SIZES.put(path, size);
+                continue;
+            }
+            String key = path + ":" + size;
             if (seen.contains(key)) {
                 continue;
             }
             seen.add(key);
+            PENDING_SIZES.remove(path);
             if (publishFile(entry)) {
                 Log.i(TAG, "Gallery watcher published " + entry.getName());
             }
