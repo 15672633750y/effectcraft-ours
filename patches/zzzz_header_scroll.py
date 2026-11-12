@@ -9,18 +9,17 @@ MARKER = "EFFECTCRAFT_OURS_HEADER_SCROLL_V1"
 OLD = """    let x = brand_and_home(app, ui, &p, x, cy);
     let x = tool_slots(app, ui, &p, x, cy);
 """
-NEW = """    let x = brand_and_home(app, ui, &p, x, cy);
-    // The tool row can slide sideways: many buttons do not fit a phone width.
+NEW = """    // The tool row scrolls as one strip, brand and Home included.
     let scroll_id = egui::Id::new("ours-header-scroll");
     let mut scroll = ui.ctx().data(|d| d.get_temp::<f32>(scroll_id).unwrap_or(0.0));
-    let pan = Rect::from_min_max(pos2(x + 90.0, rect.min.y), pos2(rect.max.x - 320.0, rect.max.y));
+    let pan = Rect::from_min_max(pos2(x + 60.0, rect.min.y), pos2(rect.max.x - 320.0, rect.max.y));
     let pan_resp = ui.interact(pan, egui::Id::unique("ours-header-pan"), Sense::drag());
     if pan_resp.dragged() {
-        // Dragging left reveals what is off the right edge, so the offset is negative.
         scroll = (scroll - pan_resp.drag_delta().x).clamp(-1600.0, 160.0);
         ui.ctx().data_mut(|d| d.insert_temp(scroll_id, scroll));
     }
     let x = x + scroll;
+    let x = brand_and_home(app, ui, &p, x, cy);
     let x = tool_slots(app, ui, &p, x, cy);
 """
 

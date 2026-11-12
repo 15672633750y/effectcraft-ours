@@ -63,7 +63,9 @@ fn keyframe_buttons(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Paint
         draw_history_arrow(&p, r.center(), r.width() * 0.32, cmd == "edit.redo", tint);
         let resp = resp.on_hover_text(tip);
         if resp.clicked() && ready {
-            let _ = crate::menus::invoke(app, ui.ctx(), cmd, serde_json::json!({}));
+            if crate::menus::invoke(app, ui.ctx(), cmd, serde_json::json!({})).is_ok() {
+                app.ui.status = if cmd == "edit.undo" { "已撤销".into() } else { "已恢复".into() };
+            }
         }
         x += 38.0;
     }
@@ -102,22 +104,22 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context) {
 
 /// A curved undo (or, mirrored, redo) arrow drawn with lines, so it never depends on a font glyph.
 fn draw_history_arrow(p: &egui::Painter, c: egui::Pos2, rad: f32, mirror: bool, color: egui::Color32) {
-    let stroke = egui::Stroke::new(2.0, color);
+    // A thin hook: most of a ring, open at the bottom, with a short diagonal tip.
+    let stroke = egui::Stroke::new(1.8, color);
     let sign = if mirror { -1.0 } else { 1.0 };
     let mut pts: Vec<egui::Pos2> = Vec::new();
-    for i in 0..=14 {
-        let t = i as f32 / 14.0;
-        let a = std::f32::consts::PI * (0.15 + 0.7 * t);
-        pts.push(pos2(c.x + sign * rad * a.cos(), c.y + rad * 0.75 * a.sin()));
+    let steps = 22;
+    for i in 0..=steps {
+        let t = i as f32 / steps as f32;
+        let a = std::f32::consts::PI * (0.08 + 1.05 * t);
+        pts.push(pos2(c.x + sign * rad * a.sin(), c.y + rad * 0.78 * a.cos()));
     }
     p.add(egui::Shape::line(pts.clone(), stroke));
-    let tip = pts[0];
-    let h = rad * 0.55;
-    p.add(egui::Shape::convex_polygon(
-        vec![tip + vec2(0.0, -h * 0.7), tip + vec2(0.0, h * 0.7), tip + vec2(-sign * h, 0.0)],
-        color,
-        egui::Stroke::NONE,
-    ));
+    let tip = pts[pts.len() - 1];
+    let prev = pts[pts.len() - 2];
+    let dir = (tip - prev).normalized();
+    let hook = egui::vec2(-dir.y, dir.x) * (rad * 0.55);
+    p.add(egui::Shape::line(vec![tip, tip + hook], stroke));
 }
 '''
 
