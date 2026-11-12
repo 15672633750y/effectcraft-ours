@@ -74,22 +74,32 @@ fn keyframe_buttons(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Paint
 
 fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context) {
     let open_id = egui::Id::new("ours-curve-open");
+    let kind_id = egui::Id::new("ours-curve-kind");
     let mut open = ctx.data(|d| d.get_temp::<bool>(open_id).unwrap_or(false));
     if !open {
         return;
     }
+    let mut kind = ctx.data(|d| d.get_temp::<u8>(kind_id).unwrap_or(0));
     let t = app.tokens;
     let mut close = false;
-    // Sit just under the toolbar at the right edge, so the viewer stays visible.
+    // Docked under the toolbar on the left, over the column beside the viewer.
     let screen = ctx.screen_rect();
     egui::Window::new("曲线")
         .open(&mut open)
         .collapsible(false)
         .resizable(false)
-        .fixed_pos(pos2((screen.right() - 260.0).max(screen.left() + 8.0), screen.top() + 74.0))
+        .fixed_pos(pos2(screen.left() + 186.0, screen.top() + 74.0))
+        .default_width(232.0)
         .show(ctx, |ui| {
+            // Top: a large preview of the chosen easing, the place a handle editor would live.
+            ui.label("曲线预览");
+            let (canvas, _) = ui.allocate_exact_size(vec2(214.0, 92.0), Sense::hover());
+            ui.painter().rect_filled(canvas, 4.0, t.switch_well);
+            let plot = canvas.shrink2(vec2(14.0, 12.0));
+            draw_ease_curve(ui.painter(), plot, kind, t.accent);
+            ui.add_space(6.0);
             ui.label("缓动预设（点击应用）");
-            ui.add_space(4.0);
+            ui.add_space(2.0);
             let presets: [(&str, &str, u8); 5] = [
                 ("缓入缓出", "keys.easyEase", 0),
                 ("缓入", "keys.easyEaseIn", 1),
@@ -98,12 +108,12 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context) {
                 ("定格", "keys.toggleHold", 4),
             ];
             ui.horizontal_wrapped(|ui| {
-                for (label, cmd, kind) in presets {
-                    let (rect, resp) = ui.allocate_exact_size(vec2(66.0, 76.0), Sense::click());
-                    let bg = if resp.hovered() { t.hover } else { t.switch_well };
+                for (label, cmd, k) in presets {
+                    let (rect, resp) = ui.allocate_exact_size(vec2(66.0, 74.0), Sense::click());
+                    let bg = if kind == k { t.accent.gamma_multiply(0.35) } else if resp.hovered() { t.hover } else { t.switch_well };
                     ui.painter().rect_filled(rect, 5.0, bg);
-                    let plot = Rect::from_min_size(rect.min + vec2(9.0, 8.0), vec2(46.0, 42.0));
-                    draw_ease_curve(ui.painter(), plot, kind, t.text);
+                    let cell = Rect::from_min_size(rect.min + vec2(9.0, 8.0), vec2(46.0, 40.0));
+                    draw_ease_curve(ui.painter(), cell, k, t.text);
                     ui.painter().text(
                         pos2(rect.center().x, rect.max.y - 13.0),
                         Align2::CENTER_CENTER,
@@ -113,12 +123,17 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context) {
                     );
                     if resp.on_hover_text(label).clicked() {
                         let _ = crate::menus::invoke(app, ctx, cmd, serde_json::json!({}));
-                        close = true;
+                        kind = k;
                     }
                 }
             });
         });
-    ctx.data_mut(|d| d.insert_temp(open_id, open && !close));
+    ctx.data_mut(|d| {
+        d.insert_temp(open_id, open);
+        d.insert_temp(kind_id, kind);
+    });
+    let _ = close;
+    close = false;
 }
 
 /// A thumbnail of an easing curve: the shape is what makes the preset recognisable.
