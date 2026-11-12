@@ -92,17 +92,24 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
         .movable(true)
         .default_width(232.0)
         .show(ctx, |ui| {
-            // Top: a square custom curve. The two handles are the keyframe influences.
-            ui.label("自定义缓动（拖动手柄）");
-            let c1 = egui::Id::new("ours-curve-in");
-            let c2 = egui::Id::new("ours-curve-out");
-            let mut i1 = ctx.data(|d| d.get_temp::<f32>(c1).unwrap_or(0.33));
-            let mut i2 = ctx.data(|d| d.get_temp::<f32>(c2).unwrap_or(0.33));
-            let dragged_last = ctx.data(|d| d.get_temp::<bool>(egui::Id::new("ours-curve-dragged")).unwrap_or(false));
-            let mut prev_dragged = dragged_last;
+            // One square: drag anywhere inside to bend the curve (up/down = strength,
+            // left/right = which side of the motion gets the ease).
+            ui.label("自定义缓动（按住方块拖动）");
+            let bend_id = egui::Id::new("ours-curve-bend");
+            let skew_id = egui::Id::new("ours-curve-skew");
+            let mut bend = ctx.data(|d| d.get_temp::<f32>(bend_id).unwrap_or(0.35));
+            let mut skew = ctx.data(|d| d.get_temp::<f32>(skew_id).unwrap_or(0.0));
             let (canvas, _) = ui.allocate_exact_size(vec2(248.0, 248.0), Sense::hover());
             ui.painter().rect_filled(canvas, 6.0, t.switch_well);
             let plot = canvas.shrink2(vec2(18.0, 18.0));
+            let drag = ui.interact(canvas, egui::Id::unique("ours-curve-drag"), Sense::drag());
+            if drag.dragged() {
+                let d = drag.drag_delta();
+                bend = (bend - d.y / plot.height() * 1.4).clamp(0.06, 0.94);
+                skew = (skew + d.x / plot.width() * 1.6).clamp(-0.85, 0.85);
+            }
+            let i1 = (bend * (1.0 - skew * 0.75)).clamp(0.02, 0.98);
+            let i2 = (bend * (1.0 + skew * 0.75)).clamp(0.02, 0.98);
             let p0 = pos2(plot.left(), plot.bottom());
             let p1 = pos2(plot.left() + plot.width() * i1, plot.bottom());
             let p2 = pos2(plot.left() + plot.width() * (1.0 - i2), plot.top());
@@ -115,43 +122,16 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
                 let y = v * v * v * p0.y + 3.0 * v * v * u * p1.y + 3.0 * v * u * u * p2.y + u * u * u * p3.y;
                 pts.push(pos2(x, y));
             }
-            ui.painter().add(egui::Shape::line(pts, egui::Stroke::new(2.0, t.accent)));
-            let h1 = ui.interact(Rect::from_center_size(p1, vec2(22.0, 22.0)), egui::Id::unique("ours-c1"), Sense::drag());
-            let h2 = ui.interact(Rect::from_center_size(p2, vec2(22.0, 22.0)), egui::Id::unique("ours-c2"), Sense::drag());
-            if h1.dragged() {
-                i1 = (i1 + h1.drag_delta().x / plot.width()).clamp(0.02, 0.98);
+            if drag.hovered() || drag.dragged() {
+                ui.painter().rect_stroke(canvas, 6.0, egui::Stroke::new(1.0, t.accent), egui::StrokeKind::Inside);
             }
-            if h2.dragged() {
-                i2 = (i2 - h2.drag_delta().x / plot.width()).clamp(0.02, 0.98);
-            }
-            // Remember the shape a drag started from, so the previous curve can stay visible.
-            let start_id = egui::Id::new("ours-curve-start");
-            if h1.drag_started() || h2.drag_started() {
-                ctx.data_mut(|d| d.insert_temp(start_id, (i1, i2)));
-            }
-            let ghost = ctx.data(|d| d.get_temp::<(f32, f32)>(start_id));
-            if let Some((q1, q2)) = ghost {
-                let a1 = pos2(plot.left() + plot.width() * q1, plot.bottom());
-                let a2 = pos2(plot.left() + plot.width() * (1.0 - q2), plot.top());
-                let mut ghost_pts: Vec<egui::Pos2> = Vec::new();
-                for k in 0..=32 {
-                    let u = k as f32 / 32.0;
-                    let v = 1.0 - u;
-                    let x = v * v * v * p0.x + 3.0 * v * v * u * a1.x + 3.0 * v * u * u * a2.x + u * u * u * p3.x;
-                    let y = v * v * v * p0.y + 3.0 * v * v * u * a1.y + 3.0 * v * u * u * a2.y + u * u * u * p3.y;
-                    ghost_pts.push(pos2(x, y));
-                }
-                ui.painter().add(egui::Shape::line(ghost_pts, egui::Stroke::new(1.4, t.text_faint)));
-            }
-            for (hh, at) in [(&h1, p1), (&h2, p2)] {
-                ui.painter().circle_filled(at, if hh.hovered() { 7.0 } else { 5.0 }, t.text);
-            }
+            ui.painter().add(egui::Shape::line(pts, egui::Stroke::new(2.2, t.accent)));
             ctx.data_mut(|d| {
-                d.insert_temp(c1, i1);
-                d.insert_temp(c2, i2);
+                d.insert_temp(bend_id, bend);
+                d.insert_temp(skew_id, skew);
             });
-            // Letting go of a handle applies at once: no second button to remember.
-            if h1.drag_stopped() || h2.drag_stopped() {
+            // Letting go applies at once.
+            if drag.drag_stopped() {
                 if app.session.state.selected_keys.is_empty() {
                     app.ui.status = "请先选中关键帧，再应用缓动".into();
                 } else {
