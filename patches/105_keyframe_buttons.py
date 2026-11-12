@@ -88,7 +88,8 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
         .open(&mut open)
         .collapsible(false)
         .resizable(false)
-        .fixed_pos(pos2(screen.left() + 186.0, screen.top() + 74.0))
+        .default_pos(pos2(screen.left() + 186.0, screen.top() + 74.0))
+        .movable(true)
         .default_width(232.0)
         .show(ctx, |ui| {
             // Top: a large preview of the chosen easing, the place a handle editor would live.
@@ -166,23 +167,38 @@ fn draw_ease_curve(p: &egui::Painter, r: Rect, kind: u8, color: egui::Color32) {
 
 /// A curved undo (or, mirrored, redo) arrow drawn with lines, so it never depends on a font glyph.
 fn draw_history_arrow(p: &egui::Painter, c: egui::Pos2, rad: f32, mirror: bool, color: egui::Color32) {
-    // A rounded loop with a flat tail and a small hook, as in the reference icon.
+    // Rounded square loop, open on the left, with a short tick: the reference icon mirrored.
     let stroke = egui::Stroke::new(2.0, color);
     let sign = if mirror { -1.0 } else { 1.0 };
+    let w = rad * 0.9;
+    let h = rad * 0.75;
+    let r = rad * 0.35;
+    let left = c.x - sign * w;
+    let right = c.x + sign * w;
+    let top = c.y - h;
+    let bottom = c.y + h;
     let mut pts: Vec<egui::Pos2> = Vec::new();
-    let steps = 28;
-    for i in 0..=steps {
-        let t = i as f32 / steps as f32;
-        // Most of a circle, open just above the left shoulder.
-        let a = std::f32::consts::PI * (0.55 + 1.55 * t);
-        pts.push(pos2(c.x + sign * rad * a.cos(), c.y + rad * 0.85 * a.sin()));
+    // Top edge, from the tick to the rounded top corner.
+    pts.push(pos2(left + sign * r * 0.4, top));
+    pts.push(pos2(right - sign * r, top));
+    // Rounded top-right corner.
+    for i in 0..=6 {
+        let a = -std::f32::consts::FRAC_PI_2 + std::f32::consts::FRAC_PI_2 * (i as f32 / 6.0);
+        pts.push(pos2(right - sign * r + sign * r * a.cos(), top + r + r * a.sin()));
     }
-    p.add(egui::Shape::line(pts.clone(), stroke));
-    // Flat tail running out of the opening, then a short hook upward.
-    let tail = pts[pts.len() - 1];
-    let out = pos2(tail.x - sign * rad * 0.9, tail.y);
-    p.add(egui::Shape::line(vec![tail, out], stroke));
-    p.add(egui::Shape::line(vec![out, pos2(out.x, out.y - rad * 0.5)], stroke));
+    // Down the right side, round the bottom corner, along the bottom to the left.
+    pts.push(pos2(right, bottom - r));
+    for i in 0..=6 {
+        let a = std::f32::consts::FRAC_PI_2 * (i as f32 / 6.0);
+        pts.push(pos2(right - sign * r + sign * r * a.cos(), bottom - r + r * a.sin()));
+    }
+    pts.push(pos2(left + sign * r, bottom));
+    p.add(egui::Shape::line(pts, stroke));
+    // The tick at the opening.
+    p.add(egui::Shape::line(
+        vec![pos2(left + sign * r * 0.4, top), pos2(left + sign * r * 0.4, top - rad * 0.35)],
+        stroke,
+    ));
 }
 '''
 
