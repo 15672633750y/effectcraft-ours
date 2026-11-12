@@ -60,7 +60,7 @@ fn keyframe_buttons(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Paint
         // The curved arrows are drawn as vectors: the bundled font has no ↶/↷ glyph, and a
         // missing glyph would show as a narrow box.
         let _ = label;
-        draw_history_arrow(&p, r.center(), r.width() * 0.32, cmd == "edit.redo", tint);
+        draw_history_arrow(&p, r, cmd == "edit.redo", tint);
         let resp = resp.on_hover_text(tip);
         if resp.clicked() && ready {
             if crate::menus::invoke(app, ui.ctx(), cmd, serde_json::json!({})).is_ok() {
@@ -246,27 +246,35 @@ fn draw_ease_curve(p: &egui::Painter, r: Rect, kind: u8, color: egui::Color32) {
 }
 
 /// A curved undo (or, mirrored, redo) arrow drawn with lines, so it never depends on a font glyph.
-fn draw_history_arrow(p: &egui::Painter, c: egui::Pos2, rad: f32, mirror: bool, color: egui::Color32) {
-    // A hoop with an arrowhead on one side and a long tail on the other: the familiar undo arrow.
-    let stroke = egui::Stroke::new(2.0, color);
-    let sign = if mirror { -1.0 } else { 1.0 };
+fn draw_history_arrow(p: &egui::Painter, r: Rect, mirror: bool, color: egui::Color32) {
+    // Open rounded loop with a short hook: drawn to the same proportions as the reference icons.
+    let stroke = egui::Stroke::new(1.9, color);
+    let s = if mirror { -1.0 } else { 1.0 };
+    let inner = r.shrink2(vec2(6.5, 6.5));
+    let (left, right) = (inner.left(), inner.right());
+    let (top, bot) = (inner.top(), inner.bottom());
+    let h = inner.height();
+    let w = inner.width();
+    let rr = (h * 0.42).min(w * 0.28);
     let mut pts: Vec<egui::Pos2> = Vec::new();
-    let steps = 24;
-    for i in 0..=steps {
-        let t = i as f32 / steps as f32;
-        // From the arrow side, round the bottom, up to the tail side.
-        let a = std::f32::consts::PI * (1.0 - t);
-        pts.push(pos2(c.x + sign * rad * a.cos(), c.y + rad * 0.85 * a.sin()));
+    pts.push(pos2(left + s * w * 0.18, bot));
+    pts.push(pos2(right - rr, bot));
+    for i in 1..=8 {
+        let a = (90.0 - 90.0 * i as f32 / 8.0).to_radians();
+        pts.push(pos2(right - rr + rr * a.cos(), bot - rr + rr * a.sin()));
     }
-    p.add(egui::Shape::line(pts.clone(), stroke));
-    // Tail: keep going down from the far end, as in the sketch.
-    let tail = pts[pts.len() - 1];
-    p.add(egui::Shape::line(vec![tail, pos2(tail.x + sign * rad * 0.55, tail.y + rad * 0.35)], stroke));
-    // Arrowhead on the other end, pointing outwards.
-    let tip = pts[0];
-    let h = rad * 0.55;
-    p.add(egui::Shape::line(vec![tip, pos2(tip.x - sign * h * 0.8, tip.y - h * 0.55)], stroke));
-    p.add(egui::Shape::line(vec![tip, pos2(tip.x, tip.y + h * 0.95)], stroke));
+    pts.push(pos2(right, top + rr));
+    for i in 1..=8 {
+        let a = (-90.0 * i as f32 / 8.0).to_radians();
+        pts.push(pos2(right - rr + rr * a.cos(), top + rr + rr * a.sin()));
+    }
+    pts.push(pos2(left + s * w * 0.06, top));
+    p.add(egui::Shape::line(pts, stroke));
+    // The hook leaves the open end upwards and inwards, mirrored for redo.
+    p.add(egui::Shape::line(
+        vec![pos2(left + s * w * 0.06, top), pos2(left + s * w * 0.38, top - h * 0.32)],
+        stroke,
+    ));
 }
 '''
 
