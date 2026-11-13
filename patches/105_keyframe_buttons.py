@@ -331,6 +331,7 @@ fn plugin_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
             ui.label("把文件放进手机这两个文件夹（没有就新建）：");
             ui.label("  Download/EffectCraftPlugins —— .wasm / .zip");
             ui.label("  Download/EffectCraftScripts —— .jsx / .js");
+            ui.label("也可以直接放进 Download 根目录，同样会自动装。");
             ui.label("然后完全退出 App 再打开，会自动装好。");
             ui.separator();
             ui.heading("装不了的格式");
