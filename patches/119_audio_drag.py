@@ -40,7 +40,8 @@ NEW = '''        Some((name, [a, b])) => {
                     ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
                 }
                 if resp.dragged() {
-                    let step = resp.drag_delta().x * 0.25;
+                    // Audio Levels are f64 in the project; the drag delta is f32.
+                    let step = resp.drag_delta().x as f64 * 0.25;
                     if step != 0.0 {
                         let mut lv = [a, b];
                         lv[ch] = (lv[ch] + step).clamp(-60.0, 12.0);

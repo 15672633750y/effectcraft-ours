@@ -190,9 +190,13 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
                 }
             }
             let save_id = egui::Id::new("ours-curve-saved");
+            let save_h_id = egui::Id::new("ours-curve-saved-handles");
             ui.horizontal(|ui| {
                 if ui.button("保存曲线").clicked() {
-                    ctx.data_mut(|d| d.insert_temp(save_id, ys));
+                    ctx.data_mut(|d| {
+                        d.insert_temp(save_id, ys);
+                        d.insert_temp(save_h_id, h);
+                    });
                     app.ui.status = "已保存曲线".into();
                 }
                 if ui.button("重置曲线").clicked() {
@@ -235,7 +239,10 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
             }
             if let Some(sv) = restore {
                 ys = sv;
-                ctx.data_mut(|d| d.insert_temp(pts_id, ys));
+                if let Some(hv) = ctx.data(|d| d.get_temp::<[f32; 4]>(save_h_id)) {
+                    h = hv;
+                    ctx.data_mut(|d| d.insert_temp(hp_id, hv));
+                }
             }
             ui.label("缓动预设（点击应用）");
             ui.add_space(2.0);
