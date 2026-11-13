@@ -32,6 +32,8 @@ def main() -> None:
         java.io.File config = new java.io.File(ext, "config");
         copyDropped(new java.io.File("/storage/emulated/0/Download/EffectCraftScripts"), new java.io.File(config, "Scripts"));
         copyDropped(new java.io.File("/storage/emulated/0/Download/EffectCraftPlugins"), new java.io.File(config, "Plug-ins"));
+        // Also pick up files dropped straight into Downloads, so the two folders are optional.
+        copyDropped(new java.io.File("/storage/emulated/0/Download"), new java.io.File(config, "Scripts"));
     }
 
     private void copyDropped(java.io.File from, java.io.File to) {
