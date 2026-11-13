@@ -18,6 +18,11 @@ MODULE = r'''//! Chinese display names for the common transform properties.
 pub fn name<'a>(en: &'a str, _group: &str) -> &'a str {
     match en {
         "Transform" => "变换",
+        "Audio" => "音频",
+        "Audio Levels" => "音频电平",
+        "Waveform" => "波形",
+        "Levels" => "电平",
+        "Effects" => "效果",
         "Layer Transform" => "图层变换",
         "Anchor Point" => "锚点",
         "Position" => "位置",
