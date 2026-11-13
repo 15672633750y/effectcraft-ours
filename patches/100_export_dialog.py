@@ -87,7 +87,6 @@ fn export_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
             if ui.checkbox(&mut draft, "草稿画质（更快）").changed() {
                 ctx.data_mut(|d| d.insert_temp(egui::Id::new("ours-export-draft"), draft));
             }
-            params["quality"] = serde_json::json!(if draft { "draft" } else { "best" });
             if ui.checkbox(&mut follow, "渲染时预览跟随").changed() {
                 ctx.data_mut(|d| d.insert_temp(egui::Id::new("ours-preview-follow"), follow));
             }
@@ -143,6 +142,9 @@ fn export_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
         }
         // One call carries the whole setup: the queue item is created with these settings, so
         // the file that comes out really is PNG/4K/120 as chosen.
+        // Draft quality renders much faster; the checkbox above sets it.
+        let draft = ctx.data(|d| d.get_temp::<bool>(egui::Id::new("ours-export-draft")).unwrap_or(false));
+        params["quality"] = serde_json::json!(if draft { "draft" } else { "best" });
         if crate::menus::invoke(app, ctx, "renderQueue.add", params).is_ok() {
             let _ = crate::menus::invoke(app, ctx, "renderQueue.render", serde_json::json!({}));
         }
