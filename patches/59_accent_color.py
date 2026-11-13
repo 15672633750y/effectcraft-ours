@@ -77,10 +77,11 @@ def main() -> None:
     theme = root / "crates/ui-egui/src/theme.rs"
     tsrc = theme.read_text(encoding="utf-8")
     if MARKER not in tsrc:
-        if tsrc.count(THEME_ANCHOR) != 1 or tsrc.count(PARSE_ANCHOR) != 1:
+        if tsrc.count(THEME_ANCHOR) != 1:
             raise SystemExit("theme anchors missing")
         tsrc = tsrc.replace(THEME_ANCHOR, THEME, 1)
-        tsrc = tsrc.replace(PARSE_ANCHOR, PARSE_FN + PARSE_ANCHOR, 1)
+        # Module-scope helpers at the end of the file, not inside an impl block.
+        tsrc = tsrc + "\n" + PARSE_FN
         theme.write_text(tsrc, encoding="utf-8")
 
     settings = root / "crates/ui-egui/src/panels/settings.rs"
