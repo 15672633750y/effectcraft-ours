@@ -191,6 +191,10 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
                     ctx.data_mut(|d| d.insert_temp(save_id, ys));
                     app.ui.status = "已保存曲线".into();
                 }
+                if ui.button("重置曲线").clicked() {
+                    ctx.data_mut(|d| d.insert_temp(pts_id, [0.06, 0.22, 0.45, 0.66, 0.8, 0.72, 0.55, 0.35, 0.14]));
+                    app.ui.status = "曲线已重置".into();
+                }
                 if ui.button("删除关键帧").clicked() {
                     if app.session.state.selected_keys.is_empty() {
                         app.ui.status = "请先选中关键帧".into();
