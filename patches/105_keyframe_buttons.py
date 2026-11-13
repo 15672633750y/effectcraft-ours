@@ -354,8 +354,8 @@ fn draw_history_arrow(p: &egui::Painter, r: Rect, mirror: bool, color: egui::Col
     // pair is an exact mirror of itself.
     let stroke = egui::Stroke::new(1.8, color);
     let c = r.center();
-    let bw = 18.0;
-    let bh = 14.0;
+    let bw = 20.0;
+    let bh = 16.0;
     let (top, bot) = (c.y - bh * 0.5, c.y + bh * 0.5);
     let hw = bw * 0.5;
     let rr = (bh * 0.42).min(hw * 0.56);
