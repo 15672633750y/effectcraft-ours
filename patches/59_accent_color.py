@@ -110,11 +110,12 @@ UI = '''    // " + MARKER + "
         ui.data_mut(|d| d.insert_temp(hex_buf_id, hex_buf));
         // 取色器：和合成里的颜色一样，一个完整的拾色弹窗。
         let picker_id = egui::Id::new("ours-accent-picker");
-        let current = crate::theme::swatch(if app.session.prefs.appearance.accent.is_empty() {
-            "#2d8ceb"
+        let hex_now = if app.session.prefs.appearance.accent.is_empty() {
+            "#2d8ceb".to_string()
         } else {
-            &app.session.prefs.appearance.accent
-        });
+            app.session.prefs.appearance.accent.clone()
+        };
+        let current = crate::theme::swatch(&hex_now);
         let [r, g, b, _] = current.to_srgba_unmultiplied();
         let mut rgb = [f32::from(r) / 255.0, f32::from(g) / 255.0, f32::from(b) / 255.0];
         if ui.button("取色器…").clicked() {
