@@ -9,6 +9,7 @@ MARKER = "EFFECTCRAFT_OURS_INSTALL_SCRIPTS_V1"
 ANCHOR = "        startGalleryWatcher();\n"
 
 CODE = '''        installDroppedExtensions();
+        deleteEmptyRenders();
 '''
 
 
@@ -34,6 +35,20 @@ def main() -> None:
         copyDropped(new java.io.File("/storage/emulated/0/Download/EffectCraftPlugins"), new java.io.File(config, "Plug-ins"));
         // Also pick up files dropped straight into Downloads, so the two folders are optional.
         copyDropped(new java.io.File("/storage/emulated/0/Download"), new java.io.File(config, "Scripts"));
+    }
+
+    /** Removes zero-byte files a cancelled render left behind, so nothing empty reaches the gallery. */
+    private void deleteEmptyRenders() {
+        java.io.File dir = new java.io.File("/storage/emulated/0/DCIM/EffectCraft");
+        java.io.File[] files = dir.listFiles();
+        if (files == null) {
+            return;
+        }
+        for (java.io.File f : files) {
+            if (f.isFile() && f.length() == 0L && !f.delete()) {
+                Log.w(TAG, "could not remove empty render " + f.getName());
+            }
+        }
     }
 
     private void copyDropped(java.io.File from, java.io.File to) {
