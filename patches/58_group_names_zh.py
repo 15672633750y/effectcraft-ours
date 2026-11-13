@@ -19,6 +19,9 @@ TABLE = (
     '        "Material Options" => return "材质选项".to_string(),\n'
     "        _ => {}\n"
     "    }\n"
+    "    if stored.ends_with(\" Transform\") {\n"
+    "        return \"图层变换\".to_string();\n"
+    "    }\n"
 )
 
 
