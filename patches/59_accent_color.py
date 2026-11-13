@@ -85,6 +85,47 @@ UI = '''    // " + MARKER + "
             }
         });
     }
+    // 16 进制输入 + 取色器：色板只是快捷方式，这一行能选任意颜色。
+    let hex_buf_id = egui::Id::new("ours-accent-hex");
+    let mut hex_buf = ui.data(|d| d.get_temp::<String>(hex_buf_id)).unwrap_or_else(|| {
+        let a = &app.session.prefs.appearance.accent;
+        if a.is_empty() {
+            String::new()
+        } else {
+            a.clone()
+        }
+    });
+    ui.horizontal(|ui| {
+        ui.add_sized(vec2(250.0, 18.0), egui::Label::new("十六进制：").truncate());
+        let edit = ui.add(egui::TextEdit::singleline(&mut hex_buf).hint_text("#2d8ceb").desired_width(96.0));
+        if edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+            let v = hex_buf.trim().trim_start_matches('#').to_string();
+            let valid = (v.len() == 6 || v.len() == 3) && v.chars().all(|c| c.is_ascii_hexdigit());
+            if valid {
+                acts.push(Act::Set("appearance.accent".into(), json!(format!("#{v}"))));
+            } else if v.is_empty() {
+                acts.push(Act::Set("appearance.accent".into(), json!("")));
+            }
+        }
+        ui.data_mut(|d| d.insert_temp(hex_buf_id, hex_buf));
+        // 取色器：和合成里的颜色一样，一个完整的拾色弹窗。
+        let picker_id = egui::Id::new("ours-accent-picker");
+        let current = crate::theme::swatch(if app.session.prefs.appearance.accent.is_empty() {
+            "#2d8ceb"
+        } else {
+            &app.session.prefs.appearance.accent
+        });
+        let [r, g, b, _] = current.to_srgba_unmultiplied();
+        let mut rgb = [f32::from(r) / 255.0, f32::from(g) / 255.0, f32::from(b) / 255.0];
+        if ui.button("取色器…").clicked() {
+            crate::widgets::open_popup(ui, picker_id);
+        }
+        let anchor = ui.min_rect().left_bottom();
+        if crate::widgets::color_popup(ui, picker_id, anchor, &mut rgb) {
+            let to = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+            acts.push(Act::Set("appearance.accent".into(), json!(format!("#{:02x}{:02x}{:02x}", to(rgb[0]), to(rgb[1]), to(rgb[2])))));
+        }
+    });
 '''
 
 
