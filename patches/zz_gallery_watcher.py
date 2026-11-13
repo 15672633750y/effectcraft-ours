@@ -137,7 +137,26 @@ def main() -> None:
             }
             String name = entry.getName().toLowerCase(java.util.Locale.ROOT);
             boolean video = name.endsWith(".mp4") || name.endsWith(".mov") || name.endsWith(".m4v");
-            if (!video || entry.length() <= 0) {
+            boolean temp = name.endsWith(".part") || name.endsWith(".tmp") || name.endsWith(".partial");
+            if (!video && !temp) {
+                continue;
+            }
+            long length = entry.length();
+            if (temp || (video && length <= 0)) {
+                // A render stopped (cancel / pause then quit) leaves these behind: a 0-byte or
+                // half-written file the app never finished. Delete one once it has not grown for
+                // two scans and is at least a minute old, so a render still starting up is safe.
+                String stale = entry.getAbsolutePath();
+                Long before = PENDING_SIZES.get(stale);
+                boolean old = System.currentTimeMillis() - entry.lastModified() > 60000L;
+                if (before != null && before == length && old) {
+                    PENDING_SIZES.remove(stale);
+                    if (entry.delete()) {
+                        Log.i(TAG, "Removed an unfinished render: " + entry.getName());
+                    }
+                } else {
+                    PENDING_SIZES.put(stale, length);
+                }
                 continue;
             }
             // Only publish a file once its size has stopped changing: a render still being
