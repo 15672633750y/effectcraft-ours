@@ -82,6 +82,12 @@ fn export_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
                 });
             ui.add_space(8.0);
             let mut follow = ctx.data(|d| d.get_temp::<bool>(egui::Id::new("ours-preview-follow")).unwrap_or(true));
+            // Draft quality renders much faster and is what you want while roughing out a cut.
+            let mut draft = ctx.data(|d| d.get_temp::<bool>(egui::Id::new("ours-export-draft")).unwrap_or(false));
+            if ui.checkbox(&mut draft, "草稿画质（更快）").changed() {
+                ctx.data_mut(|d| d.insert_temp(egui::Id::new("ours-export-draft"), draft));
+            }
+            params["quality"] = serde_json::json!(if draft { "draft" } else { "best" });
             if ui.checkbox(&mut follow, "渲染时预览跟随").changed() {
                 ctx.data_mut(|d| d.insert_temp(egui::Id::new("ours-preview-follow"), follow));
             }
