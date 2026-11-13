@@ -87,6 +87,7 @@ fn export_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
             if ui.checkbox(&mut draft, "草稿画质（更快）").changed() {
                 ctx.data_mut(|d| d.insert_temp(egui::Id::new("ours-export-draft"), draft));
             }
+            ui.label(egui::RichText::new("最佳画质用恒定质量（CRF 20）编码，码率随画面复杂度自动分配").weak());
             if ui.checkbox(&mut follow, "渲染时预览跟随").changed() {
                 ctx.data_mut(|d| d.insert_temp(egui::Id::new("ours-preview-follow"), follow));
             }
