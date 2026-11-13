@@ -113,26 +113,29 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
             let plot = canvas.shrink2(vec2(18.0, 18.0));
             let px = |i: usize| plot.left() + plot.width() * (i as f32 / 8.0);
             let py = |v: f32| plot.bottom() - plot.height() * v.clamp(0.0, 1.0);
-            // Smooth curve through the points (Catmull-Rom).
+            // Monotone cubic: smooth, and it can never overshoot between two points, so the
+            // curve keeps the shape you drag instead of growing bumps of its own.
+            let slope = |i: usize| -> f32 {
+                let left = if i == 0 { 0.0 } else { ys[i] - ys[i - 1] };
+                let right = if i == 8 { 0.0 } else { ys[i + 1] - ys[i] };
+                if left * right <= 0.0 { 0.0 } else { (left + right) * 0.5 }
+            };
             let mut path: Vec<egui::Pos2> = Vec::new();
             for seg in 0usize..8 {
-                let (a, b, c, d) = (
-                    ys[seg.saturating_sub(1)],
-                    ys[seg],
-                    ys[seg + 1],
-                    ys[(seg + 2).min(8)],
-                );
+                let (y0, y1) = (ys[seg], ys[seg + 1]);
+                let (m0, m1) = (slope(seg), slope(seg + 1));
                 let steps = 16;
                 for k in 0..steps {
                     let u = k as f32 / steps as f32;
                     let u2 = u * u;
                     let u3 = u2 * u;
-                    let v = 0.5 * ((2.0 * b)
-                        + (-a + c) * u
-                        + (2.0 * a - 5.0 * b + 4.0 * c - d) * u2
-                        + (-a + 3.0 * b - 3.0 * c + d) * u3);
+                    let h00 = 2.0 * u3 - 3.0 * u2 + 1.0;
+                    let h10 = u3 - 2.0 * u2 + u;
+                    let h01 = -2.0 * u3 + 3.0 * u2;
+                    let h11 = u3 - u2;
+                    let v = h00 * y0 + h10 * m0 + h01 * y1 + h11 * m1;
                     let x = px(seg) + (px(seg + 1) - px(seg)) * u;
-                    path.push(pos2(x, py(v)));
+                    path.push(pos2(x, py(v.clamp(0.0, 1.0))));
                 }
             }
             path.push(pos2(px(8), py(ys[8])));
