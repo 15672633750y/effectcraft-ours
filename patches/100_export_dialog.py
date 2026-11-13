@@ -82,12 +82,22 @@ fn export_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
                 });
             ui.add_space(8.0);
             let mut follow = ctx.data(|d| d.get_temp::<bool>(egui::Id::new("ours-preview-follow")).unwrap_or(true));
+            // AfterCodecs' export sheet asks for one number: quality 0-100 (70 by default). Same
+            // idea here: the slider is the CRF dial, and 70 is CRF 20 — its default position.
+            let mut hq = ctx.data(|d| d.get_temp::<i32>(egui::Id::new("ours-export-hq")).unwrap_or(70));
+            ui.label("画质（1–100）");
+            if ui.add(egui::Slider::new(&mut hq, 1..=100)).changed() {
+                ctx.data_mut(|d| d.insert_temp(egui::Id::new("ours-export-hq"), hq));
+            }
             // Draft quality renders much faster and is what you want while roughing out a cut.
             let mut draft = ctx.data(|d| d.get_temp::<bool>(egui::Id::new("ours-export-draft")).unwrap_or(false));
             if ui.checkbox(&mut draft, "草稿画质（更快）").changed() {
                 ctx.data_mut(|d| d.insert_temp(egui::Id::new("ours-export-draft"), draft));
             }
-            ui.label(egui::RichText::new("最佳画质用恒定质量（CRF 20）编码，码率随画面复杂度自动分配").weak());
+            ui.label(
+                egui::RichText::new("恒定质量编码：画质 70 ≈ AfterCodecs 默认 Q70（CRF 20）；草稿画质改用固定码率")
+                    .weak(),
+            );
             if ui.checkbox(&mut follow, "渲染时预览跟随").changed() {
                 ctx.data_mut(|d| d.insert_temp(egui::Id::new("ours-preview-follow"), follow));
             }
@@ -146,6 +156,13 @@ fn export_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
         // Draft quality renders much faster; the checkbox above sets it.
         let draft = ctx.data(|d| d.get_temp::<bool>(egui::Id::new("ours-export-draft")).unwrap_or(false));
         params["quality"] = serde_json::json!(if draft { "draft" } else { "best" });
+        if !draft {
+            // Constant quality: H.264 reads the Output Module's codec quality as its CRF level
+            // (8 + (100 - q) * 0.4), so 70 is CRF 20 — the AfterCodecs default's equivalent.
+            let hq = ctx.data(|d| d.get_temp::<i32>(egui::Id::new("ours-export-hq")).unwrap_or(70));
+            params["rateControl"] = serde_json::json!("quality");
+            params["codecQuality"] = serde_json::json!(hq);
+        }
         if crate::menus::invoke(app, ctx, "renderQueue.add", params).is_ok() {
             let _ = crate::menus::invoke(app, ctx, "renderQueue.render", serde_json::json!({}));
         }
