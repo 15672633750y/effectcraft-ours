@@ -103,69 +103,70 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
         .movable(true)
         .default_width(232.0)
         .show(ctx, |ui| {
-            // The curve is a set of draggable points: pull any of them down and the curve
-            // dips there, pull one up and it arches. Left/right dragging shifts the peak.
-            ui.label("自定义缓动（拖动曲线上的点）");
-            let pts_id = egui::Id::new("ours-curve-points");
-            let mut ys: [f32; 9] = ctx.data(|d| d.get_temp::<[f32; 9]>(pts_id)).unwrap_or([0.06, 0.22, 0.45, 0.66, 0.8, 0.72, 0.55, 0.35, 0.14]);
+            // Two handles on a cubic from A to B: the curve can only sweep from the first
+            // keyframe to the second, so it can never grow a second hump of its own.
+            ui.label("自定义缓动（拖两端的控制柄）");
+            let hp_id = egui::Id::new("ours-curve-handles");
+            let mut h: [f32; 4] = ctx.data(|d| d.get_temp::<[f32; 4]>(hp_id)).unwrap_or([0.33, 0.0, 0.67, 1.0]);
             let (canvas, _) = ui.allocate_exact_size(vec2(248.0, 248.0), Sense::hover());
             ui.painter().rect_filled(canvas, 6.0, t.switch_well);
             let plot = canvas.shrink2(vec2(18.0, 18.0));
-            let px = |i: usize| plot.left() + plot.width() * (i as f32 / 8.0);
+            let px = |v: f32| plot.left() + plot.width() * v.clamp(0.0, 1.0);
             let py = |v: f32| plot.bottom() - plot.height() * v.clamp(0.0, 1.0);
-            // Monotone cubic: smooth, and it can never overshoot between two points, so the
-            // curve keeps the shape you drag instead of growing bumps of its own.
-            let slope = |i: usize| -> f32 {
-                let left = if i == 0 { 0.0 } else { ys[i] - ys[i - 1] };
-                let right = if i == 8 { 0.0 } else { ys[i + 1] - ys[i] };
-                if left * right <= 0.0 { 0.0 } else { (left + right) * 0.5 }
+            let at = |u: f32| -> (f32, f32) {
+                let (u2, u3) = (u * u, u * u * u);
+                let (a, b) = (3.0 * (1.0 - u) * (1.0 - u) * u, 3.0 * (1.0 - u) * u * u);
+                (a * h[0] + b * h[2] + u3, a * h[1] + b * h[3] + u3)
             };
-            let mut path: Vec<egui::Pos2> = Vec::new();
-            for seg in 0usize..8 {
-                let (y0, y1) = (ys[seg], ys[seg + 1]);
-                let (m0, m1) = (slope(seg), slope(seg + 1));
-                let steps = 16;
-                for k in 0..steps {
-                    let u = k as f32 / steps as f32;
-                    let u2 = u * u;
-                    let u3 = u2 * u;
-                    let h00 = 2.0 * u3 - 3.0 * u2 + 1.0;
-                    let h10 = u3 - 2.0 * u2 + u;
-                    let h01 = -2.0 * u3 + 3.0 * u2;
-                    let h11 = u3 - u2;
-                    let v = h00 * y0 + h10 * m0 + h01 * y1 + h11 * m1;
-                    let x = px(seg) + (px(seg + 1) - px(seg)) * u;
-                    path.push(pos2(x, py(v.clamp(0.0, 1.0))));
+            // Sample the curve at the nine x steps the ease command works in.
+            let mut ys: [f32; 9] = [0.0; 9];
+            for (i, slot) in ys.iter_mut().enumerate() {
+                let want = i as f32 / 8.0;
+                let (mut lo, mut hi) = (0.0f32, 1.0f32);
+                for _ in 0..24 {
+                    let mid = (lo + hi) * 0.5;
+                    if at(mid).0 < want {
+                        lo = mid;
+                    } else {
+                        hi = mid;
+                    }
                 }
+                *slot = at((lo + hi) * 0.5).1.clamp(0.0, 1.0);
             }
-            path.push(pos2(px(8), py(ys[8])));
+            let mut path: Vec<egui::Pos2> = Vec::new();
+            for i in 0..=64 {
+                let (x, y) = at(i as f32 / 64.0);
+                path.push(pos2(px(x), py(y)));
+            }
             ui.painter().add(egui::Shape::line(path, egui::Stroke::new(2.2, t.accent)));
-            // Drag anywhere: the nearest of the nine points follows the finger 1:1, which keeps
-            // the curve under the pointer instead of lagging behind it.
+            let h1 = pos2(px(h[0]), py(h[1]));
+            let h2 = pos2(px(h[2]), py(h[3]));
+            let hs = egui::Stroke::new(1.2, t.text_dim);
+            ui.painter().line_segment([pos2(px(0.0), py(0.0)), h1], hs);
+            ui.painter().line_segment([pos2(px(1.0), py(1.0)), h2], hs);
+            ui.painter().circle_filled(h1, 5.5, t.accent);
+            ui.painter().circle_filled(h2, 5.5, t.text_dim);
+            // Drag the nearer handle: it stays inside the plot and left of its partner, so the
+            // curve always moves forward in time.
             let canvas_resp = ui.interact(canvas, egui::Id::unique("ours-curve-drag"), Sense::drag());
             let mut stopped = false;
             if canvas_resp.dragged() || canvas_resp.drag_started() {
                 if let Some(pos) = canvas_resp.interact_pointer_pos() {
-                    let t = ((pos.x - plot.left()) / plot.width()).clamp(0.0, 1.0);
-                    let idx = ((t * 8.0).round() as usize).min(8);
-                    // Between two points, blend so the curve bends smoothly rather than snapping.
-                    let exact = t * 8.0;
-                    let lo = exact.floor() as usize;
-                    let hi = (lo + 1).min(8);
-                    let frac = exact - lo as f32;
-                    let y = ((plot.bottom() - pos.y) / plot.height()).clamp(0.0, 1.0);
-                    if frac < 0.5 {
-                        ys[lo] = y;
+                    let gx = ((pos.x - plot.left()) / plot.width()).clamp(0.0, 1.0);
+                    let gy = ((plot.bottom() - pos.y) / plot.height()).clamp(0.0, 1.0);
+                    if (gx - h[0]).abs() + (gy - h[1]).abs() <= (gx - h[2]).abs() + (gy - h[3]).abs() {
+                        h[0] = gx.min(h[2] - 0.02);
+                        h[1] = gy;
                     } else {
-                        ys[hi] = y;
+                        h[2] = gx.max(h[0] + 0.02);
+                        h[3] = gy;
                     }
-                    let _ = idx;
                 }
             }
             if canvas_resp.drag_stopped() {
                 stopped = true;
             }
-            ctx.data_mut(|d| d.insert_temp(pts_id, ys));
+            ctx.data_mut(|d| d.insert_temp(hp_id, h));
             if stopped {
                 if app.session.state.selected_keys.is_empty() {
                     app.ui.status = "请先选中关键帧，再应用缓动".into();
@@ -195,7 +196,7 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
                     app.ui.status = "已保存曲线".into();
                 }
                 if ui.button("重置曲线").clicked() {
-                    ctx.data_mut(|d| d.insert_temp(pts_id, [0.06, 0.22, 0.45, 0.66, 0.8, 0.72, 0.55, 0.35, 0.14]));
+                    ctx.data_mut(|d| d.insert_temp(hp_id, [0.33, 0.0, 0.67, 1.0]));
                     app.ui.status = "曲线已重置".into();
                 }
                 if ui.button("删除关键帧").clicked() {
@@ -352,10 +353,12 @@ fn plugin_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
 fn draw_history_arrow(p: &egui::Painter, r: Rect, mirror: bool, color: egui::Color32) {
     // Fixed size, centred on the button, so it lines up with the neighbouring buttons and the
     // pair is an exact mirror of itself.
-    let stroke = egui::Stroke::new(1.8, color);
+    // Sized to the 12px labels of the neighbouring buttons (曲线, 导出), so the icon and the
+    // words sit on one optical baseline instead of the arrow towering over them.
+    let stroke = egui::Stroke::new(1.5, color);
     let c = r.center();
-    let bw = 20.0;
-    let bh = 16.0;
+    let bw = 13.0;
+    let bh = 10.5;
     let (top, bot) = (c.y - bh * 0.5, c.y + bh * 0.5);
     let hw = bw * 0.5;
     let rr = (bh * 0.42).min(hw * 0.56);
