@@ -12,6 +12,10 @@ from pathlib import Path
 MARKER = "EFFECTCRAFT_OURS_GALLERY_PUBLISH_V1"
 
 PUBLISH = '''
+    /** Gallery copies already made, keyed by path + size + mtime: one copy per file version. */
+    private static final java.util.Set<String> PUBLISHED_TO_GALLERY =
+        java.util.Collections.synchronizedSet(new java.util.HashSet<String>());
+
     /** Copy a finished render into DCIM/EffectCraft and register it with MediaStore. */
     private void publishToGallery(String path) {
         try {
@@ -20,6 +24,18 @@ PUBLISH = '''
             if (!src.isFile() || src.length() <= 0) return;
             String name = src.getName();
             String lower = name.toLowerCase(java.util.Locale.ROOT);
+            // Renders only: the save dialog also commits project files and subtitles, and those
+            // must never land in the video gallery.
+            if (!(lower.endsWith(".mp4") || lower.endsWith(".mov") || lower.endsWith(".m4v") || lower.endsWith(".webm"))) {
+                return;
+            }
+            // The document is committed again on every later save (auto-save included); without
+            // this guard each commit copied the same render into the gallery once more, which is
+            // how a project ended up with hundreds of "… (1) (2)" copies.
+            String key = src.getAbsolutePath() + ":" + src.length() + ":" + src.lastModified();
+            if (!PUBLISHED_TO_GALLERY.add(key)) {
+                return;
+            }
             String mime = lower.endsWith(".mov") ? "video/quicktime"
                 : lower.endsWith(".webm") ? "video/webm"
                 : lower.endsWith(".mp4") || lower.endsWith(".m4v") ? "video/mp4"

@@ -29,6 +29,16 @@ def main() -> None:
     private void startGalleryWatcher() {
         Thread thread = new Thread(() -> {
             final java.util.Set<String> seen = new java.util.HashSet<>();
+            // Everything already on disk was published by an earlier run (the export itself does
+            // it through the save dialog): seed the set so a restart never re-publishes a render
+            // that is already in the gallery. This is what made every launch add its own copies.
+            try {
+                java.io.File existing = getExternalFilesDir(null);
+                if (existing != null) {
+                    seedSeen(existing, seen, 0);
+                }
+            } catch (Throwable ignored) {
+            }
             while (true) {
                 try {
                     java.io.File root = getExternalFilesDir(null);
@@ -90,6 +100,28 @@ def main() -> None:
         }
     }
 
+    /** Record the videos already on disk without publishing them. */
+    private void seedSeen(java.io.File dir, java.util.Set<String> seen, int depth) {
+        if (depth > 4) {
+            return;
+        }
+        java.io.File[] entries = dir.listFiles();
+        if (entries == null) {
+            return;
+        }
+        for (java.io.File entry : entries) {
+            if (entry.isDirectory()) {
+                seedSeen(entry, seen, depth + 1);
+                continue;
+            }
+            String name = entry.getName().toLowerCase(java.util.Locale.ROOT);
+            boolean video = name.endsWith(".mp4") || name.endsWith(".mov") || name.endsWith(".m4v");
+            if (video && entry.length() > 0) {
+                seen.add(entry.getAbsolutePath() + ":" + entry.length() + ":" + entry.lastModified());
+            }
+        }
+    }
+
     private void scanForVideos(java.io.File dir, java.util.Set<String> seen, int depth) {
         if (depth > 4) {
             return;
@@ -117,7 +149,7 @@ def main() -> None:
                 PENDING_SIZES.put(path, size);
                 continue;
             }
-            String key = path + ":" + size;
+            String key = path + ":" + size + ":" + entry.lastModified();
             if (seen.contains(key)) {
                 continue;
             }
