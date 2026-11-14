@@ -20,6 +20,7 @@ STAMP_OLD = '''pub fn utc_stamp(unix: u64) -> String {
 '''
 STAMP_NEW = '''pub fn utc_stamp(unix: u64) -> String {
     // EFFECTCRAFT_OURS_LOCAL_TIME_V1 — 用本地时区显示（之前是 UTC，差 8 小时）
+    use chrono::TimeZone as _;
     if let Some(local) = chrono::Local.timestamp_opt(unix as i64, 0).single() {
         return local.format("%Y-%m-%d %H:%M:%S").to_string();
     }
