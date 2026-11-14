@@ -39,8 +39,17 @@ METHODS = '''
             java.io.File ext = getExternalFilesDir(null);
             if (ext == null) return;
             java.io.File logs = new java.io.File(ext, "config/Logs");
-            java.io.File previous = new java.io.File(logs, "effectcraft.1.log");
-            if (!previous.isFile()) return;
+            // 取最近改动过的那个日志：Rust 那边启动时才轮转，所以我们看到的
+            // `effectcraft.log` 往往还是上一次会话的内容，`.1.log` 可能更旧。
+            java.io.File previous = null;
+            for (String candidate : new String[] {"effectcraft.log", "effectcraft.1.log", "effectcraft.2.log"}) {
+                java.io.File f = new java.io.File(logs, candidate);
+                if (!f.isFile() || f.length() <= 0) continue;
+                if (previous == null || f.lastModified() > previous.lastModified()) previous = f;
+            }
+            if (previous == null) return;
+            // 正在写的那个（刚改过）不复制，否则每次启动都会复制一份半截日志。
+            if (System.currentTimeMillis() - previous.lastModified() < 5000L) return;
             java.io.File stamp = new java.io.File(logs, ".exported");
             if (stamp.isFile() && stamp.lastModified() >= previous.lastModified()) return;
             String text = oursReadText(previous);
