@@ -89,6 +89,19 @@ fn export_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
             if ui.add(egui::Slider::new(&mut hq, 1..=100)).changed() {
                 ctx.data_mut(|d| d.insert_temp(egui::Id::new("ours-export-hq"), hq));
             }
+            // Encoding speed, like AfterCodecs' speed presets: slower spends more time looking
+            // for better matches, faster trades a little quality for time.
+            let speed_id = egui::Id::new("ours-export-speed");
+            let mut speed = ctx.data(|d| d.get_temp::<usize>(speed_id).unwrap_or(0));
+            ui.label("编码速度");
+            egui::ComboBox::from_id_salt("ours-export-speed-combo")
+                .selected_text(["标准", "慢（画质优先）", "快（速度优先）"][speed.min(2)])
+                .show_ui(ui, |ui| {
+                    for (i, name) in ["标准", "慢（画质优先）", "快（速度优先）"].iter().enumerate() {
+                        ui.selectable_value(&mut speed, i, *name);
+                    }
+                });
+            ctx.data_mut(|d| d.insert_temp(speed_id, speed));
             // Draft quality renders much faster and is what you want while roughing out a cut.
             let mut draft = ctx.data(|d| d.get_temp::<bool>(egui::Id::new("ours-export-draft")).unwrap_or(false));
             if ui.checkbox(&mut draft, "草稿画质（更快）").changed() {
@@ -162,8 +175,8 @@ fn export_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
             let hq = ctx.data(|d| d.get_temp::<i32>(egui::Id::new("ours-export-hq")).unwrap_or(70));
             params["rateControl"] = serde_json::json!("quality");
             params["codecQuality"] = serde_json::json!(hq);
-            // 编码速度固定用默认的「标准」档：和插件的默认导出一致，不再多一个选项。
-            params["encodeSpeed"] = serde_json::json!(0u8);
+            let speed = ctx.data(|d| d.get_temp::<usize>(egui::Id::new("ours-export-speed")).unwrap_or(0));
+            params["encodeSpeed"] = serde_json::json!(speed);
         }
         if crate::menus::invoke(app, ctx, "renderQueue.add", params).is_ok() {
             let _ = crate::menus::invoke(app, ctx, "renderQueue.render", serde_json::json!({}));
