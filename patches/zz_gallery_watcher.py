@@ -141,6 +141,8 @@ METHODS = '''
                 if (!f.isFile()) continue;
                 String name = f.getName();
                 if (name.startsWith("未正常导出-")) continue;
+                // MediaStore 回收站里的名字（.trashed-…）不参与改名，也不该被当成成片。
+                if (name.contains(".trashed-")) continue;
                 String lower = name.toLowerCase(java.util.Locale.ROOT);
                 if (!lower.endsWith(".mp4") && !lower.endsWith(".mov") && !lower.endsWith(".m4v")) continue;
                 // 刚写完的别动（可能还在写）。
