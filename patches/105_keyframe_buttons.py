@@ -103,55 +103,58 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
         .movable(true)
         .default_width(232.0)
         .show(ctx, |ui| {
-            // A speed curve: one line from A to B. Grab any of its points and pull it up, down,
-            // left or right — a hill where the effect runs fast, a valley where it holds still.
-            // The line is a Catmull-Rom spline through the points, so a hill you draw is a hill,
-            // not a spike, and it never grows one you did not draw.
-            ui.label("速度曲线（拖点：上=快，下=慢）");
-            let pts_id = egui::Id::new("ours-curve-points");
-            let mut pts: [f32; 18] = ctx.data(|d| d.get_temp::<[f32; 18]>(pts_id)).unwrap_or([
-                0.0, 0.0, 0.125, 0.125, 0.25, 0.25, 0.375, 0.375, 0.5, 0.5, 0.625, 0.625, 0.75, 0.75, 0.875, 0.875,
-                1.0, 1.0,
-            ]);
+            // One arch, at most one peak: speed rises to a single summit and comes back down.
+            // Drag the summit left/right to move where the fastest moment is, up/down to change
+            // how sharp the ease is; drag either end up or down for a one-sided ease.
+            ui.label("速度曲线（拖山峰：左右=位置，上下=快慢）");
+            let pts_id = egui::Id::new("ours-curve-arch");
+            let mut pts: [f32; 4] = ctx.data(|d| d.get_temp::<[f32; 4]>(pts_id)).unwrap_or([0.5, 1.0, 0.0, 0.0]);
             let (canvas, _) = ui.allocate_exact_size(vec2(248.0, 248.0), Sense::hover());
             ui.painter().rect_filled(canvas, 6.0, t.switch_well);
             let plot = canvas.shrink2(vec2(18.0, 18.0));
             let px = |v: f32| plot.left() + plot.width() * v.clamp(0.0, 1.0);
             let py = |v: f32| plot.bottom() - plot.height() * v.clamp(0.0, 1.0);
-            let at = |i: usize| (pts[2 * i], pts[2 * i + 1]);
-            // 20 samples a segment: smooth enough to draw and to read the nine values back.
-            let mut poly: Vec<(f32, f32)> = Vec::new();
-            for seg in 0..8usize {
-                let p0 = if seg == 0 { at(0) } else { at(seg - 1) };
-                let p1 = at(seg);
-                let p2 = at(seg + 1);
-                let p3 = if seg + 2 <= 8 { at(seg + 2) } else { p2 };
-                for k in 0..20 {
-                    let u = k as f32 / 20.0;
-                    let (u2, u3) = (u * u, u * u * u);
-                    let x = 0.5
-                        * (2.0 * p1.0 + (-p0.0 + p2.0) * u + (2.0 * p0.0 - 5.0 * p1.0 + 4.0 * p2.0 - p3.0) * u2
-                            + (-p0.0 + 3.0 * p1.0 - 3.0 * p2.0 + p3.0) * u3);
-                    let y = 0.5
-                        * (2.0 * p1.1 + (-p0.1 + p2.1) * u + (2.0 * p0.1 - 5.0 * p1.1 + 4.0 * p2.1 - p3.1) * u2
-                            + (-p0.1 + 3.0 * p1.1 - 3.0 * p2.1 + p3.1) * u3);
-                    poly.push((x.clamp(0.0, 1.0), y.clamp(0.0, 1.0)));
+            // Three points: the start, the summit, the end. Monotone cubic between them, so the
+            // line can hold one hill (or one dip) and never grows a second one.
+            let xs = [0.0f32, pts[0].clamp(0.03, 0.97), 1.0];
+            let ys3 = [pts[2].clamp(0.0, 1.0), pts[1].clamp(0.0, 1.0), pts[3].clamp(0.0, 1.0)];
+            let slope = |i: usize| -> f32 {
+                let left = if i == 0 { 0.0 } else { (ys3[i] - ys3[i - 1]) / (xs[i] - xs[i - 1]) };
+                let right = if i == 2 { 0.0 } else { (ys3[i + 1] - ys3[i]) / (xs[i + 1] - xs[i]) };
+                if left * right <= 0.0 { 0.0 } else { (left + right) * 0.5 }
+            };
+            let mut samples: Vec<(f32, f32)> = Vec::new();
+            for seg in 0..2usize {
+                let (x0, x1) = (xs[seg], xs[seg + 1]);
+                let (y0, y1) = (ys3[seg], ys3[seg + 1]);
+                let (m0, m1) = (slope(seg), slope(seg + 1));
+                let h = x1 - x0;
+                let steps = 32;
+                for k in 0..steps {
+                    let u = k as f32 / steps as f32;
+                    let u2 = u * u;
+                    let u3 = u2 * u;
+                    let v = (2.0 * u3 - 3.0 * u2 + 1.0) * y0
+                        + (u3 - 2.0 * u2 + u) * m0 * h
+                        + (-2.0 * u3 + 3.0 * u2) * y1
+                        + (u3 - u2) * m1 * h;
+                    samples.push((x0 + h * u, v.clamp(0.0, 1.0)));
                 }
             }
-            poly.push(at(8));
-            let mut path: Vec<egui::Pos2> = poly.iter().map(|(x, y)| pos2(px(*x), py(*y))).collect();
-            path.push(pos2(px(1.0), py(poly.last().map_or(1.0, |p| p.1))));
-            ui.painter().add(egui::Shape::line(path, egui::Stroke::new(2.2, t.accent)));
-            for i in 0..9 {
-                let (x, y) = at(i);
-                ui.painter().circle_filled(pos2(px(x), py(y)), 3.4, t.text_dim);
+            samples.push((1.0, ys3[2]));
+            let path: Vec<egui::Pos2> = samples.iter().map(|(x, y)| pos2(px(*x), py(*y))).collect();
+            ui.painter().add(egui::Shape::line(path, egui::Stroke::new(2.4, t.accent)));
+            // The three handles.
+            let ends = [pos2(px(0.0), py(ys3[0])), pos2(px(xs[1]), py(ys3[1])), pos2(px(1.0), py(ys3[2]))];
+            for (i, h) in ends.iter().enumerate() {
+                ui.painter().circle_filled(*h, if i == 1 { 5.0 } else { 4.0 }, if i == 1 { t.accent } else { t.text_dim });
             }
-            // The nine values the ease command takes, read off the drawn line.
+            // The nine values the ease command takes, read off the drawn arch.
             let mut ys: [f32; 9] = [0.0; 9];
             for (i, slot) in ys.iter_mut().enumerate() {
                 let want = i as f32 / 8.0;
                 let mut v = 0.0;
-                for pair in poly.windows(2) {
+                for pair in samples.windows(2) {
                     let (a, b) = (pair[0], pair[1]);
                     if b.0 > a.0 && want >= a.0 && want <= b.0 {
                         v = a.1 + (b.1 - a.1) * ((want - a.0) / (b.0 - a.0));
@@ -165,22 +168,26 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
                 if let Some(pos) = canvas_resp.interact_pointer_pos() {
                     let gx = ((pos.x - plot.left()) / plot.width()).clamp(0.0, 1.0);
                     let gy = ((plot.bottom() - pos.y) / plot.height()).clamp(0.0, 1.0);
-                    // The nearest point follows the finger; it stays between its neighbours so the
-                    // line keeps going forward in time.
-                    let mut pick = 0usize;
+                    let mut pick = 1usize;
                     let mut best = f32::MAX;
-                    for i in 0..9 {
-                        let (x, y) = at(i);
-                        let d = (x - gx) * (x - gx) + (y - gy) * (y - gy);
+                    for (i, h) in ends.iter().enumerate() {
+                        let dx = (h.x - pos.x) / plot.width();
+                        let dy = (h.y - pos.y) / plot.height();
+                        let d = dx * dx + dy * dy;
                         if d < best {
                             best = d;
                             pick = i;
                         }
                     }
-                    let lo = if pick == 0 { 0.0 } else { pts[2 * pick - 2] + 0.03 };
-                    let hi = if pick == 8 { 1.0 } else { pts[2 * pick + 2] - 0.03 };
-                    pts[2 * pick] = gx.clamp(lo, hi.max(lo));
-                    pts[2 * pick + 1] = gy;
+                    match pick {
+                        // The summit: left/right moves the fastest moment, up/down its speed.
+                        1 => {
+                            pts[0] = gx.clamp(0.03, 0.97);
+                            pts[1] = gy;
+                        }
+                        0 => pts[2] = gy,
+                        _ => pts[3] = gy,
+                    }
                 }
             }
             if canvas_resp.drag_stopped() {
@@ -220,10 +227,7 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
                     app.ui.status = "已保存曲线".into();
                 }
                 if ui.button("重置曲线").clicked() {
-                    ctx.data_mut(|d| d.insert_temp(pts_id, [
-                        0.0, 0.0, 0.125, 0.125, 0.25, 0.25, 0.375, 0.375, 0.5, 0.5, 0.625, 0.625, 0.75, 0.75, 0.875, 0.875,
-                        1.0, 1.0,
-                    ]));
+                    ctx.data_mut(|d| d.insert_temp(pts_id, [0.5, 1.0, 0.0, 0.0]));
                     app.ui.status = "曲线已重置".into();
                 }
                 if ui.button("删除关键帧").clicked() {
@@ -262,7 +266,7 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
             }
             if let Some(sv) = restore {
                 ys = sv;
-                if let Some(saved) = ctx.data(|d| d.get_temp::<[f32; 18]>(save_pts_id)) {
+                if let Some(saved) = ctx.data(|d| d.get_temp::<[f32; 4]>(save_pts_id)) {
                     pts = saved;
                     ctx.data_mut(|d| d.insert_temp(pts_id, saved));
                 }
