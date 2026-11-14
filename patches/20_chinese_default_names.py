@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """Default names in Chinese, the way the localized After Effects names them.
 
+The only `String::from("Comp 1")` in widgets.rs belongs to a text-editing test (it just needs a
+six-character string), so it is left alone: editing it turned that test's fixture Chinese and its
+6-character assertion failed.
+
+
 A new composition starts as 合成 1 and a pre-composition as 预合成 1; the engine still
 appends the next free number, so nothing about uniqueness changes.
 """
@@ -13,8 +18,6 @@ MARKER = "EFFECTCRAFT_OURS_CHINESE_DEFAULT_NAMES_V1"
 EDITS = [
     ("crates/ui-egui/src/panels/comp_settings.rs",
      'name: "Comp 1".into(),', 'name: "合成 1".into(),'),
-    ("crates/ui-egui/src/widgets.rs",
-     'let mut text = String::from("Comp 1");', 'let mut text = String::from("合成 1");'),
     ("crates/engine/src/cmd/comp.rs",
      '.unwrap_or("Comp 1")', '.unwrap_or("合成 1")'),
     ("crates/engine/src/cmd/layer/timing.rs",
