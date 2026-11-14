@@ -59,13 +59,19 @@ SERVICE_JAVA = '''
                 .setSound(null);
             try {
                 startForeground(NOTIFICATION_ID, b.build());
-            } catch (Throwable ignored) {
+            } catch (Throwable denied) {
+                // 后台启动被系统拒绝：安静退出，别把进程带走。
+                Log.w("EffectCraftKeepAlive", "foreground not allowed", denied);
+                stopSelf();
             }
         }
 
         @Override
         public int onStartCommand(Intent intent, int flags, int startId) {
-            return START_STICKY;
+            // 千万别用 START_STICKY：App 被划掉后系统会把服务拉起来，而在后台启动
+            // 前台服务会被 Android 12+ 拒绝（ForegroundServiceStartNotAllowedException），
+            // 于是“划后台再打开必闪退一次”，而且崩在服务里，Activity 的崩溃记录器还没装好。
+            return START_NOT_STICKY;
         }
 
         @Override
