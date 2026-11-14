@@ -56,7 +56,7 @@ fn noise(x: f32, y: f32, seed: u32) -> f32 {
     top + (bottom - top) * sy
 }
 
-fn specs() -> Vec<EffectSpec> {
+pub(crate) fn specs() -> Vec<EffectSpec> {
     vec![
         spec(
             "S_Glow",
