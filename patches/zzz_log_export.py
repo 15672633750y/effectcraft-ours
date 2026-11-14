@@ -75,6 +75,7 @@ METHODS = '''
             // 正在写的那个（刚改过）不复制。
             if (System.currentTimeMillis() - previous.lastModified() < 3000L) return;
             java.io.File logs = previous.getParentFile();
+            java.io.File stamp = new java.io.File(logs, ".exported");
             if (stamp.isFile() && stamp.lastModified() >= previous.lastModified()) return;
             String text = oursReadText(previous);
             if (text.isEmpty()) return;
