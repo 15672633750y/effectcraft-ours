@@ -1,25 +1,23 @@
 #!/usr/bin/env python3
-"""Make a crash diagnosable: copy the previous session's log out to DCIM, and clear stuck pending files.
+"""Keep the previous session's log where a file manager can see it, and drop old copies.
 
-A Rust panic (or a kill) leaves nothing the file manager can see: the session log lives under
-`Android/data/<package>/files/config/Logs`, which scoped storage hides, and the Rust side cannot
-write to DCIM without broad storage access. So on the next launch the shell reads the previous
-log, and when it contains `panic:` it publishes it through MediaStore — that is what the export
-path already uses, so it always works. Files a killed publish left behind (`.pending-*.mp4`) are
-removed after a day: they are half-made copies nothing can see.
+The session log lives under `Android/data/<package>/files/config/Logs`, which scoped storage hides,
+and a native crash leaves nothing this side can write. So every launch copies the previous session's
+log into `DCIM/EffectCraft` through MediaStore (which the export path already proves works). Only
+the three newest copies are kept, so the folder never fills up.
 """
 from __future__ import annotations
 
 import os
 from pathlib import Path
 
-MARKER = "EFFECTCRAFT_OURS_LOG_EXPORT_V1"
+MARKER = "EFFECTCRAFT_OURS_LOG_EXPORT_V2"
 ANCHOR = "        installCrashLogger();\n"
 
 CODE = "        oursExportLastLog();\n        oursCleanPendingRenders();\n"
 
 METHODS = '''
-    // EFFECTCRAFT_OURS_LOG_EXPORT_V1
+    // EFFECTCRAFT_OURS_LOG_EXPORT_V2
     private static String oursReadText(java.io.File file) {
         try (java.io.InputStream in = new java.io.FileInputStream(file)) {
             java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
@@ -35,7 +33,7 @@ METHODS = '''
         }
     }
 
-    /** The previous session's log, when it records a panic, published so a file manager can see it. */
+    /** The previous session's log, published so a file manager can see it (keeps the newest three). */
     private void oursExportLastLog() {
         try {
             java.io.File ext = getExternalFilesDir(null);
@@ -46,9 +44,10 @@ METHODS = '''
             java.io.File stamp = new java.io.File(logs, ".exported");
             if (stamp.isFile() && stamp.lastModified() >= previous.lastModified()) return;
             String text = oursReadText(previous);
-            if (!text.contains("panic:") && !text.contains("audio clock stalled")) return;
+            if (text.isEmpty()) return;
+            String name = "effectcraft-log-" + System.currentTimeMillis() + ".txt";
             android.content.ContentValues values = new android.content.ContentValues();
-            values.put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, "effectcraft-log-" + System.currentTimeMillis() + ".txt");
+            values.put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, name);
             values.put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/plain");
             values.put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, "DCIM/EffectCraft");
             android.net.Uri target = getContentResolver().insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
@@ -59,6 +58,47 @@ METHODS = '''
             }
             stamp.createNewFile();
             stamp.setLastModified(previous.lastModified());
+            oursTrimOldLogs();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** Keep the three newest `effectcraft-log-*.txt` copies in DCIM/EffectCraft. */
+    private void oursTrimOldLogs() {
+        try {
+            java.util.ArrayList<android.net.Uri> found = new java.util.ArrayList<>();
+            java.util.ArrayList<Long> stamps = new java.util.ArrayList<>();
+            String[] cols = {android.provider.MediaStore.MediaColumns._ID, android.provider.MediaStore.MediaColumns.DISPLAY_NAME};
+            String where = android.provider.MediaStore.MediaColumns.DISPLAY_NAME + " LIKE ?";
+            try (android.database.Cursor c = getContentResolver().query(
+                    android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, cols, where, new String[] {"effectcraft-log-%"}, null)) {
+                if (c == null) return;
+                int idCol = c.getColumnIndex(android.provider.MediaStore.MediaColumns._ID);
+                int nameCol = c.getColumnIndex(android.provider.MediaStore.MediaColumns.DISPLAY_NAME);
+                while (c.moveToNext()) {
+                    String n = c.getString(nameCol);
+                    long stamp = 0;
+                    try {
+                        String digits = n.replaceAll("[^0-9]", "");
+                        if (!digits.isEmpty()) stamp = Long.parseLong(digits);
+                    } catch (Exception ignored) {
+                    }
+                    found.add(android.content.ContentUris.withAppendedId(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, c.getLong(idCol)));
+                    stamps.add(stamp);
+                }
+            }
+            while (stamps.size() > 3) {
+                int oldest = 0;
+                for (int i = 1; i < stamps.size(); i++) {
+                    if (stamps.get(i) < stamps.get(oldest)) oldest = i;
+                }
+                try {
+                    getContentResolver().delete(found.get(oldest), null, null);
+                } catch (Exception ignored) {
+                }
+                found.remove(oldest);
+                stamps.remove(oldest);
+            }
         } catch (Throwable ignored) {
         }
     }
@@ -94,9 +134,8 @@ def main() -> None:
     helper = "    private static String mimeFor(String fileName) {"
     if src.count(helper) != 1:
         raise SystemExit(f"mimeFor anchor: {src.count(helper)}")
-    src = src.replace(helper, METHODS + "\n" + helper, 1)
-    path.write_text(src, encoding="utf-8")
-    print("previous-session log exported when it holds a panic")
+    path.write_text(src.replace(helper, METHODS + "\n" + helper, 1), encoding="utf-8")
+    print("every launch keeps the previous session log (newest three)")
 
 
 if __name__ == "__main__":

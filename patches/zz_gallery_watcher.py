@@ -114,11 +114,45 @@ METHODS = '''
             oursSizes.put(entry.getAbsolutePath(), size);
             if (before == null || before.longValue() != size) continue;
             if (entry.getAbsolutePath().toLowerCase(java.util.Locale.ROOT).endsWith(".part")) continue;
+            // 再确认 mp4 写完整（有 moov 索引）：中断的渲染留下的是半截文件，发布出去也是打不开的。
+            if (!oursLooksComplete(entry)) continue;
             if (oursPublishVideo(entry)) {
                 seen.add(key);
                 oursSizes.remove(entry.getAbsolutePath());
             }
         }
+    }
+
+    /** mp4 是否写完整：文件头或末尾能找到 moov 索引。 */
+    private static boolean oursLooksComplete(java.io.File file) {
+        try {
+            long size = file.length();
+            if (size < 1024) return false;
+            String name = file.getName().toLowerCase(java.util.Locale.ROOT);
+            if (!name.endsWith(".mp4") && !name.endsWith(".mov") && !name.endsWith(".m4v")) return true;
+            int headLen = (int) Math.min(8192, size);
+            byte[] head = new byte[headLen];
+            try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(file, "r")) {
+                raf.readFully(head, 0, headLen);
+            }
+            if (oursHasMoov(head)) return true;
+            int tailLen = (int) Math.min(262144, size);
+            byte[] tail = new byte[tailLen];
+            try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(file, "r")) {
+                raf.seek(size - tailLen);
+                raf.readFully(tail, 0, tailLen);
+            }
+            return oursHasMoov(tail);
+        } catch (Throwable e) {
+            return false;
+        }
+    }
+
+    private static boolean oursHasMoov(byte[] bytes) {
+        for (int i = 0; i + 3 < bytes.length; i++) {
+            if (bytes[i] == 'm' && bytes[i + 1] == 'o' && bytes[i + 2] == 'o' && bytes[i + 3] == 'v') return true;
+        }
+        return false;
     }
 
     private boolean oursPublishVideo(java.io.File src) {
