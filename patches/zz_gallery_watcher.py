@@ -158,6 +158,12 @@ METHODS = '''
                 }
                 java.io.File renamed = new java.io.File(broken, "未正常导出-" + name);
                 if (!renamed.exists()) f.renameTo(renamed);
+                // 旁边的“已停止”说明也一起挪过去。
+                java.io.File note = new java.io.File(dir, name + ".已停止.txt");
+                if (note.isFile()) {
+                    java.io.File moved = new java.io.File(broken, "未正常导出-" + name + ".已停止.txt");
+                    if (!moved.exists()) note.renameTo(moved);
+                }
             }
         } catch (Throwable ignored) {
         }
