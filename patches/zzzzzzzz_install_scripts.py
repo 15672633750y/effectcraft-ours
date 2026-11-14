@@ -8,10 +8,23 @@ from pathlib import Path
 MARKER = "EFFECTCRAFT_OURS_INSTALL_SCRIPTS_V1"
 ANCHOR = "        installCrashLogger();\n"
 
-CODE = '''        // 启动期这些事任何一步抛异常都不能把 App 带走（首次启动闪退的可疑点之一）。
+CODE = '''        // 启动期这些事任何一步抛异常都不能把 App 带走，而且它们和首帧抢时间：
+        // 推迟到窗口起来之后再跑，减少“首次打开闪退”（偶发）的窗口。
         try {
-            installDroppedExtensions();
-            deleteEmptyRenders();
+            final android.view.View startupView = getWindow() != null ? getWindow().getDecorView() : null;
+            final Runnable extras = () -> {
+                try {
+                    installDroppedExtensions();
+                    deleteEmptyRenders();
+                } catch (Throwable startError) {
+                    Log.w(TAG, "startup extras skipped", startError);
+                }
+            };
+            if (startupView != null) {
+                startupView.postDelayed(extras, 1500L);
+            } else {
+                extras.run();
+            }
         } catch (Throwable startError) {
             Log.w(TAG, "startup extras skipped", startError);
         }
