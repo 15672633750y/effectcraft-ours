@@ -30,10 +30,6 @@ EDITS = [
         "let br = Rect::from_center_size(pos2(cw.av + 10.0 + 18.0 * i as f32, cy), vec2(15.0, 15.0));",
         "let br = Rect::from_center_size(pos2(cw.av + 9.0 + 17.0 * i as f32, cy), vec2(14.0, 14.0));",
     ),
-    (
-        "    let name_w = 96.0;\n    let mut x = x0;\n",
-        "    let name_w = 96.0;\n    // 左内边距 16 点：第一列不贴面板边缘（贴边处手指点不到）\n    let mut x = x0 + if vis.av { 16.0 } else { 0.0 };\n",
-    ),
 ]
 
 
