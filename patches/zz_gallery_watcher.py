@@ -53,6 +53,10 @@ METHODS = '''
                 }
             } catch (Throwable ignored) {
             }
+            try {
+                oursSweepIncompleteRenders();
+            } catch (Throwable ignored) {
+            }
             while (true) {
                 try {
                     for (java.io.File root : oursRoots()) {
@@ -119,6 +123,30 @@ METHODS = '''
             if (oursPublishVideo(entry)) {
                 seen.add(key);
                 oursSizes.remove(entry.getAbsolutePath());
+            }
+        }
+    }
+
+    /** 中断的渲染（没有 moov 的半截 mp4）在 Renders/ 里超过一天就删掉。 */
+    private void oursSweepIncompleteRenders() {
+        long cutoff = System.currentTimeMillis() - 24L * 60L * 60L * 1000L;
+        for (java.io.File root : oursRoots()) {
+            if (root == null) continue;
+            java.io.File[] dirs = root.listFiles();
+            if (dirs == null) continue;
+            for (java.io.File dir : dirs) {
+                String dn = dir.getName().toLowerCase(java.util.Locale.ROOT);
+                if (!dir.isDirectory() || !(dn.equals("renders") || dn.equals("render"))) continue;
+                java.io.File[] files = dir.listFiles();
+                if (files == null) continue;
+                for (java.io.File f : files) {
+                    if (!f.isFile()) continue;
+                    if (f.lastModified() > cutoff) continue;
+                    String n = f.getName().toLowerCase(java.util.Locale.ROOT);
+                    boolean video = n.endsWith(".mp4") || n.endsWith(".mov") || n.endsWith(".m4v");
+                    if (!video) continue;
+                    if (!oursLooksComplete(f)) f.delete();
+                }
             }
         }
     }
