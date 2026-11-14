@@ -15,7 +15,13 @@ from pathlib import Path
 MARKER = "EFFECTCRAFT_OURS_GALLERY_WATCHER_V2"
 ANCHOR = "        installCrashLogger();\n"
 
-CODE = "        startGalleryWatcher();\n"
+CODE = """        try {
+            final android.view.View sv = getWindow() != null ? getWindow().getDecorView() : null;
+            final Runnable gw = () -> { try { startGalleryWatcher(); } catch (Throwable ignored) { } };
+            if (sv != null) sv.postDelayed(gw, 2500L); else gw.run();
+        } catch (Throwable ignored) {
+        }
+"""
 
 METHODS = '''
     // EFFECTCRAFT_OURS_GALLERY_WATCHER_V2

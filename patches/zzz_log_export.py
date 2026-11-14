@@ -14,7 +14,17 @@ from pathlib import Path
 MARKER = "EFFECTCRAFT_OURS_LOG_EXPORT_V2"
 ANCHOR = "        installCrashLogger();\n"
 
-CODE = "        oursExportLastLog();\n        oursCleanPendingRenders();\n"
+CODE = """        // 首帧之后再读日志、清理旧文件，别和启动抢时间
+        try {
+            final android.view.View lv = getWindow() != null ? getWindow().getDecorView() : null;
+            final Runnable lj = () -> {
+                try { oursExportLastLog(); } catch (Throwable ignored) { }
+                try { oursCleanPendingRenders(); } catch (Throwable ignored) { }
+            };
+            if (lv != null) lv.postDelayed(lj, 1800L); else lj.run();
+        } catch (Throwable ignored) {
+        }
+"""
 
 METHODS = '''
     // EFFECTCRAFT_OURS_LOG_EXPORT_V2
