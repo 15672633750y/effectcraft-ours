@@ -66,6 +66,7 @@ METHODS = '''
                             oursScanVideos(root, seen, 0);
                         }
                     }
+                    oursMarkInterrupted();
                 } catch (Throwable ignored) {
                     // keep watching
                 }
@@ -126,6 +127,29 @@ METHODS = '''
                 seen.add(key);
                 oursSizes.remove(entry.getAbsolutePath());
             }
+        }
+    }
+
+    /** DCIM 里没写完的 mp4 改名成“未正常导出-…”，一眼能看出是中断的文件。 */
+    private void oursMarkInterrupted() {
+        try {
+            java.io.File dir = new java.io.File("/storage/emulated/0/DCIM/EffectCraft");
+            java.io.File[] files = dir.listFiles();
+            if (files == null) return;
+            long now = System.currentTimeMillis();
+            for (java.io.File f : files) {
+                if (!f.isFile()) continue;
+                String name = f.getName();
+                if (name.startsWith("未正常导出-")) continue;
+                String lower = name.toLowerCase(java.util.Locale.ROOT);
+                if (!lower.endsWith(".mp4") && !lower.endsWith(".mov") && !lower.endsWith(".m4v")) continue;
+                // 刚写完的别动（可能还在写）。
+                if (now - f.lastModified() < 4000L) continue;
+                if (oursLooksComplete(f)) continue;
+                java.io.File renamed = new java.io.File(dir, "未正常导出-" + name);
+                if (!renamed.exists()) f.renameTo(renamed);
+            }
+        } catch (Throwable ignored) {
         }
     }
 

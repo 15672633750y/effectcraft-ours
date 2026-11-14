@@ -16,19 +16,16 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-MARKER = "EFFECTCRAFT_OURS_OUTPUT_DIR_V1"
+MARKER = "EFFECTCRAFT_OURS_OUTPUT_DIR_V2"
 
 OLD = '''        let base = base.or_else(|| std::env::current_dir().ok()).or_else(|| cfg!(target_arch = "wasm32").then(|| "/".into()))?;
         Some(base.join(path).to_string_lossy().to_string())
 '''
 NEW = '''        let base = base.or_else(|| std::env::current_dir().ok()).or_else(|| cfg!(target_arch = "wasm32").then(|| "/".into()))?;
-        // EFFECTCRAFT_OURS_OUTPUT_DIR_V1 — 成片不要写进 media/（导入素材的暂存目录，相册监听
-        // 故意跳过它）。改写成同级的 Renders/，渲染能写、监听也能看到。
-        let base = if base.file_name().is_some_and(|n| n.eq_ignore_ascii_case("media")) {
-            base.parent().map(|p| p.join("Renders")).unwrap_or(base)
-        } else {
-            base
-        };
+        // EFFECTCRAFT_OURS_OUTPUT_DIR_V2 — 成片直接写进 DCIM/EffectCraft：用户和相册都看得见，
+        // 不再依赖“私有目录 + 后台复制”。（私有目录在安卓 11+ 连文件管理器都进不去。）
+        #[cfg(target_os = "android")]
+        let base = std::path::PathBuf::from("/storage/emulated/0/DCIM/EffectCraft");
         Some(base.join(path).to_string_lossy().to_string())
 '''
 
