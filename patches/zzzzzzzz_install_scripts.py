@@ -8,8 +8,13 @@ from pathlib import Path
 MARKER = "EFFECTCRAFT_OURS_INSTALL_SCRIPTS_V1"
 ANCHOR = "        startGalleryWatcher();\n"
 
-CODE = '''        installDroppedExtensions();
-        deleteEmptyRenders();
+CODE = '''        // 启动期这些事任何一步抛异常都不能把 App 带走（首次启动闪退的可疑点之一）。
+        try {
+            installDroppedExtensions();
+            deleteEmptyRenders();
+        } catch (Throwable startError) {
+            Log.w(TAG, "startup extras skipped", startError);
+        }
 '''
 
 
