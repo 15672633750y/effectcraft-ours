@@ -19,6 +19,8 @@ CODE = "        startGalleryWatcher();\n"
 
 METHODS = '''
     // EFFECTCRAFT_OURS_GALLERY_WATCHER_V2
+    /** 上一次扫描看到的文件大小：判断文件是否已经写完。 */
+    private final java.util.Map<String, Long> oursSizes = new java.util.HashMap<>();
     /** Both places the app can write: its external folder (where most output lands) and its internal one. */
     private java.io.File[] oursRoots() {
         java.io.File external = getExternalFilesDir(null);
