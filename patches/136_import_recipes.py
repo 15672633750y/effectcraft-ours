@@ -26,10 +26,8 @@ pub(crate) fn is_recipe_path(path: &str) -> bool {
     if lower.ends_with(".nk") {
         return true;
     }
-    if lower.ends_with("draft_content.json") || lower.ends_with(".json") {
-        return true;
-    }
-    false
+    // 只有剪映的草稿叫这个名字：别的 .json 是素材或工程，别当配方拆。
+    lower.ends_with("draft_content.json")
 }
 
 fn dir_of(path: &str) -> String {
