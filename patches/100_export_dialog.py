@@ -188,8 +188,9 @@ fn export_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
         for i in (1..=existing).rev() {
             let _ = crate::menus::invoke(app, ctx, "renderQueue.remove", serde_json::json!({"index": i}));
         }
-        // 直接写到相册目录：那里一定能被用户看到，也不需要猜默认路径。
-        // 状态栏同时显示实际用的路径，万一失败能立刻知道是哪一步。
+        // 走系统的“保存到”选择器：安卓上是 SAF 的创建文档对话框，
+        // 用户选 DCIM/EffectCraft，写入完成后 Java 那一侧会把它登记进相册。
+        // （之前直接给一个固定路径，App 没写权限时既不报错也没有文件。）
         if fmt != 3 {
             let ext = match fmt { 1 => "mov", 2 => "gif", _ => "mp4" };
             let comp_name = app
@@ -198,8 +199,18 @@ fn export_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
                 .and_then(|c| app.session.project.item(c))
                 .map(|i| i.name.clone())
                 .unwrap_or_else(|| "EffectCraft".to_string());
-            let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-            params["output"] = serde_json::json!(format!("/storage/emulated/0/DCIM/EffectCraft/{comp_name}-{stamp}.{ext}"));
+            let default_name = format!("{comp_name}.{ext}");
+            match app.hooks.save_dialog(&default_name) {
+                Some(Some(path)) => {
+                    params["output"] = serde_json::json!(path);
+                }
+                Some(None) => {
+                    // 用户取消了保存位置：什么都不做，别把空任务塞进队列。
+                    ctx.data_mut(|d| d.insert_temp(open_id, true));
+                    return;
+                }
+                None => {}
+            }
         }
         match crate::menus::invoke(app, ctx, "renderQueue.add", params) {
             Ok(v) => {
