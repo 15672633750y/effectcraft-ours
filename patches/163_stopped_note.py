@@ -31,6 +31,20 @@ NEW = '''            // EFFECTCRAFT_OURS_STOPPED_NOTE_V1 — 中断的成片旁�
                         if let Err(e) = std::fs::write(&side, note) {
                             log::warn!("could not write {side}: {e}");
                         }
+                        // 直接改名，不等后台扫描：文件名一眼看出是没导出完的。
+                        let src = std::path::Path::new(path);
+                        if src.is_file()
+                            && let (Some(dir), Some(name)) = (src.parent(), src.file_name().and_then(|n| n.to_str()))
+                            && !name.starts_with("未正常导出-")
+                        {
+                            let renamed = dir.join(format!("未正常导出-{name}"));
+                            match std::fs::rename(src, &renamed) {
+                                Ok(()) => {
+                                    let _ = std::fs::rename(&side, format!("{}.已停止.txt", renamed.to_string_lossy()));
+                                }
+                                Err(e) => log::warn!("could not rename the stopped render: {e}"),
+                            }
+                        }
                     }
                 }
             }
