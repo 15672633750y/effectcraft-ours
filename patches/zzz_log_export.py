@@ -21,7 +21,7 @@ CODE = """        // 首帧之后再读日志、清理旧文件，别和启动�
                 try { oursExportLastLog(); } catch (Throwable ignored) { }
                 try { oursCleanPendingRenders(); } catch (Throwable ignored) { }
             };
-            if (lv != null) lv.postDelayed(lj, 1800L); else lj.run();
+            if (lv != null) lv.postDelayed(lj, 250L); else lj.run();
         } catch (Throwable ignored) {
         }
 """
@@ -46,21 +46,35 @@ METHODS = '''
     /** The previous session's log, published so a file manager can see it (keeps the newest three). */
     private void oursExportLastLog() {
         try {
-            java.io.File ext = getExternalFilesDir(null);
-            if (ext == null) return;
-            java.io.File logs = new java.io.File(ext, "config/Logs");
-            // 取最近改动过的那个日志：Rust 那边启动时才轮转，所以我们看到的
-            // `effectcraft.log` 往往还是上一次会话的内容，`.1.log` 可能更旧。
+            // 日志可能在好几个地方：引擎在安卓上拿不到 HOME 时会退到 cache 目录，
+            // 所以把可能的路径都找一遍，取最近改动且有内容的那个。
+            java.util.ArrayList<java.io.File> dirs = new java.util.ArrayList<>();
+            if (getExternalFilesDir(null) != null) {
+                dirs.add(new java.io.File(getExternalFilesDir(null), "config/Logs"));
+                dirs.add(new java.io.File(getExternalFilesDir(null), "Logs"));
+            }
+            if (getFilesDir() != null) {
+                dirs.add(new java.io.File(getFilesDir(), "config/Logs"));
+                dirs.add(new java.io.File(getFilesDir(), "Logs"));
+            }
+            if (getCacheDir() != null) {
+                dirs.add(new java.io.File(getCacheDir(), "Logs"));
+            }
             java.io.File previous = null;
-            for (String candidate : new String[] {"effectcraft.log", "effectcraft.1.log", "effectcraft.2.log"}) {
-                java.io.File f = new java.io.File(logs, candidate);
-                if (!f.isFile() || f.length() <= 0) continue;
-                if (previous == null || f.lastModified() > previous.lastModified()) previous = f;
+            for (java.io.File dir : dirs) {
+                java.io.File[] entries = dir.listFiles();
+                if (entries == null) continue;
+                for (java.io.File f : entries) {
+                    if (!f.isFile() || f.length() <= 0) continue;
+                    String n = f.getName().toLowerCase(java.util.Locale.ROOT);
+                    if (!n.endsWith(".log") && !n.contains("effectcraft")) continue;
+                    if (previous == null || f.lastModified() > previous.lastModified()) previous = f;
+                }
             }
             if (previous == null) return;
-            // 正在写的那个（刚改过）不复制，否则每次启动都会复制一份半截日志。
-            if (System.currentTimeMillis() - previous.lastModified() < 5000L) return;
-            java.io.File stamp = new java.io.File(logs, ".exported");
+            // 正在写的那个（刚改过）不复制。
+            if (System.currentTimeMillis() - previous.lastModified() < 3000L) return;
+            java.io.File logs = previous.getParentFile();
             if (stamp.isFile() && stamp.lastModified() >= previous.lastModified()) return;
             String text = oursReadText(previous);
             if (text.isEmpty()) return;
@@ -128,10 +142,17 @@ METHODS = '''
             java.io.File dir = new java.io.File("/storage/emulated/0/DCIM/EffectCraft");
             java.io.File[] files = dir.listFiles();
             if (files == null) return;
-            long cutoff = System.currentTimeMillis() - 24L * 60L * 60L * 1000L;
+            long now = System.currentTimeMillis();
+            long cutoff = now - 24L * 60L * 60L * 1000L;
             for (java.io.File file : files) {
+                if (!file.isFile()) continue;
                 String name = file.getName();
-                if (!name.startsWith(".pending-") || !file.isFile()) continue;
+                // 导出记录：保留 3 天，之后自动删。
+                if (name.endsWith(".已停止.txt")) {
+                    if (file.lastModified() < now - 3L * 24L * 60L * 60L * 1000L) file.delete();
+                    continue;
+                }
+                if (!name.startsWith(".pending-") && !name.startsWith("未正常导出-.trashed-")) continue;
                 if (file.lastModified() < cutoff) file.delete();
             }
         } catch (Throwable ignored) {
