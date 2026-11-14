@@ -182,6 +182,12 @@ fn export_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
             let speed = ctx.data(|d| d.get_temp::<usize>(egui::Id::new("ours-export-speed")).unwrap_or(0));
             params["encodeSpeed"] = serde_json::json!(speed);
         }
+        // 只保留这一次导出：先把队列里旧的项目去掉，否则每导一次都会多一项，
+        // 点“渲染”时把历史上所有勾选的项重新渲染一遍。
+        let existing = app.session.project.render_queue.len();
+        for i in (1..=existing).rev() {
+            let _ = crate::menus::invoke(app, ctx, "renderQueue.remove", serde_json::json!({"index": i}));
+        }
         if crate::menus::invoke(app, ctx, "renderQueue.add", params).is_ok() {
             let _ = crate::menus::invoke(app, ctx, "renderQueue.render", serde_json::json!({}));
         }
