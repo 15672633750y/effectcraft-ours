@@ -51,7 +51,11 @@ fn export_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
         .collapsible(false)
         .resizable(false)
         .show(ctx, |ui| {
-            ui.label("请先打开一个合成工程");
+            // Only when there is nothing to render: with a composition open this line read like an
+            // error next to the composition's own details.
+            if comp_info == "未打开合成" {
+                ui.label("请先打开一个合成工程");
+            }
             ui.label(egui::RichText::new(comp_info.clone()).weak());
             ui.add_space(6.0);
             ui.label("视频格式");
