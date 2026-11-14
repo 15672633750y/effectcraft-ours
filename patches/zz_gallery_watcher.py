@@ -23,10 +23,12 @@ METHODS = '''
     private java.io.File[] oursRoots() {
         java.io.File external = getExternalFilesDir(null);
         java.io.File internal = getFilesDir();
-        if (external != null && internal != null) return new java.io.File[] { external, internal };
-        if (external != null) return new java.io.File[] { external };
-        if (internal != null) return new java.io.File[] { internal };
-        return new java.io.File[0];
+        java.io.File cache = getCacheDir();
+        java.util.ArrayList<java.io.File> list = new java.util.ArrayList<>();
+        if (external != null) list.add(external);
+        if (internal != null) list.add(internal);
+        if (cache != null) list.add(cache);
+        return list.toArray(new java.io.File[0]);
     }
 
     /** Folders under the app storage that are not render output. */

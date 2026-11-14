@@ -147,25 +147,6 @@ fn export_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
             _ => "h264",
         };
         let mut params = serde_json::json!({"format": format});
-        // 明确给一个一定可写的输出路径：App 私有目录下的 Renders/。
-        // 之前的默认路径依赖 HOME（安卓上常常没有），渲染"完成"了却没落盘，
-        // 相册自然也拿不到。这里写死一个可写目录，相册监听再把它发布出去。
-        if fmt != 3 {
-            let ext = match fmt { 1 => "mov", 2 => "gif", _ => "mp4" };
-            if let Some(base) = effectcraft_host::config_dir().and_then(|d| d.parent().map(|p| p.to_path_buf())) {
-                let dir = base.join("Renders");
-                let _ = std::fs::create_dir_all(&dir);
-                let comp_name = app
-                    .session
-                    .active_comp_id()
-                    .and_then(|c| app.session.project.item(c))
-                    .map(|i| i.name.clone())
-                    .unwrap_or_else(|| "EffectCraft".to_string());
-                let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-                let file = dir.join(format!("{comp_name}-{stamp}.{ext}"));
-                params["output"] = serde_json::json!(file.to_string_lossy());
-            }
-        }
         if let Some((w, h)) = match res {
             1 => Some((854u32, 480u32)),
             2 => Some((1280, 720)),
