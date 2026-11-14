@@ -34,6 +34,10 @@ EDITS = [
     ),
     ("const AV_W: f32 = 76.0;", "const AV_W: f32 = 104.0;"),
     (
+        "    let name_w = 96.0;\n    let mut x = x0;\n",
+        "    let name_w = 96.0;\n    // 左内边距 16 点：第一列不贴面板边缘（贴边处手指点不到）\n    let mut x = x0 + if vis.av { 16.0 } else { 0.0 };\n",
+    ),
+    (
         "        hic(Icon::Eye, cw.av + 10.0);\n        hic(Icon::Speaker, cw.av + 28.0);\n        hic(Icon::Solo, cw.av + 46.0);\n        hic(Icon::Lock, cw.av + 64.0);",
         "        hic(Icon::Eye, cw.av + 13.0);\n        hic(Icon::Speaker, cw.av + 38.0);\n        hic(Icon::Solo, cw.av + 63.0);\n        hic(Icon::Lock, cw.av + 88.0);",
     ),
