@@ -36,7 +36,7 @@ METHODS = '''
         String n = name.toLowerCase(java.util.Locale.ROOT);
         return !(n.equals("media") || n.equals("config") || n.equals("logs") || n.equals("models")
                 || n.equals("plug-ins") || n.equals("plugins") || n.equals("scripts")
-                || n.equals("cache") || n.equals("tmp") || n.equals("temp") || n.startsWith("."));
+                || n.startsWith("."));
     }
 
     /** Poll the app's output folders and push finished videos into DCIM/EffectCraft. */

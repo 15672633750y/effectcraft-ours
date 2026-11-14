@@ -188,33 +188,10 @@ fn export_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
         for i in (1..=existing).rev() {
             let _ = crate::menus::invoke(app, ctx, "renderQueue.remove", serde_json::json!({"index": i}));
         }
-        // 走系统的“保存到”选择器：安卓上是 SAF 的创建文档对话框，
-        // 用户选 DCIM/EffectCraft，写入完成后 Java 那一侧会把它登记进相册。
-        // （之前直接给一个固定路径，App 没写权限时既不报错也没有文件。）
-        if fmt != 3 {
-            let ext = match fmt { 1 => "mov", 2 => "gif", _ => "mp4" };
-            let comp_name = app
-                .session
-                .active_comp_id()
-                .and_then(|c| app.session.project.item(c))
-                .map(|i| i.name.clone())
-                .unwrap_or_else(|| "EffectCraft".to_string());
-            let default_name = format!("{comp_name}.{ext}");
-            match app.hooks.save_dialog(&default_name) {
-                Some(Some(path)) => {
-                    params["output"] = serde_json::json!(path);
-                }
-                Some(None) => {
-                    // 用户取消了保存位置：什么都不做，别把空任务塞进队列。
-                    ctx.data_mut(|d| d.insert_temp(open_id, true));
-                    return;
-                }
-                None => {}
-            }
-        }
         match crate::menus::invoke(app, ctx, "renderQueue.add", params) {
             Ok(v) => {
                 let shown = v.get("output").and_then(|o| o.as_str()).unwrap_or("").to_string();
+                // 状态栏显示引擎实际用的输出路径：导出到底写到哪，一眼就能看到。
                 app.ui.status = if shown.is_empty() { "已加入渲染队列".to_string() } else { format!("导出到 {shown}") };
                 let _ = crate::menus::invoke(app, ctx, "renderQueue.render", serde_json::json!({}));
             }
