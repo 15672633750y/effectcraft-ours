@@ -18,7 +18,7 @@ from pathlib import Path
 MARKER = "EFFECTCRAFT_OURS_CLOCK_STALL_V1"
 
 OLD = '''        let snap = |f: i64| wa + (f - wa).div_euclid(step) * step;
-        let target = snap(fr.frame_at(a.clock_time()).clamp(wa, wb));
+        let target = snap(audio::frame_of_sample(a.clock(), a.rate, fr).clamp(wa, wb));
 '''
 NEW = '''        let snap = |f: i64| wa + (f - wa).div_euclid(step) * step;
         // EFFECTCRAFT_OURS_CLOCK_STALL_V1
@@ -26,7 +26,7 @@ NEW = '''        let snap = |f: i64| wa + (f - wa).div_euclid(step) * step;
         // the first frame. Watch it; once it has not moved for half a second, take the frame from
         // the wall clock so playback moves, and say so once in the log.
         let clock_key = egui::Id::new("playback-audio-clock-stall");
-        let now_tick = a.clock_time().0;
+        let now_tick = a.clock();
         let last = ctx.data(|d| d.get_temp::<(i64, f64)>(clock_key));
         let stalled = matches!(last, Some((sample, at)) if sample == now_tick && now - at > 0.5);
         if last.is_none_or(|(sample, _)| sample != now_tick) {
@@ -45,7 +45,7 @@ NEW = '''        let snap = |f: i64| wa + (f - wa).div_euclid(step) * step;
             let frames = ((elapsed * self.playback.fps) / step as f64).floor() as i64;
             snap((self.playback.start_frame + frames).clamp(wa, wb))
         } else {
-            snap(fr.frame_at(a.clock_time()).clamp(wa, wb))
+            snap(audio::frame_of_sample(a.clock(), a.rate, fr).clamp(wa, wb))
         };
 '''
 
