@@ -24,36 +24,6 @@ PROP_NEW = '''    // EFFECTCRAFT_OURS_TL_PROP_ZH_V1 — 只翻显示；存储名
     let pname = if prop.has_expression() { format!("{shown}  =") } else { shown };
 '''
 
-# The rows the Timeline renders for a default shape layer (English, before the table).
-ROWS = [
-    "形状图层 1",
-    "  >Contents",
-    "    >Rectangle 1",
-    "      >Rectangle Path 1",
-    "        Size",
-    "        Position",
-    "        Roundness",
-    "        Per-Corner Roundness",
-    "        Top Left Roundness",
-    "        Top Right Roundness",
-    "        Bottom Right Roundness",
-    "        Bottom Left Roundness",
-    "      >Fill 1",
-    "        Composite",
-    "        Fill Rule",
-    "        Color",
-    "        Opacity",
-    "      >Transform",
-    "        Anchor Point",
-    "        Position",
-    "        Scale",
-    "        Skew",
-    "        Skew Axis",
-    "        Rotation",
-    "        Opacity",
-]
-
-
 def main() -> None:
     root = Path(os.environ["EFFECTCRAFT_DIR"]).resolve()
     prop = (root / "crates/ui-egui/src/i18n/prop.rs").read_text(encoding="utf-8")
@@ -67,23 +37,13 @@ def main() -> None:
         timeline.write_text(src.replace(PROP_OLD, PROP_NEW, 1), encoding="utf-8")
         print("timeline property rows go through the table")
 
-    def shown(row: str) -> str:
-        lead = len(row) - len(row.lstrip(" "))
-        rest = row[lead:]
-        arrow = ">" if rest.startswith(">") else ""
-        rest = rest[len(arrow):]
-        return " " * lead + arrow + table.get(rest, rest)
-
+    # The test reads the *stored* names, which stay English (expressions address them); only the
+    # default layer name is Chinese (40_ui_chinese renames it).
     tests = root / "crates/ui-egui/src/panels/timeline/tests.rs"
     src = tests.read_text(encoding="utf-8")
-    start = src.index(TIMELINE_TEST)
-    open_at = src.index("labels(&app),", start)
-    begin = src.index("[", open_at)
-    end = src.index("]", begin)
-    body = "[\n" + "".join(f'            "{shown(r)}",\n' for r in ROWS) + "        "
-    src = src[:begin] + body + src[end:]
-    tests.write_text(src, encoding="utf-8")
-    print("timeline label test rebuilt from the table")
+    if '            "Shape Layer 1",\n' in src:
+        tests.write_text(src.replace('            "Shape Layer 1",\n', '            "形状图层 1",\n', 1), encoding="utf-8")
+        print("timeline label test expects 形状图层 1")
 
     dialogs = root / "crates/ui-egui/src/panels/dialogs.rs"
     src = dialogs.read_text(encoding="utf-8")
