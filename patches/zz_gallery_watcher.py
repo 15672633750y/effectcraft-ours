@@ -106,8 +106,18 @@ METHODS = '''
             if (name.endsWith(".part") || name.endsWith(".tmp") || name.endsWith(".partial")) continue;
             String key = entry.getAbsolutePath() + ":" + entry.length() + ":" + entry.lastModified();
             if (seen.contains(key)) continue;
-            if (entry.length() <= 0) continue;
-            if (oursPublishVideo(entry)) seen.add(key);
+            long size = entry.length();
+            if (size <= 0) continue;
+            // 只发布“已经写完”的文件：大小和上一次扫描完全一样才发布。
+            // 否则会把正在写入的半截文件拷进相册（那种 00:00、打不开的条目）。
+            Long before = oursSizes.get(entry.getAbsolutePath());
+            oursSizes.put(entry.getAbsolutePath(), size);
+            if (before == null || before.longValue() != size) continue;
+            if (entry.getAbsolutePath().toLowerCase(java.util.Locale.ROOT).endsWith(".part")) continue;
+            if (oursPublishVideo(entry)) {
+                seen.add(key);
+                oursSizes.remove(entry.getAbsolutePath());
+            }
         }
     }
 
