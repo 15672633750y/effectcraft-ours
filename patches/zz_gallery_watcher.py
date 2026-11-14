@@ -19,6 +19,16 @@ CODE = "        startGalleryWatcher();\n"
 
 METHODS = '''
     // EFFECTCRAFT_OURS_GALLERY_WATCHER_V2
+    /** Both places the app can write: its external folder (where most output lands) and its internal one. */
+    private java.io.File[] oursRoots() {
+        java.io.File external = getExternalFilesDir(null);
+        java.io.File internal = getFilesDir();
+        if (external != null && internal != null) return new java.io.File[] { external, internal };
+        if (external != null) return new java.io.File[] { external };
+        if (internal != null) return new java.io.File[] { internal };
+        return new java.io.File[0];
+    }
+
     /** Folders under the app storage that are not render output. */
     private static boolean oursIsOutputDir(String name) {
         String n = name.toLowerCase(java.util.Locale.ROOT);
@@ -34,17 +44,19 @@ METHODS = '''
             // Everything already on disk was published by an earlier run: seed the set so a
             // restart never re-publishes a render that is already in the gallery.
             try {
-                java.io.File root = getExternalFilesDir(null);
-                if (root != null) {
-                    oursSeedSeen(root, seen, 0);
+                for (java.io.File root : oursRoots()) {
+                    if (root != null) {
+                        oursSeedSeen(root, seen, 0);
+                    }
                 }
             } catch (Throwable ignored) {
             }
             while (true) {
                 try {
-                    java.io.File root = getExternalFilesDir(null);
-                    if (root != null) {
-                        oursScanVideos(root, seen, 0);
+                    for (java.io.File root : oursRoots()) {
+                        if (root != null) {
+                            oursScanVideos(root, seen, 0);
+                        }
                     }
                 } catch (Throwable ignored) {
                     // keep watching
