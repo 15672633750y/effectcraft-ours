@@ -147,6 +147,7 @@ pub fn name<'a>(en: &'a str, _group: &str) -> &'a str {
         "Fill" => "填充",
         "Clamp" => "钳制",
         "Environment Map" => "环境贴图",
+        "Color" => "颜色",
         "Composite" => "合成",
         "Fill Rule" => "填充规则",
         "Per-Corner Roundness" => "各角圆度",
