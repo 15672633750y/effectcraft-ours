@@ -188,6 +188,31 @@ fn export_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
         for i in (1..=existing).rev() {
             let _ = crate::menus::invoke(app, ctx, "renderQueue.remove", serde_json::json!({"index": i}));
         }
+        // 每次导出用带时间戳的文件名：中断的半截文件和下一次导出不会同名互相覆盖
+        // （以前都是 `合成 1.mp4`，停了之后一重导就把中断文件覆盖掉了）。
+        if fmt != 3 {
+            let ext = match fmt { 1 => "mov", 2 => "gif", _ => "mp4" };
+            let comp_name = app
+                .session
+                .active_comp_id()
+                .and_then(|c| app.session.project.item(c))
+                .map(|i| i.name.clone())
+                .unwrap_or_else(|| "EffectCraft".to_string());
+            let secs = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            // 本地时间 HHMMSS 便于你按时间找文件；实在拿不到就用时间戳。
+            use chrono::TimeZone as _;
+            let stamp = chrono::Local
+                .timestamp_opt(secs as i64, 0)
+                .single()
+                .map(|t| t.format("%m%d-%H%M%S").to_string())
+                .unwrap_or_else(|| secs.to_string());
+            params["output"] = serde_json::json!(format!(
+                "/storage/emulated/0/DCIM/EffectCraft/{comp_name}-{stamp}.{ext}"
+            ));
+        }
         match crate::menus::invoke(app, ctx, "renderQueue.add", params) {
             Ok(v) => {
                 let shown = v.get("output").and_then(|o| o.as_str()).unwrap_or("").to_string();
