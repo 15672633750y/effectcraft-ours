@@ -148,7 +148,15 @@ METHODS = '''
                 // 刚写完的别动（可能还在写）。
                 if (now - f.lastModified() < 4000L) continue;
                 if (oursLooksComplete(f)) continue;
-                java.io.File renamed = new java.io.File(dir, "未正常导出-" + name);
+                // 中断的片段挪进“中断片段/”子目录，并在里面放 .nomedia：
+                // 文件管理器看得见，系统相册不会把它当成能播的视频。
+                java.io.File broken = new java.io.File(dir, "中断片段");
+                if (!broken.exists()) broken.mkdirs();
+                java.io.File nomedia = new java.io.File(broken, ".nomedia");
+                if (!nomedia.exists()) {
+                    try { nomedia.createNewFile(); } catch (Throwable ignored) { }
+                }
+                java.io.File renamed = new java.io.File(broken, "未正常导出-" + name);
                 if (!renamed.exists()) f.renameTo(renamed);
             }
         } catch (Throwable ignored) {
@@ -164,7 +172,7 @@ METHODS = '''
             if (dirs == null) continue;
             for (java.io.File dir : dirs) {
                 String dn = dir.getName().toLowerCase(java.util.Locale.ROOT);
-                if (!dir.isDirectory() || !(dn.equals("renders") || dn.equals("render"))) continue;
+                if (!dir.isDirectory() || !(dn.equals("renders") || dn.equals("render") || dn.equals("中断片段"))) continue;
                 java.io.File[] files = dir.listFiles();
                 if (files == null) continue;
                 for (java.io.File f : files) {
