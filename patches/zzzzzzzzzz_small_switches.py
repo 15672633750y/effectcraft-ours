@@ -27,23 +27,12 @@ EDITS = [
         "let fr_ = Rect::from_center_size(pos2(cw.switches + SW * 3.0 + SW / 2.0, cy), vec2(13.0, 13.0));",
     ),
     (
-        # 左栏四个开关保持大命中框（右侧那排 15px 用户点得中，左边这四个点不中）；
-        # 左侧改成 22 点见方、间隔 25 点，并把整列放宽。
         "let br = Rect::from_center_size(pos2(cw.av + 10.0 + 18.0 * i as f32, cy), vec2(15.0, 15.0));",
-        "let br = Rect::from_center_size(pos2(cw.av + 13.0 + 25.0 * i as f32, cy), vec2(22.0, 22.0));",
+        "let br = Rect::from_center_size(pos2(cw.av + 9.0 + 17.0 * i as f32, cy), vec2(14.0, 14.0));",
     ),
-    ("const AV_W: f32 = 76.0;", "const AV_W: f32 = 104.0;"),
     (
         "    let name_w = 96.0;\n    let mut x = x0;\n",
         "    let name_w = 96.0;\n    // 左内边距 16 点：第一列不贴面板边缘（贴边处手指点不到）\n    let mut x = x0 + if vis.av { 16.0 } else { 0.0 };\n",
-    ),
-    (
-        "        hic(Icon::Eye, cw.av + 10.0);\n        hic(Icon::Speaker, cw.av + 28.0);\n        hic(Icon::Solo, cw.av + 46.0);\n        hic(Icon::Lock, cw.av + 64.0);",
-        "        hic(Icon::Eye, cw.av + 13.0);\n        hic(Icon::Speaker, cw.av + 38.0);\n        hic(Icon::Solo, cw.av + 63.0);\n        hic(Icon::Lock, cw.av + 88.0);",
-    ),
-    (
-        'for (name, x, all_on) in [("video", cw.av + 10.0, video_on), ("audio", cw.av + 28.0, audio_on)] {',
-        'for (name, x, all_on) in [("video", cw.av + 13.0, video_on), ("audio", cw.av + 38.0, audio_on)] {',
     ),
 ]
 
