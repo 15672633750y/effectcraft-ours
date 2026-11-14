@@ -30,7 +30,7 @@ THEME_NEW = "            // EFFECTCRAFT_OURS_TIGHT_CHROME_V1 — 面板间隙 4�
 TITLE_OLD = """    Some(format!("{} {}", crate::i18n::command_label("window.panel", "Composition"), app.session.project.item(c)?.name))
 """
 TITLE_NEW = """    // EFFECTCRAFT_OURS_TIGHT_CHROME_V1 — 面板名已经是「预览」，再套一层「合成」就成了「合成 合成1」
-    Some(app.session.project.item(c)?.name)
+    Some(app.session.project.item(c)?.name.clone())
 """
 
 
