@@ -188,8 +188,26 @@ fn export_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
         for i in (1..=existing).rev() {
             let _ = crate::menus::invoke(app, ctx, "renderQueue.remove", serde_json::json!({"index": i}));
         }
-        if crate::menus::invoke(app, ctx, "renderQueue.add", params).is_ok() {
-            let _ = crate::menus::invoke(app, ctx, "renderQueue.render", serde_json::json!({}));
+        // 直接写到相册目录：那里一定能被用户看到，也不需要猜默认路径。
+        // 状态栏同时显示实际用的路径，万一失败能立刻知道是哪一步。
+        if fmt != 3 {
+            let ext = match fmt { 1 => "mov", 2 => "gif", _ => "mp4" };
+            let comp_name = app
+                .session
+                .active_comp_id()
+                .and_then(|c| app.session.project.item(c))
+                .map(|i| i.name.clone())
+                .unwrap_or_else(|| "EffectCraft".to_string());
+            let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+            params["output"] = serde_json::json!(format!("/storage/emulated/0/DCIM/EffectCraft/{comp_name}-{stamp}.{ext}"));
+        }
+        match crate::menus::invoke(app, ctx, "renderQueue.add", params) {
+            Ok(v) => {
+                let shown = v.get("output").and_then(|o| o.as_str()).unwrap_or("").to_string();
+                app.ui.status = if shown.is_empty() { "已加入渲染队列".to_string() } else { format!("导出到 {shown}") };
+                let _ = crate::menus::invoke(app, ctx, "renderQueue.render", serde_json::json!({}));
+            }
+            Err(e) => app.ui.status = e,
         }
         ctx.data_mut(|d| d.insert_temp(open_id, false));
     }
