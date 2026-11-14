@@ -28,7 +28,8 @@ NEW = '''        let snap = |f: i64| wa + (f - wa).div_euclid(step) * step;
         let clock_key = egui::Id::new("playback-audio-clock-stall");
         let now_tick = a.clock();
         let last = ctx.data(|d| d.get_temp::<(i64, f64)>(clock_key));
-        let stalled = matches!(last, Some((sample, at)) if sample == now_tick && now - at > 0.5);
+        // 播放刚开始的头一秒不算停滞（上一次播放留下的记录会误判）。
+        let stalled = matches!(last, Some((sample, at)) if sample == now_tick && now - at > 0.5 && now - self.playback.start_wall > 1.0);
         if last.is_none_or(|(sample, _)| sample != now_tick) {
             ctx.data_mut(|d| d.insert_temp(clock_key, (now_tick, now)));
         }
