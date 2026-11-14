@@ -163,26 +163,39 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
                 *slot = v.clamp(0.0, 1.0);
             }
             let canvas_resp = ui.interact(canvas, egui::Id::unique("ours-curve-drag"), Sense::drag());
+            let pick_id = egui::Id::new("ours-curve-picked");
             let mut stopped = false;
-            if canvas_resp.dragged() || canvas_resp.drag_started() {
+            // Which handle a drag grabbed is decided once, when it starts: the summit sits close to
+            // an end handle whenever it is dragged near one, and re-picking every frame made the
+            // drag jump to the other handle (the line then stopped following the finger).
+            if canvas_resp.drag_started() {
+                if let Some(pos) = canvas_resp.interact_pointer_pos() {
+                    let peak = ends[1];
+                    let pick = if (peak.x - pos.x).abs() < 16.0 && (peak.y - pos.y).abs() < 16.0 {
+                        1usize
+                    } else {
+                        let mut best = (f32::MAX, 1usize);
+                        for (i, h) in ends.iter().enumerate() {
+                            let dx = (h.x - pos.x) / plot.width();
+                            let dy = (h.y - pos.y) / plot.height();
+                            let d = dx * dx + dy * dy;
+                            if d < best.0 {
+                                best = (d, i);
+                            }
+                        }
+                        best.1
+                    };
+                    ctx.data_mut(|d| d.insert_temp(pick_id, pick as u8));
+                }
+            }
+            if canvas_resp.dragged() {
                 if let Some(pos) = canvas_resp.interact_pointer_pos() {
                     let gx = ((pos.x - plot.left()) / plot.width()).clamp(0.0, 1.0);
                     let gy = ((plot.bottom() - pos.y) / plot.height()).clamp(0.0, 1.0);
-                    let mut pick = 1usize;
-                    let mut best = f32::MAX;
-                    for (i, h) in ends.iter().enumerate() {
-                        let dx = (h.x - pos.x) / plot.width();
-                        let dy = (h.y - pos.y) / plot.height();
-                        let d = dx * dx + dy * dy;
-                        if d < best {
-                            best = d;
-                            pick = i;
-                        }
-                    }
-                    match pick {
+                    match ctx.data(|d| d.get_temp::<u8>(pick_id).unwrap_or(1)) {
                         // The summit: left/right moves the fastest moment, up/down its speed.
                         1 => {
-                            pts[0] = gx.clamp(0.03, 0.97);
+                            pts[0] = gx.clamp(0.06, 0.94);
                             pts[1] = gy;
                         }
                         0 => pts[2] = gy,
