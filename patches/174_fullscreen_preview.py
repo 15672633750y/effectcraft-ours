@@ -67,7 +67,7 @@ fn ours_fullscreen(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: egui::Rect
     let Some(cid) = app.session.active_comp_id() else { return };
     let Some(comp) = app.session.project.comp(cid) else { return };
     let dur = comp.duration.seconds().max(1e-3);
-    let now = app.session.state.time.seconds().clamp(0.0, dur);
+    let now = app.session.time().seconds().clamp(0.0, dur);
     let track = egui::Rect::from_min_max(egui::pos2(play.max.x + 10.0, cy - 8.0), egui::pos2(bar.max.x - 12.0, cy + 8.0));
     p.rect_filled(track, 4.0, t.switch_well);
     let frac = (now / dur) as f32;
