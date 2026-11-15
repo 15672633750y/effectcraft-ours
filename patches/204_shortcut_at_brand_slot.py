@@ -16,8 +16,28 @@ NEW = ANCHOR + '''    // EFFECTCRAFT_OURS_SHORTCUT_AT_START_V1 — 工具栏第�
     {
         let r = Rect::from_min_size(pos2(x, cy - 13.0), vec2(44.0, 26.0));
         let resp = ui.interact(r, egui::Id::unique("ours-shortcut"), Sense::click()).on_hover_text("快捷键面板");
-        p.rect_filled(r, 5.0, t.switch_well);
-        p.text(r.center(), Align2::CENTER_CENTER, "快捷", Tokens::ui(12.0), t.text);
+        // 用图片当按钮：圆形头像，和行高一致
+        let tex_id = egui::Id::unique("ours-shortcut-icon");
+        let tex = ui.ctx().data(|d| d.get_temp::<Option<egui::TextureHandle>>(tex_id)).unwrap_or_else(|| {
+            let t = image::load_from_memory_with_format(
+                include_bytes!("../../assets/shortcut-btn.png"),
+                image::ImageFormat::Png,
+            )
+            .ok()
+            .map(|img| {
+                let img = img.to_rgba8();
+                let ci = egui::ColorImage::from_rgba_unmultiplied([img.width() as usize, img.height() as usize], img.as_raw());
+                ui.ctx().load_texture("ours-shortcut-icon", ci, egui::TextureOptions::LINEAR)
+            });
+            ui.ctx().data_mut(|d| d.insert_temp(tex_id, t.clone()));
+            t
+        });
+        if let Some(t) = tex {
+            p.image(t.id(), r, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
+        } else {
+            p.rect_filled(r, 5.0, t.switch_well);
+            p.text(r.center(), Align2::CENTER_CENTER, "快捷", Tokens::ui(12.0), t.text);
+        }
         if resp.clicked() {
             let id = egui::Id::unique("ours-shortcut-open");
             let open: bool = ui.ctx().data(|d| d.get_temp::<bool>(id).unwrap_or(false));
