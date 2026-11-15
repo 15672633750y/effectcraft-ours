@@ -55,9 +55,9 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
     let rows: [(&str, &str); 7] = [
         ("After Effects 工程", "`.aep` / `.aepx` → 合成、图层、关键帧、效果、音频（多数可还原）"),
         ("EffectCraft 工程", "`.ecproj` → 整个工程，原样打开"),
-        ("剪映 / CapCut 工程", "工程文件夹里的 `draft_content.json` → 媒体与时间线（实验）"),
+        ("剪映 / CapCut 工程", "`draft_content.json` → 重建时间线：切点、顺序、时长、音视频分轨（转场/特效/文字不导入）"),
         ("Nuke 工程", "`.nk` → 只导入 Read 节点的素材路径（实验）"),
-        ("快影工程", "`.zip` → 只导入里面的媒体文件（实验）"),
+        ("快影工程", "`.zip` → 只导入里面的媒体文件（时间线重建需先提供工程文件样本）"),
         ("After Effects 效果预设", "`.ffx` → 把预设里的效果套到选中图层（效果参数可再调）"),
         ("媒体", "mp4 / mov / png / jpg / wav / mp3 … → 作为素材导入"),
     ];
