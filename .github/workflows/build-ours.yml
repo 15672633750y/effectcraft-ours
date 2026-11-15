@@ -7,6 +7,14 @@ on:
         description: 'Upstream EffectCraft tag'
         required: false
         default: 'v0.22.0'
+      package:
+        description: 'Android package name (so builds can be installed side by side)'
+        required: false
+        default: 'com.artcraft.effectcraft.sx'
+      patches:
+        description: 'Apply our patches (yes/no). Use no for a test build of a bare upstream tag'
+        required: false
+        default: 'yes'
   push:
     paths:
       - '.github/workflows/build-ours.yml'
@@ -16,7 +24,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: ours-${{ github.ref }}
+  group: ours-${{ github.ref }}-${{ inputs.tag }}-${{ inputs.package }}
   cancel-in-progress: true
 
 jobs:
@@ -53,7 +61,7 @@ jobs:
       - name: Apply our patches (none yet)
         run: |
           set -euo pipefail
-          if [ -d ours/patches ]; then
+          if [ "${{ inputs.patches || 'yes' }}" = "yes" ] && [ -d ours/patches ]; then
             for p in ours/patches/*.py; do
               [ -e "$p" ] || continue
               EFFECTCRAFT_DIR="$GITHUB_WORKSPACE/artcraft/source/effectcraft" ARTCRAFT_DIR="$GITHUB_WORKSPACE/artcraft" python3 "$p"
@@ -141,7 +149,7 @@ jobs:
           bash build.sh -effectcraft --noupdate \
             -appname="${APP_NAME}" \
             -appicon="$GITHUB_WORKSPACE/app-icon.png" \
-            -packagename=com.artcraft.effectcraft.sx 2>&1 | tee logs/effectcraft-build.log
+            -packagename="${{ inputs.package || 'com.artcraft.effectcraft.sx' }}" 2>&1 | tee logs/effectcraft-build.log
 
       - name: Save the signing key
         if: always()
