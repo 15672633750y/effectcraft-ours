@@ -52,12 +52,13 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
         return;
     }
     let t = app.tokens;
-    let rows: [(&str, &str); 7] = [
+    let rows: [(&str, &str); 8] = [
         ("After Effects 工程", "`.aep` / `.aepx` → 合成、图层、关键帧、效果、音频（多数可还原）"),
         ("EffectCraft 工程", "`.ecproj` → 整个工程，原样打开"),
-        ("剪映 / CapCut 工程", "`draft_content.json` → 重建时间线：切点、顺序、时长、音视频分轨（转场/特效/文字不导入）"),
+        ("剪映 / CapCut 工程", "`draft_content.json` 或草稿 zip → 重建时间线：切点、顺序、时长、音视频分轨"),
         ("NodeVideo 工程（仿AE）", "`.zip` / `.nv` → 重建时间线：图层位置、时长、素材（速度/效果不转换）"),
         ("快影工程", "暂不支持（需要工程文件样本才能做时间线重建）"),
+        ("AM / FCP7 XML 工程", "`.xml` → 重建时间线：切点、顺序、时长（Premiere/AM 导出）"),
         ("After Effects 效果预设", "`.ffx` → 把预设里的效果套到选中图层（效果参数可再调）"),
         ("媒体", "mp4 / mov / png / jpg / wav / mp3 … → 作为素材导入"),
     ];
