@@ -122,7 +122,7 @@ def main() -> None:
                 java.io.File dir = new java.io.File(CRASH_DIR);
                 if (!dir.isDirectory()) dir.mkdirs();
                 try (java.io.FileOutputStream os = new java.io.FileOutputStream(new java.io.File(dir, "startup.txt"))) {
-                    os.write(("启动于 " + System.currentTimeMillis() + "\n").getBytes("UTF-8"));
+                    os.write(("启动于 " + System.currentTimeMillis() + String.valueOf((char) 10)).getBytes("UTF-8"));
                     os.flush();
                     os.getFD().sync();
                 }
