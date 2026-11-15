@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
-"""Let Android re-create the activity on a rotation instead of handling it in place.
+"""Lock the activity to landscape — the last way to keep the app openable.
 
-`configChanges` listed every rotation-related change, so Android hands the resize to the running
-app: the native window changes size under the graphics surface, and that is where the app dies.
-Declaring nothing makes Android do what it does for every ordinary app — finish the activity and
-start it again at the new size — which is the path the framework handles properly. The app reopens
-the same project; nothing else changes.
+Both rotation paths kill this app on this phone: with `configChanges` the drawing surface is
+resized in place and the graphics stack dies; without it, Android re-creates the activity on every
+launch (the phone starts in portrait, the app wants landscape) and the app dies just as often. With
+the orientation locked there is no rotation to handle, so the app simply opens.
+
+A video editor is a landscape app; portrait would need the surface path fixed first.
 """
 from __future__ import annotations
 
 import os
 from pathlib import Path
 
-MARKER = "EFFECTCRAFT_OURS_ROTATE_RECREATE_V1"
-OLD = 'config_changes = "{config_changes}"\n'
-NEW = '# EFFECTCRAFT_OURS_ROTATE_RECREATE_V1 — 不声明 configChanges：转屏交给系统重建 Activity\n'
+MARKER = "EFFECTCRAFT_OURS_LOCK_LANDSCAPE_V1"
+OLD = 'orientation = "sensor"'
+NEW = 'orientation = "sensorLandscape"'
 
 
 def main() -> None:
@@ -22,14 +23,14 @@ def main() -> None:
     path = root / "lib/build-common.sh"
     src = path.read_text(encoding="utf-8")
     if MARKER in src:
-        print("rotation already left to the system")
+        print("orientation already locked")
         return
     n = src.count(OLD)
-    if n < 1:
-        raise SystemExit(f"config_changes anchor: {n}")
-    src = src.replace(OLD, NEW)
+    if n != 2:
+        raise SystemExit(f"orientation anchor: expected 2, found {n}")
+    src = src.replace(OLD, NEW + "  # " + MARKER)
     path.write_text(src, encoding="utf-8")
-    print(f"removed configChanges from {n} activity blocks")
+    print("activity locked to landscape")
 
 
 if __name__ == "__main__":
