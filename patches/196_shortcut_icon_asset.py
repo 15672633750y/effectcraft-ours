@@ -25,3 +25,7 @@ def main() -> None:
         print(f"shortcut icon written ({len(data)} bytes)")
     else:
         print("shortcut icon already in place")
+
+
+if __name__ == "__main__":
+    main()
