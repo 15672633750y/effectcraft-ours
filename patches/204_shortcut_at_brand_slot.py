@@ -20,7 +20,7 @@ NEW = ANCHOR + '''    // EFFECTCRAFT_OURS_SHORTCUT_AT_START_V1 — 工具栏第�
         let tex_id = egui::Id::unique("ours-shortcut-icon");
         let tex = ui.ctx().data(|d| d.get_temp::<Option<egui::TextureHandle>>(tex_id)).unwrap_or_else(|| {
             let t = image::load_from_memory_with_format(
-                include_bytes!("../../assets/shortcut-btn.png"),
+                include_bytes!("../assets/shortcut-btn.png"),
                 image::ImageFormat::Png,
             )
             .ok()
