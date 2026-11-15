@@ -30,7 +30,7 @@ SPEC_NEW = '''pub fn specs() -> Vec<crate::CommandSpec> {
         ["File", "Export"],
         None,
         "{path?: .zip}",
-        |s: &Session, _| !s.project.items.is_empty(),
+        always,
         export_nv
     ), cmd!(
         "ours.exportProjectZip",
@@ -117,7 +117,7 @@ fn export_nv(s: &mut Session, p: &Value) -> Result<Value> {
     let mut media_files: Vec<(String, String)> = Vec::new();
     let mut next_id: i64 = 100_000;
     for layer in comp.layers.iter() {
-        let effectcraft_project::LayerSource::Footage(item) = layer.source else { continue };
+        let effectcraft_project::LayerSource::Footage { item } = layer.source else { continue };
         let Some(item_obj) = s.project.item(item) else { continue };
         let effectcraft_project::ItemKind::Footage(f) = &item_obj.kind else { continue };
         if f.missing || f.path.is_empty() {
@@ -144,9 +144,9 @@ fn export_nv(s: &mut Session, p: &Value) -> Result<Value> {
         for asset in ["AssetVideo", "AssetAudio", "AssetImage"] {
             if let Some(a) = node.get_mut(asset).and_then(serde_json::Value::as_object_mut) {
                 a.insert("AbsolutePath".into(), json!(f.path));
-                if let Some(w) = f.width { a.insert("Width".into(), json!(w)); }
-                if let Some(h) = f.height { a.insert("Height".into(), json!(h)); }
-                a.insert("Duration".into(), json!(f.duration.unwrap_or(dur)));
+                a.insert("Width".into(), json!(f.width));
+                a.insert("Height".into(), json!(f.height));
+                a.insert("Duration".into(), json!(f.duration.seconds()));
                 a.insert("LinkBroken".into(), json!(false));
             }
         }

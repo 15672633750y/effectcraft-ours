@@ -29,7 +29,7 @@ MODULE = r'''//! 工程分享：把工程（可选带素材）打成一个 zip�
 
 use serde_json::{Value, json};
 
-use super::{bad, str_p};
+use super::{always, bad, str_p};
 use crate::{Result, Session, cmd};
 
 /// Every footage path the project references, de-duplicated.
@@ -103,7 +103,7 @@ pub fn specs() -> Vec<crate::CommandSpec> {
         ["File", "Export"],
         None,
         "{path?: .zip, media?: bool (default true)}",
-        |s: &Session, _| !s.project.items.is_empty(),
+        always,
         export_project_zip
     )]
 }
