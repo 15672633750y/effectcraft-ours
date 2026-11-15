@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""The viewer's comp-chip row only appears when there is more than one comp open.
+"""The viewer no longer draws its own comp-chip row at all.
 
 That row is drawn inside the *panel body* (`panels/viewer.rs`), 24 px tall, one chip per open comp
-in the viewer — the rounded “合成 1” chip under the tab strip. With a single comp it is a label
-that cannot be dragged and does nothing, and it costs 24 px of canvas.
+in the viewer — the rounded “合成 1” chip under the tab strip. Switching compositions is done with
+the tab strip above it (which drags and switches panels too), so the chip row is removed outright:
+it cost 24 px of canvas and could not be dragged.
 
-The tab strip above it (`■ 合成 1  图层  ☰`, which drags and switches panels) is drawn by the
-docking library and is **not touched here**. Nothing else about the viewer changes: the row still
-appears, exactly as before, once a second comp is opened in the viewer, where it is the switcher.
+The tab strip above it (`■ 合成 1  图层  ☰`) is drawn by the docking library and is **not touched
+here**.
 """
 from __future__ import annotations
 
@@ -18,13 +18,9 @@ MARKER = "EFFECTCRAFT_OURS_COMP_CHIP_MULTI_V1"
 
 OLD = '''    let nav_h = if super::precomp::has_flow(app) { 0.0 } else { 24.0 };
 '''
-NEW = '''    // EFFECTCRAFT_OURS_COMP_CHIP_MULTI_V1 — 只有一个合成时不画这条 chip 行：
-    // 它拖不动、点了没用，还白占 24px；开第二个合成时照旧出现，用来切换。
-    let nav_h = if super::precomp::has_flow(app) || app.session.state.open_comps.len() <= 1 {
-        0.0
-    } else {
-        24.0
-    };
+NEW = '''    // EFFECTCRAFT_OURS_COMP_CHIP_MULTI_V1 — 不画这一行 chip：
+    // 切合成用上面的标签条（能拖、能切面板），这行只是白占 24px。全部隐藏。
+    let nav_h = 0.0f32;
 '''
 
 
