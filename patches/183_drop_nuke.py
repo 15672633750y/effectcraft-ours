@@ -12,7 +12,7 @@ from pathlib import Path
 
 MARKER = "EFFECTCRAFT_OURS_NO_NUKE_V1"
 
-OLD = '''    if lower.ends_with(".nk") || lower.ends_with(".nv") {
+OLD = '''    if path.to_ascii_lowercase().ends_with(".nk") || lower.ends_with(".nv") {
         return true;
     }'''
 NEW = '''    // EFFECTCRAFT_OURS_NO_NUKE_V1 — 不再当 Nuke 脚本处理；NodeVideo 的 .nv 仍然要
