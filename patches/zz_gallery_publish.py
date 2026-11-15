@@ -14,10 +14,10 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-MARKER = "EFFECTCRAFT_OURS_GALLERY_PUBLISH_V1"
+MARKER = "EFFECTCRAFT_OURS_GALLERY_PUBLISH_V2"
 
 CODE = '''
-    // EFFECTCRAFT_OURS_GALLERY_PUBLISH_V1 — 让导出的视频出现在相册里
+    // EFFECTCRAFT_OURS_GALLERY_PUBLISH_V2 — 让导出的视频出现在相册里
     private final java.util.HashMap<String, Long> oursPublished = new java.util.HashMap<>();
     private volatile boolean oursPublishRunning = false;
 
