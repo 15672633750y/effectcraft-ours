@@ -25,17 +25,43 @@ HOOK_NEW = '''    // EFFECTCRAFT_OURS_FIX3_V1 — NodeVideo 的 zip / .nv 先处
         if lower.ends_with(".zip") || lower.ends_with(".nv") {
             // EFFECTCRAFT_OURS_NV_ZIP_ERROR_V1 — 走到底：成功就用时间线，失败给明确原因，
             // 不再退回 JSON 解析（那会报 "expected value at line 1 column 1"）
+            let diag = nv_diag(path);
             return match import_nodevideo(s, path) {
                 Some(note) => {
                     s.toast(note);
                     Ok(Vec::new())
                 }
                 None => Err(EngineError::Other(format!(
-                    "{path}：没有找到可用的 NodeVideo 工程（zip 里需要有 .nv，且素材要在本机或 zip 的 Medias/ 里）"
+                    "{path}：没有找到可用的 NodeVideo 工程（zip 里需要有 .nv，且素材要在本机或 zip 的 Medias/ 里；诊断：{diag}"
                 ))),
             };
         }
     }
+'''
+
+
+DIAG = r'''
+
+/// 失败时给一句诊断：zip 里有多少条目、有没有 .nv。
+fn nv_diag(path: &str) -> String {
+    let lower = path.to_ascii_lowercase();
+    if !lower.ends_with(".zip") {
+        return format!("{}：不是 zip", if lower.ends_with(".nv") { "只有 .nv" } else { "未知" });
+    }
+    let Ok(file) = std::fs::File::open(path) else { return "打不开文件".into() };
+    let Ok(mut zip) = zip::ZipArchive::new(file) else { return "不是有效的 zip".into() };
+    let mut nv = 0usize;
+    let mut media = 0usize;
+    let mut first = Vec::new();
+    for i in 0..zip.len() {
+        let Ok(e) = zip.by_index(i) else { continue };
+        let n = e.name().to_ascii_lowercase();
+        if n.ends_with(".nv") { nv += 1; }
+        if n.starts_with("medias/") || n.contains("/medias/") { media += 1; }
+        if first.len() < 3 { first.push(e.name().to_string()); }
+    }
+    format!("{} 个条目，{} 个 .nv，{} 个媒体，例如 {:?}", zip.len(), nv, media, first)
+}
 '''
 
 LOG_OLD = '''    if nodes.is_empty() {
@@ -58,7 +84,7 @@ def main() -> None:
         return
     if src.count(HOOK_OLD) != 1:
         raise SystemExit(f"hook anchor: {src.count(HOOK_OLD)}")
-    src = src.replace(HOOK_OLD, HOOK_NEW, 1)
+    src = src.replace(HOOK_OLD, HOOK_NEW + DIAG, 1)
     if src.count(LOG_OLD) == 1:
         src = src.replace(LOG_OLD, LOG_NEW, 1)
     ext.write_text(src, encoding="utf-8")

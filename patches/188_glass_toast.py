@@ -47,13 +47,13 @@ NEW = '''            // EFFECTCRAFT_OURS_GLASS_TOAST_V1 — 底部居中的玻�
                 p.rect_filled(r.expand(grow), 22.0, egui::Color32::from_black_alpha(a as u8));
             }
             // 玻璃底：浅色磨砂（白 30% 压在深色 12% 上）
-            p.rect_filled(r, 20.0, egui::Color32::from_rgba_unmultiplied(18, 18, 20, 150));
-            p.rect_filled(r, 20.0, egui::Color32::from_rgba_unmultiplied(244, 245, 248, 150));
+            p.rect_filled(r, 20.0, egui::Color32::from_rgba_unmultiplied(12, 12, 14, 96));
+            p.rect_filled(r, 20.0, egui::Color32::from_rgba_unmultiplied(246, 247, 250, 96));
             // 顶部内高光 + 亮边
             let hi = egui::Rect::from_min_max(r.min, egui::pos2(r.max.x, r.min.y + r.height() * 0.45));
-            p.rect_filled(hi, 20.0, egui::Color32::from_rgba_unmultiplied(255, 255, 255, 26));
-            p.rect_stroke(r, 20.0, egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(255, 255, 255, 150)), egui::StrokeKind::Inside);
-            p.galley(r.min + pad, galley, egui::Color32::from_rgb(24, 24, 26));
+            p.rect_filled(hi, 20.0, egui::Color32::from_rgba_unmultiplied(255, 255, 255, 18));
+            p.rect_stroke(r, 20.0, egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(255, 255, 255, 120)), egui::StrokeKind::Inside);
+            p.galley(r.min + pad, galley, egui::Color32::from_rgb(246, 247, 250));
             self.auto.add("toast", r, &m);
 '''
 
