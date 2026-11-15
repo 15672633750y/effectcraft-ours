@@ -32,7 +32,7 @@ HOOK_NEW = '''    // EFFECTCRAFT_OURS_FIX3_V1 — NodeVideo 的 zip / .nv 先处
                     Ok(Vec::new())
                 }
                 None => Err(EngineError::Other(format!(
-                    "{path}：没有找到可用的 NodeVideo 工程（zip 里需要有 .nv，且素材要在本机或 zip 的 Medias/ 里；诊断：{diag}"
+                    "{path}：NV 工程没导入成功——可能原因：①工程里只有纯色/调整层，没有媒体图层 ②素材不在本机也不在 zip 的 Medias/ 里；诊断：{diag}"
                 ))),
             };
         }

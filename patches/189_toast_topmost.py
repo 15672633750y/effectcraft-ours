@@ -32,8 +32,8 @@ NEW = '''            // EFFECTCRAFT_OURS_GLASS_TOAST_V1 + _TOPMOST_V1 — 最上
                     for (grow, a) in [(7.0, 16.0), (4.0, 22.0), (2.0, 30.0)] {
                         p.rect_filled(r.expand(grow), 22.0, egui::Color32::from_black_alpha(a as u8));
                     }
-                    p.rect_filled(r, 20.0, egui::Color32::from_rgba_unmultiplied(12, 12, 14, 96));
-                    p.rect_filled(r, 20.0, egui::Color32::from_rgba_unmultiplied(246, 247, 250, 96));
+                    p.rect_filled(r, 20.0, egui::Color32::from_rgba_unmultiplied(8, 8, 10, 150));
+                    p.rect_filled(r, 20.0, egui::Color32::from_rgba_unmultiplied(246, 247, 250, 62));
                     let hi = egui::Rect::from_min_max(r.min, egui::pos2(r.max.x, r.min.y + r.height() * 0.45));
                     p.rect_filled(hi, 20.0, egui::Color32::from_rgba_unmultiplied(255, 255, 255, 18));
                     p.rect_stroke(r, 20.0, egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(255, 255, 255, 120)), egui::StrokeKind::Inside);
