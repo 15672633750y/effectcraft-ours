@@ -14,16 +14,13 @@ from pathlib import Path
 MARKER = "EFFECTCRAFT_OURS_LOG_EXPORT_V2"
 ANCHOR = "        installCrashLogger();\n"
 
-CODE = """        // 首帧之后再读日志、清理旧文件，别和启动抢时间
-        try {
-            final android.view.View lv = getWindow() != null ? getWindow().getDecorView() : null;
-            final Runnable lj = () -> {
-                try { oursExportLastLog(); } catch (Throwable ignored) { }
-                try { oursCleanPendingRenders(); } catch (Throwable ignored) { }
-            };
-            if (lv != null) lv.postDelayed(lj, 250L); else lj.run();
-        } catch (Throwable ignored) {
-        }
+CODE = """        // 日志导出放到后台线程：UI 线程一旦卡死（正在建 GPU 合成器），
+        // postDelayed 就不会执行，日志也就永远抓不到。
+        new Thread(() -> {
+            try { Thread.sleep(300); } catch (InterruptedException ignored) { }
+            try { oursExportLastLog(); } catch (Throwable ignored) { }
+            try { oursCleanPendingRenders(); } catch (Throwable ignored) { }
+        }, "log-export").start();
 """
 
 METHODS = '''
