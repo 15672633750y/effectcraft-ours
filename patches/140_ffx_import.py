@@ -33,8 +33,17 @@ fn ffx_effect_ids(text: &str) -> Vec<&'static str> {
     ];
     let mut found: Vec<(&str, usize)> = Vec::new();
     for (name, id) in KNOWN {
-        if let Some(at) = text.find(name) {
-            found.push((id, at));
+        // 预设里同一个效果可能出现多次（例如三条彩放两份）：按出现次数逐个应用
+        let bytes = text.as_bytes();
+        let mut from = 0usize;
+        while let Some(rel) = text[from..].find(name) {
+            let at = from + rel;
+            let after = at + name.len();
+            let boundary = bytes.get(after).map(|b| !b.is_ascii_alphanumeric() && *b != b'-' && *b != b' ').unwrap_or(true);
+            if boundary {
+                found.push((id, at));
+            }
+            from = at + name.len();
         }
     }
     found.sort_by_key(|(_, at)| *at);
