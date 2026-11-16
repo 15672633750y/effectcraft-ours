@@ -150,7 +150,11 @@ jobs:
       - name: Render the temporary launcher icon
         run: |
           set -euo pipefail
-          python3 ours/tools/make_icon.py "$GITHUB_WORKSPACE/app-icon.png"
+          if [ -f ours/tools/app-icon.png ]; then
+            cp ours/tools/app-icon.png "$GITHUB_WORKSPACE/app-icon.png"
+          else
+            python3 ours/tools/make_icon.py "$GITHUB_WORKSPACE/app-icon.png"
+          fi
           ls -l "$GITHUB_WORKSPACE/app-icon.png"
 
       - name: Build the APK
