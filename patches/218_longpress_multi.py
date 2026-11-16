@@ -19,7 +19,9 @@ NEW = '''    app.auto.add(&format!("timeline.layer.{}.row", layer.id.0), left, &
     // EFFECTCRAFT_OURS_LONGPRESS_MULTI_V1 — 长按 450ms（几乎不移动）= 加选/取消
     let lp_start = egui::Id::new(("ours-lp-start", layer.id.0));
     let lp_fired = egui::Id::new(("ours-lp-fired", layer.id.0));
+    let lp_pos = egui::Id::new(("ours-lp-pos", layer.id.0));
     let now = ui.input(|i| i.time);
+    let pointer = ui.input(|i| i.pointer.interact_pos());
     if row_resp.is_pointer_button_down_on() {
         let start: Option<f64> = ctx.data(|d| d.get_temp::<f64>(lp_start));
         let start = match start {
@@ -33,7 +35,17 @@ NEW = '''    app.auto.add(&format!("timeline.layer.{}.row", layer.id.0), left, &
             }
         };
         let fired: bool = ctx.data(|d| d.get_temp::<bool>(lp_fired)).unwrap_or(false);
-        if !fired && now - start > 0.45 {
+        // 只有手指基本没动才算长按（拖动排序不该触发多选）
+        let press_at: Option<egui::Pos2> = ctx.data(|d| d.get_temp::<egui::Pos2>(lp_pos));
+        let held_still = match (press_at, pointer) {
+            (Some(a), Some(b)) => (b - a).length() < 8.0,
+            (None, Some(b)) => {
+                ctx.data_mut(|d| d.insert_temp(lp_pos, b));
+                true
+            }
+            _ => false,
+        };
+        if !fired && held_still && now - start > 0.45 {
             ctx.data_mut(|d| d.insert_temp(lp_fired, true));
             actions.push(("layer.select".into(), json!({"layers": [layer.id.0], "toggle": true})));
         }
