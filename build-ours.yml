@@ -157,6 +157,21 @@ jobs:
           fi
           ls -l "$GITHUB_WORKSPACE/app-icon.png"
 
+      - name: Use the fixed signing key (if configured)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          set -e
+          if [ -n "${KEYSTORE_BASE64:-}" ]; then
+            mkdir -p artcraft/keys
+            printf '%s' "$KEYSTORE_BASE64" | base64 -d > artcraft/keys/artcraft-builder.jks
+            printf '%s' "${KEYSTORE_PASSWORD:-}" > artcraft/keys/.keystore-password
+            echo "signing key restored from repository secrets"
+          else
+            echo "no KEYSTORE_BASE64 secret: the build keeps using/generating its cached key"
+          fi
+
       - name: Build the APK
         run: |
           set -o pipefail
@@ -165,7 +180,7 @@ jobs:
           bash build.sh -effectcraft --noupdate \
             -appname="${APP_NAME}" \
             -appicon="$GITHUB_WORKSPACE/app-icon.png" \
-            -packagename="${{ inputs.package || 'com.artcraft.effectcraft.sx' }}" 2>&1 | tee logs/effectcraft-build.log
+            -packagename="${{ inputs.package || 'com.shimoveaex.effects' }}" 2>&1 | tee logs/effectcraft-build.log
 
       - name: Save the signing key
         if: always()
