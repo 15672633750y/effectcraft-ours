@@ -18,7 +18,7 @@ FUNC = r'''
 
 /// The effects an `.ffx` preset names, in the order they first appear, as our effect ids.
 fn ffx_effect_ids(text: &str) -> Vec<&'static str> {
-    const KNOWN: [(&str, &str); 7] = [
+    const KNOWN: [(&str, &str); 11] = [
         ("S_VintageColor3Strip", "S_VintageColor3Strip"),
         ("S_VintageColor2Strip", "org.effectcraft.compat.sapphire.vintagecolor2strip"),
         ("S_Vignette", "S_Vignette"),
@@ -26,6 +26,10 @@ fn ffx_effect_ids(text: &str) -> Vec<&'static str> {
         ("S_Rays", "S_Rays"),
         ("S_TextureFlux", "S_TextureFlux"),
         ("S_DropShadow", "S_DropShadow"),
+        // AE 内置效果：预设里常见，映射到我们已有的实现
+        ("ADBE HUE SATURATION", "ec.color.huesaturation"),
+        ("ADBE Sharpen", "ec.blur.sharpen"),
+        ("ADBE Unsharp Mask2", "ec.blur.unsharp"),
     ];
     let mut found: Vec<(&str, usize)> = Vec::new();
     for (name, id) in KNOWN {
