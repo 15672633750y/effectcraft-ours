@@ -1,7 +1,7 @@
 
 /// `.ffx`（RIFX）里每个参数的数值：`tdmn` 给出名字，紧随的 `tdps` 给出 1–4 个大端 float。
-fn ffx_values(bytes: &[u8]) -> Vec<(String, Vec<f32>)> {
-    let mut out: Vec<(String, Vec<f32>)> = Vec::new();
+fn ffx_values(bytes: &[u8]) -> Vec<(String, Vec<u8>)> {
+    let mut out: Vec<(String, Vec<u8>)> = Vec::new();
     let mut last_name: Option<String> = None;
     let mut i = 0usize;
     while i + 8 <= bytes.len() {
@@ -18,11 +18,7 @@ fn ffx_values(bytes: &[u8]) -> Vec<(String, Vec<f32>)> {
         }
         if tag == b"tdps" && i + 8 + len <= bytes.len() && len > 0 && len % 4 == 0 && len <= 16 {
             let raw = &bytes[i + 8..i + 8 + len];
-            let floats: Vec<f32> = raw
-                .chunks_exact(4)
-                .map(|c| f32::from_be_bytes([c[0], c[1], c[2], c[3]]))
-                .filter(|v| v.is_finite())
-                .collect();
+            let floats: Vec<u8> = raw.to_vec();
             if !floats.is_empty()
                 && let Some(name) = &last_name
             {
@@ -58,14 +54,29 @@ fn ffx_param(name: &str) -> Option<(&'static str, bool)> {
 }
 
 /// 把预设里的数值写到刚应用的效果上；返回写了几个。
-fn apply_ffx_values(s: &mut Session, effect_id: &str, values: &[(String, Vec<f32>)]) -> usize {
+fn apply_ffx_values(s: &mut Session, effect_id: &str, values: &[(String, Vec<u8>)]) -> usize {
     let mut set = 0usize;
-    for (name, floats) in values {
+    for (name, raw) in values {
         let Some((param, percent)) = ffx_param(name) else { continue };
-        let value = if floats.len() >= 3 {
-            json!([floats[0], floats[1], floats[2]])
+        let nums: Vec<f32> = raw
+            .chunks_exact(4)
+            .map(|c| f32::from_be_bytes([c[0], c[1], c[2], c[3]]))
+            .collect();
+        if nums.is_empty() {
+            continue;
+        }
+        // 枚举参数（Show / Effect / Combine）在 RIFX 里是 4 字节整数，不是 float
+        let enumeration = matches!(param, "show" | "effect" | "combine");
+        let value = if enumeration {
+            let v = u32::from_be_bytes([raw[0], raw[1], raw[2], raw[3]]);
+            json!(v.min(15))
+        } else if nums.len() >= 3 {
+            json!([nums[0], nums[1], nums[2], 1.0])
         } else {
-            let mut v = floats[0] as f64;
+            let mut v = nums[0] as f64;
+            if !v.is_finite() {
+                continue;
+            }
             if percent && v.abs() > 4.0 {
                 v /= 100.0;
             }
