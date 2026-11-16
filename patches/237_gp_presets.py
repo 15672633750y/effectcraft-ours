@@ -67,6 +67,8 @@ fn gp_value(v: &Value) -> Option<Value> {
             Some(json!([nums[0], nums[1], nums[2], nums[3]]))
         }
         "popup" => Some(json!(nums[0] as i64)),
+        // center 是两通道的 float（归一化 x/y）
+        _ if nums.len() >= 2 => Some(json!([nums[0], nums[1]])),
         _ => Some(json!(nums[0])),
     }
 }
