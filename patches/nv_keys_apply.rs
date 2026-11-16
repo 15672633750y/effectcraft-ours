@@ -12,7 +12,7 @@
             let Some((_, lid)) = layers.iter().find(|(n, _)| n == nname) else { continue };
             for (_param, path, keys) in transform_keys(node) {
                 for (t, v) in keys {
-                    if s.execute("prop.addKey", json!({"layer": lid, "path": path, "time": t, "value": v})).is_ok() {
+                    if s.execute("prop.addKey", json!({"layer": lid, "path": path, "time": t, "timeBase": "comp", "value": v})).is_ok() {
                         keyed += 1;
                     } else {
                         skipped += 1;
