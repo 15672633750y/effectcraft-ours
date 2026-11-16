@@ -113,6 +113,17 @@ jobs:
           key: ours-cargo-${{ hashFiles('artcraft/source/effectcraft/Cargo.lock') }}
           restore-keys: ours-cargo-
 
+      # 编译产物缓存：没有它每次都要把全部 crate 重编一遍（40 分钟起）。
+      - name: Cache build output
+        uses: actions/cache@v4
+        with:
+          path: |
+            artcraft/source/effectcraft/target
+          key: ours-target-${{ hashFiles('artcraft/source/effectcraft/Cargo.lock') }}-${{ github.run_id }}
+          restore-keys: |
+            ours-target-${{ hashFiles('artcraft/source/effectcraft/Cargo.lock') }}-
+            ours-target-
+
       - name: Install cargo-ndk
         run: |
           if ! command -v cargo-ndk >/dev/null 2>&1; then
