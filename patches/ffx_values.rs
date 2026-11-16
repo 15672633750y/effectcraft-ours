@@ -41,7 +41,7 @@ fn ffx_param(name: &str) -> Option<(&'static str, bool)> {
         "Saturation" => ("saturation", true),
         "Opacity" => ("opacity", true),
         "Squareness" => ("squareness", true),
-        "Offset Darks" | "OffsetDarks" => ("offsetDarks", true),
+        "Offset Darks" | "OffsetDarks" => ("offsetDarks", false),
         "Rotate" => ("rotate", false),
         "Radius" => ("radius", false),
         "Tint" => ("tint", false),
