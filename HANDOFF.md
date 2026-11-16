@@ -50,3 +50,4 @@ EffectCraft Sx = `storytold/effectcraft` 的补丁版，在 GitHub Actions 构�
 - 本机**没有 Rust 工具链**，编译错误只能等 CI；所以 precheck 是唯一防线
 - 补丁编号字典序：`2xx` < `5xx`，要晚于某补丁生效就起名 `zz_`/`99_`
 - 构建并发组已改成 per-run，不会互相取消
+# trigger 1794872140
