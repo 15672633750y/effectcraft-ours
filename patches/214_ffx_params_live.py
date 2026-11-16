@@ -97,11 +97,11 @@ SHAPE_NEW = '''        let square = dx.abs().max(dy.abs());
 # 参考线参数：从面板上撤掉
 
 VIG_LOOP_OLD = "    buf.img.data.par_iter_mut().enumerate().for_each(|(i, px)| {\n"
-VIG_LOOP_NEW = "    let mut weights = vec![0.0f32; buf.img.data.len()];\n    buf.img.data.par_iter_mut().enumerate().for_each(|(i, px)| {\n"
+VIG_LOOP_NEW = "    let mut weights = vec![0.0f32; buf.img.data.len()];\n    buf.img.data.par_iter_mut().zip(weights.par_iter_mut()).enumerate().for_each(|(i, (px, wt))| {\n"
 
 VIG_TAIL_OLD = "        *px = premul(mixed, a);\n    });\n    buf\n}"
 VIG_TAIL_NEW = """        *px = premul(mixed, a);
-        weights[i] = wgt;
+        *wt = wgt;
     });
     // EFFECTCRAFT_OURS_FFX_PARAMS_LIVE_V1 — Blur Amount / Blur Inside
     if blur_amount >= 1.0 {
