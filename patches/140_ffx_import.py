@@ -18,7 +18,7 @@ FUNC = r'''
 
 /// The effects an `.ffx` preset names, in the order they first appear, as our effect ids.
 fn ffx_effect_ids(text: &str) -> Vec<&'static str> {
-    const KNOWN: [(&str, &str); 11] = [
+    const KNOWN: [(&str, &str); 10] = [
         ("S_VintageColor3Strip", "S_VintageColor3Strip"),
         ("S_VintageColor2Strip", "org.effectcraft.compat.sapphire.vintagecolor2strip"),
         ("S_Vignette", "S_Vignette"),
