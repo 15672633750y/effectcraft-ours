@@ -74,6 +74,18 @@ fn transform_keys(node: &Value, w: f64, h: f64) -> Vec<(&'static str, Vec<(f64, 
             out.push(("transform/position", keys));
         }
     }
+    if let Some((kx, ky)) = axes("_pivot") {
+        let mut times: Vec<f64> = kx.iter().chain(ky.iter()).map(|k| k.0).collect();
+        times.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        times.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
+        let keys: Vec<(f64, Value)> = times
+            .into_iter()
+            .map(|t| (t, json!([value_at(&kx, t) * w, value_at(&ky, t) * h])))
+            .collect();
+        if !keys.is_empty() {
+            out.push(("transform/anchor", keys));
+        }
+    }
     if let Some((kx, ky)) = axes("_scale") {
         let mut times: Vec<f64> = kx.iter().chain(ky.iter()).map(|k| k.0).collect();
         times.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
