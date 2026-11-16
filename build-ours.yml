@@ -1,0 +1,200 @@
+name: Build EffectCraft APK (ours)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Upstream EffectCraft tag'
+        required: false
+        default: 'v0.24.1'
+      package:
+        description: 'Android package name (so builds can be installed side by side)'
+        required: false
+        default: 'com.artcraft.effectcraft.sx'
+      patches:
+        description: 'Apply our patches (yes/no). Use no for a test build of a bare upstream tag'
+        required: false
+        default: 'yes'
+  push:
+    paths:
+      - '.github/workflows/build-ours.yml'
+      - 'patches/**'
+
+permissions:
+  contents: write
+
+concurrency:
+  # 每次运行一个独立组：任何一次推送都不可能取消别人的编译
+  group: ours-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    env:
+      APP_NAME: 'EffectCraft Sx'
+      ARTCRAFT_BUILD_TOOLS_VERSION: '35.0.0'
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: '16'
+      CARGO_PROFILE_RELEASE_LTO: 'false'
+      CARGO_PROFILE_RELEASE_DEBUG: 'false'
+    steps:
+      - name: Check out our patch repository
+        uses: actions/checkout@v4
+        with:
+          path: ours
+
+      - name: Check out the Android builder
+        uses: actions/checkout@v4
+        with:
+          repository: MostafaXS1/artcraft-android
+          ref: v0.5.0
+          path: artcraft
+
+      - name: Check out the upstream EffectCraft source at the requested tag
+        run: |
+          set -euo pipefail
+          TAG="${{ inputs.tag || 'v0.24.1' }}"
+          mkdir -p artcraft/source
+          git clone --depth 1 --branch "$TAG" https://github.com/storytold/effectcraft artcraft/source/effectcraft
+          git -C artcraft/source/effectcraft describe --tags --exact-match
+
+      - name: Apply our patches (none yet)
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.patches || 'yes' }}" = "yes" ] && [ -d ours/patches ]; then
+            for p in ours/patches/*.py; do
+              [ -e "$p" ] || continue
+              EFFECTCRAFT_DIR="$GITHUB_WORKSPACE/artcraft/source/effectcraft" ARTCRAFT_DIR="$GITHUB_WORKSPACE/artcraft" python3 "$p"
+            done
+          else
+            echo "No patches directory; building vanilla upstream."
+          fi
+
+      - name: Restore the persistent signing key
+        id: signing_key_cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            artcraft/keys/artcraft-builder.jks
+            artcraft/keys/.keystore-password
+          key: ours-effectcraft-signing-v1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        run: pip install --upgrade pillow
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Configure the JDK the builder looks for
+        run: |
+          sudo mkdir -p /opt/jdk
+          sudo ln -sfn "$JAVA_HOME" /opt/jdk/temurin-21
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ours-cargo-${{ hashFiles('artcraft/source/effectcraft/Cargo.lock') }}
+          restore-keys: ours-cargo-
+
+      # 编译产物缓存：没有它每次都要把全部 crate 重编一遍（40 分钟起）。
+      - name: Cache build output
+        uses: actions/cache@v4
+        with:
+          path: |
+            artcraft/source/effectcraft/target
+          key: ours-target-${{ hashFiles('artcraft/source/effectcraft/Cargo.lock') }}-${{ github.run_id }}
+          restore-keys: |
+            ours-target-${{ hashFiles('artcraft/source/effectcraft/Cargo.lock') }}-
+            ours-target-
+
+      - name: Install cargo-ndk
+        run: |
+          if ! command -v cargo-ndk >/dev/null 2>&1; then
+            mkdir -p "$HOME/.cargo/bin"
+            curl -fsSL https://github.com/bbqsrc/cargo-ndk/releases/download/v4.1.2/cargo-ndk-x86_64-unknown-linux-musl-v4.1.2.tgz \
+              | tar -xz --strip-components=1 -C "$HOME/.cargo/bin"
+            chmod +x "$HOME/.cargo/bin/cargo-ndk"*
+          fi
+          cargo ndk -V
+
+      - name: Configure the Android NDK
+        run: |
+          set -euo pipefail
+          if [ -d "$ANDROID_HOME/ndk/27.2.12479018" ]; then
+            echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+            echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+          else
+            LATEST_NDK="$(find "$ANDROID_HOME/ndk" -maxdepth 1 -mindepth 1 -type d | sort -V | tail -n 1)"
+            echo "ANDROID_NDK_HOME=$LATEST_NDK" >> "$GITHUB_ENV"
+            echo "NDK_HOME=$LATEST_NDK" >> "$GITHUB_ENV"
+          fi
+
+      - name: Render the temporary launcher icon
+        run: |
+          set -euo pipefail
+          python3 ours/tools/make_icon.py "$GITHUB_WORKSPACE/app-icon.png"
+          ls -l "$GITHUB_WORKSPACE/app-icon.png"
+
+      - name: Build the APK
+        run: |
+          set -o pipefail
+          cd artcraft
+          mkdir -p logs output
+          bash build.sh -effectcraft --noupdate \
+            -appname="${APP_NAME}" \
+            -appicon="$GITHUB_WORKSPACE/app-icon.png" \
+            -packagename="${{ inputs.package || 'com.artcraft.effectcraft.sx' }}" 2>&1 | tee logs/effectcraft-build.log
+
+      - name: Save the signing key
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            artcraft/keys/artcraft-builder.jks
+            artcraft/keys/.keystore-password
+          key: ours-effectcraft-signing-v1
+
+      - name: Upload the APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: effectcraft-apk
+          path: artcraft/output/*.apk
+          if-no-files-found: error
+
+      - name: Upload the build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: artcraft/logs/*.log
+          if-no-files-found: ignore
+
+      - name: Publish a prerelease with the APK
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ours-${{ github.run_number }}
+          name: EffectCraft Android (ours) build ${{ github.run_number }}
+          body: |
+            Built from upstream storytold/effectcraft at ${{ inputs.tag || 'v0.24.1' }} with the artcraft-android builder.
+            No third-party patch pipeline, no account gate.
+          prerelease: true
+          files: artcraft/output/*.apk
