@@ -21,7 +21,7 @@ NEW = '''            ui.add_space(8.0);
             ui.separator();
             ui.label(egui::RichText::new("工程分享").strong());
             ui.label(
-                egui::RichText::new("打包后保存在 DCIM/EffectCraft；分享到 QQ 请在文件管理器里发送那个 zip。").weak(),
+                egui::RichText::new("打包后保存在 DCIM/EffectCraft；点「完整工程分享」会弹出系统分享面板，可发给任意 App。").weak(),
             );
             let base = "/storage/emulated/0/DCIM/EffectCraft";
             if ui.button("完整导出工程（包含素材）").clicked() {
@@ -30,11 +30,14 @@ NEW = '''            ui.add_space(8.0);
                     Err(e) => app.ui.status = format!("打包失败：{e}"),
                 }
             }
-            if ui.button("完整打包并分享到 QQ").clicked() {
+            if ui.button("完整工程分享").clicked() {
                 match crate::menus::invoke(app, ui.ctx(), "ours.exportProjectZip", serde_json::json!({"media": true})) {
                     Ok(r) => {
                         let zip = r.get("zip").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                        app.ui.status = format!("已打包：{zip}（用文件管理器发送到 QQ）");
+                        match crate::menus::invoke(app, ui.ctx(), "ours.shareFile", serde_json::json!({"path": zip})) {
+                            Ok(_) => app.ui.status = "已打包，正在打开分享面板…".into(),
+                            Err(e) => app.ui.status = format!("已打包：{zip}（分享面板失败：{e}）"),
+                        }
                     }
                     Err(e) => app.ui.status = format!("打包失败：{e}"),
                 }
