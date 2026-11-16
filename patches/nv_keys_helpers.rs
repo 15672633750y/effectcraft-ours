@@ -26,13 +26,13 @@ fn transform_keys(node: &Value) -> Vec<(&'static str, &'static str, Vec<(f64, Va
             let v = if dims == 2 {
                 let g = |a: &str, b: &str| k.get(a).and_then(Value::as_f64).or_else(|| k.get(b).and_then(Value::as_f64));
                 match (g("vx", "x"), g("vy", "y")) {
-                    (Some(x), Some(y)) => Value::Vec2([x, y]),
+                    (Some(x), Some(y)) => json!([x, y]),
                     _ => continue,
                 }
             } else {
                 match k.get("_y").and_then(Value::as_f64) {
-                    Some(v) if path == "transform/opacity" => Value::Scalar(v * 100.0),
-                    Some(v) => Value::Scalar(v),
+                    Some(v) if path == "transform/opacity" => json!(v * 100.0),
+                    Some(v) => json!(v),
                     None => continue,
                 }
             };
