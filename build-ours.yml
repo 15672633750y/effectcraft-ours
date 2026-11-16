@@ -10,7 +10,7 @@ on:
       package:
         description: 'Android package name (so builds can be installed side by side)'
         required: false
-        default: 'com.artcraft.effectcraft.sx'
+        default: 'com.shimoveaex.effects'
       patches:
         description: 'Apply our patches (yes/no). Use no for a test build of a bare upstream tag'
         required: false
@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 120
     env:
-      APP_NAME: 'EffectCraft Sx'
+      APP_NAME: 'ShimoveAex'
       ARTCRAFT_BUILD_TOOLS_VERSION: '35.0.0'
       CARGO_PROFILE_RELEASE_CODEGEN_UNITS: '16'
       CARGO_PROFILE_RELEASE_LTO: 'false'
