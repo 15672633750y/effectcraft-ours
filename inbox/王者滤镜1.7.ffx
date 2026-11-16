@@ -1,0 +1,85 @@
+{
+  "name": "王者滤镜 1.7（AE 数值复刻）",
+  "note": "数值来自 AE 效果控件截图：三条彩×2 + 暗角 + 锐化 + 钝化蒙版 + 色相/饱和度",
+  "effects": [
+    {
+      "effect": "S_VintageColor3Strip",
+      "params": {
+        "amount": 1.0,
+        "keyLayerDensity": 0.1,
+        "brightness": 1.0,
+        "saturation": 0.64,
+        "offsetDarks": 0.0,
+        "grainAmp": 0.0,
+        "grainBlur": 0.0,
+        "blurMask": 12.0,
+        "invertMask": false
+      }
+    },
+    {
+      "effect": "S_VintageColor3Strip",
+      "params": {
+        "amount": 0.5,
+        "keyLayerDensity": 0.3,
+        "brightness": 1.15,
+        "saturation": 0.64,
+        "offsetDarks": 0.0,
+        "grainAmp": 0.0,
+        "grainBlur": 0.0,
+        "blurMask": 12.0,
+        "invertMask": false
+      }
+    },
+    {
+      "effect": "S_Vignette",
+      "params": {
+        "effect": 0,
+        "centerXY": [
+          960.0,
+          540.0
+        ],
+        "squareness": 0.0,
+        "radius": 1.03,
+        "relHeight": 0.75,
+        "relWidth": 1.08,
+        "rotate": 0.0,
+        "edgeSoftness": 1.0,
+        "smoothCurve": 0.4,
+        "color": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "opacity": 0.5,
+        "blurAmount": 0.0,
+        "blurInside": true,
+        "sourceBrightness": 1.02,
+        "combine": 0
+      }
+    },
+    {
+      "effect": "ec.blur.sharpen",
+      "params": {
+        "amount": 12.0
+      }
+    },
+    {
+      "effect": "ec.blur.unsharp",
+      "params": {
+        "amount": 4.0,
+        "radius": 120.0,
+        "threshold": 0.0
+      }
+    },
+    {
+      "effect": "ec.color.huesaturation",
+      "params": {
+        "channelControl": 0,
+        "hue": 0.0,
+        "saturation": -5.0,
+        "lightness": 0.0
+      }
+    }
+  ]
+}

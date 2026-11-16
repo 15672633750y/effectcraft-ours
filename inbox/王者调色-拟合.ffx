@@ -1,0 +1,29 @@
+{
+  "name": "王者调色（拟合）",
+  "note": "颜色=二次多项式(57,600 像素对拟合)，径向=实测(中心+6%/边缘-14%)，再套锐化12、色相饱和度-5",
+  "effects": [
+    {
+      "effect": "ec.color.aefit",
+      "params": {
+        "strength": 1.0,
+        "centerGain": 1.06,
+        "edgeFalloff": 0.556
+      }
+    },
+    {
+      "effect": "ec.blur.sharpen",
+      "params": {
+        "amount": 12.0
+      }
+    },
+    {
+      "effect": "ec.color.huesaturation",
+      "params": {
+        "channelControl": 0,
+        "hue": 0.0,
+        "saturation": -5.0,
+        "lightness": 0.0
+      }
+    }
+  ]
+}
