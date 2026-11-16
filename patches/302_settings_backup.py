@@ -78,11 +78,11 @@ def main() -> None:
         raise SystemExit(f"hook anchor: {src.count(HOOK)}")
     src = src.replace(HOOK, "        installCrashLogger();\n        restoreSettingsBackup();\n", 1)
     # 在 onDestroy 之前插入保存逻辑 + 方法体
-    anchor = "    protected void onDestroy() {"
+    anchor = "    @Override\n    protected void onDestroy() {"
     if src.count(anchor) != 1:
         raise SystemExit(f"onDestroy anchor: {src.count(anchor)}")
     src = src.replace(anchor, FN + "\n" + anchor, 1)
-    src = src.replace("    protected void onDestroy() {", "    protected void onDestroy() {\n        saveSettingsBackup();", 1)
+    src = src.replace(anchor, "    @Override\n    protected void onDestroy() {\n        saveSettingsBackup();", 1)
     path.write_text(src, encoding="utf-8")
     print("settings are mirrored to DCIM/EffectCraft/settings.json")
 
