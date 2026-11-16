@@ -79,7 +79,10 @@ FILE_OLD = '''    // EFFECTCRAFT_OURS_IMPORT_EXT_V1 — 剪映/CapCut 草稿与 
 '''
 FILE_NEW = '''    // EFFECTCRAFT_OURS_IMPORT_EXT_V1 — 剪映/CapCut 草稿与 Nuke 脚本：导入它们引用的媒体
     // EFFECTCRAFT_OURS_FFX_IMPORT_V1 — .ffx 效果预设：把效果套到选中图层
-    let (ffx, rest): (Vec<String>, Vec<String>) = paths.into_iter().partition(|x| x.to_ascii_lowercase().ends_with(".ffx"));
+    let (ffx, rest): (Vec<String>, Vec<String>) = paths.into_iter().partition(|x| {
+        let l = x.to_ascii_lowercase();
+        l.ends_with(".ffx") || l.ends_with(".gp")
+    });
     let (recipes, media_paths): (Vec<String>, Vec<String>) = rest.into_iter().partition(|x| super::import_ext::is_recipe_path(x));
     paths = media_paths;
     for preset in ffx {
