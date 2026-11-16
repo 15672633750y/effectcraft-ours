@@ -108,9 +108,9 @@ END_NEW = '''    // EFFECTCRAFT_OURS_NV_SOLIDS_V1 — 纯色层：新建纯色�
             && let Some(comp) = s.project.comp_mut(cid)
             && let Some(l) = comp.layers.iter_mut().find(|l| l.id.0 == lid)
         {
-            l.start_time = super::Tick::from_seconds_f64(pos);
-            l.in_point = super::Tick::from_seconds_f64(pos);
-            l.out_point = super::Tick::from_seconds_f64(pos + len);
+            l.start_time = effectcraft_time::Tick::from_seconds_f64(pos);
+            l.in_point = effectcraft_time::Tick::from_seconds_f64(pos);
+            l.out_point = effectcraft_time::Tick::from_seconds_f64(pos + len);
         }
         solids_made += 1;
     }
