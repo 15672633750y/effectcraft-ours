@@ -49,6 +49,20 @@ fn ffx_param(name: &str) -> Option<(&'static str, bool)> {
         "Show" => ("show", false),
         "Effect" => ("effect", false),
         "Combine" => ("combine", false),
+        "Mask Use" | "MaskUse" => ("maskUse", false),
+        "Blur Mask" | "BlurMask" => ("blurMask", true),
+        "Invert Mask" | "InvertMask" => ("invertMask", false),
+        "Grain Amp" | "GrainAmp" => ("grainAmp", true),
+        "Grain Blur" | "GrainBlur" => ("grainBlur", false),
+        "Key Layer Density" | "KeyLayerDensity" => ("keyLayerDensity", true),
+        "Rel Width" | "RelWidth" => ("relWidth", false),
+        "Rel Height" | "RelHeight" => ("relHeight", false),
+        "Edge Softness" | "EdgeSoftness" => ("edgeSoftness", false),
+        "Smooth Curve" | "SmoothCurve" => ("smoothCurve", true),
+        "Center XY" | "CenterXY" => ("centerXY", false),
+        "Source Brightness" | "SourceBrightness" => ("sourceBrightness", true),
+        "Blur Amount" | "BlurAmount" => ("blurAmount", false),
+        "Blur Inside" | "BlurInside" => ("blurInside", false),
         _ => return None,
     })
 }
@@ -65,9 +79,13 @@ fn apply_ffx_values(s: &mut Session, effect_id: &str, values: &[(String, Vec<u8>
         if nums.is_empty() {
             continue;
         }
-        // 枚举参数（Show / Effect / Combine）在 RIFX 里是 4 字节整数，不是 float
+        // 枚举/布尔参数（Show / Effect / Combine / Invert Mask…）在 RIFX 里是 4 字节整数
         let enumeration = matches!(param, "show" | "effect" | "combine");
-        let value = if enumeration {
+        let boolean = matches!(param, "invertMask" | "blurInside");
+        let value = if boolean {
+            let v = u32::from_be_bytes([raw[0], raw[1], raw[2], raw[3]]);
+            json!(v != 0)
+        } else if enumeration {
             let v = u32::from_be_bytes([raw[0], raw[1], raw[2], raw[3]]);
             json!(v.min(15))
         } else if nums.len() >= 3 {
