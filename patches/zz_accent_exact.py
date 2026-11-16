@@ -13,11 +13,11 @@ from pathlib import Path
 MARKER = "EFFECTCRAFT_OURS_ACCENT_EXACT_V1"
 
 EDITS = [
-    ("            t.row_selected = t.row.lerp_to_gamma(rgb, 0.38);",
+    ("            t.row_selected = t.row.lerp_to_gamma(rgb, 0.58);",
      "            t.row_selected = Tokens::for_kind(kind).row_selected;"),
-    ("            t.tl_graph_selected = t.tl_bg.lerp_to_gamma(rgb, 0.30);",
+    ("            t.tl_graph_selected = t.tl_bg.lerp_to_gamma(rgb, 0.50);",
      "            t.tl_graph_selected = Tokens::for_kind(kind).tl_graph_selected;"),
-    ("            t.fx_header_active = t.fx_header.lerp_to_gamma(rgb, 0.42);",
+    ("            t.fx_header_active = t.fx_header.lerp_to_gamma(rgb, 0.68);",
      "            t.fx_header_active = Tokens::for_kind(kind).fx_header_active;"),
 ]
 
