@@ -12,7 +12,10 @@ from pathlib import Path
 
 MARKER = "EFFECTCRAFT_OURS_SETTINGS_BACKUP_V1"
 
-HOOK = """        installCrashLogger();
+# 补丁按文件名字典序应用，`302_...` 排在 `99_crash_log.py` **之前**（ASCII 里 '3' < '9'），
+# 那时 `installCrashLogger()` 还没被插入，用它当锚点会 0 次命中、整条构建失败。
+# 改用 onCreate 里一定存在的一行，恢复设置的调用插在它后面，不依赖别的补丁。
+HOOK = """        super.onCreate(savedInstanceState);
 """
 
 FN = r'''
@@ -76,7 +79,7 @@ def main() -> None:
         return
     if src.count(HOOK) != 1:
         raise SystemExit(f"hook anchor: {src.count(HOOK)}")
-    src = src.replace(HOOK, "        installCrashLogger();\n        restoreSettingsBackup();\n", 1)
+    src = src.replace(HOOK, HOOK + "        restoreSettingsBackup();\n", 1)
     # 在 onDestroy 之前插入保存逻辑 + 方法体
     anchor = "    @Override\n    protected void onDestroy() {"
     if src.count(anchor) != 1:
