@@ -25,7 +25,8 @@ permissions:
 
 concurrency:
   group: ours-${{ github.ref }}-${{ inputs.tag }}-${{ inputs.package }}
-  cancel-in-progress: true
+  # 不再互相取消：每次推送不会再打断正在编译的那一版
+  cancel-in-progress: false
 
 jobs:
   build:
