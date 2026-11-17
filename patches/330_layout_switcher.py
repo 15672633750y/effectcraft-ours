@@ -30,7 +30,7 @@ SIG = (
 
 METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的「布局」与四套布局切换面板
     // EFFECTCRAFT_OURS_LAYOUT_PREVIEW_V1 — 用真实布局树画卡片里的缩略预览
-    fn ours_layout_mini(p: &egui::Painter, r: Rect, node: &crate::dock::Node<crate::dock::PanelKind>, tint: crate::theme::Color32, base: crate::theme::Color32) {
+    fn ours_layout_mini(p: &egui::Painter, r: egui::Rect, node: &crate::dock::Node<crate::dock::PanelKind>, tint: egui::Color32, base: egui::Color32) {
         use crate::dock::PanelKind::*;
         let gap = 2.0;
         match node {
@@ -41,7 +41,7 @@ METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的�
                     Composition | Layer | Preview => {
                         p.rect_stroke(r.shrink(1.0), 2.0, egui::Stroke::new(1.0, tint), egui::StrokeKind::Inside);
                         let inner = r.shrink(r.width().min(r.height()) * 0.18);
-                        p.rect_filled(inner, 1.0, crate::theme::Color32::from_black_alpha(210));
+                        p.rect_filled(inner, 1.0, egui::Color32::from_black_alpha(210));
                         let c = inner.center();
                         let s = inner.width().min(inner.height()) * 0.20;
                         p.add(egui::Shape::convex_polygon(
@@ -55,14 +55,14 @@ METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的�
                             let x = r.min.x + 3.0 + (r.width() - 6.0) * (i as f32 / 5.0);
                             p.line_segment([egui::pos2(x, r.min.y + 2.0), egui::pos2(x, r.max.y - 2.0)], egui::Stroke::new(1.0, tint.gamma_multiply(0.25)));
                         }
-                        let bar = Rect::from_min_size(egui::pos2(r.min.x + 3.0, r.min.y + r.height() * 0.42), egui::vec2(r.width() - 6.0, r.height() * 0.34));
+                        let bar = egui::Rect::from_min_size(egui::pos2(r.min.x + 3.0, r.min.y + r.height() * 0.42), egui::vec2(r.width() - 6.0, r.height() * 0.34));
                         p.rect_filled(bar, 1.0, tint.gamma_multiply(0.65));
                     }
                     _ => {
                         for i in 0..3 {
                             let y = r.min.y + 4.0 + i as f32 * (r.height() - 8.0) / 3.0;
                             let w = (r.width() - 8.0) * (0.82 - 0.14 * i as f32);
-                            p.rect_filled(Rect::from_min_size(egui::pos2(r.min.x + 4.0, y), egui::vec2(w, 2.0)), 1.0, tint.gamma_multiply(0.45));
+                            p.rect_filled(egui::Rect::from_min_size(egui::pos2(r.min.x + 4.0, y), egui::vec2(w, 2.0)), 1.0, tint.gamma_multiply(0.45));
                         }
                     }
                 }
@@ -76,13 +76,13 @@ METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的�
                 match axis {
                     crate::dock::SplitAxis::Horizontal => {
                         let w = (r.width() - gap) * frac;
-                        Self::ours_layout_mini(p, Rect::from_min_size(r.min, egui::vec2(w, r.height())), first, tint, base);
-                        Self::ours_layout_mini(p, Rect::from_min_size(egui::pos2(r.min.x + w + gap, r.min.y), egui::vec2(r.width() - w - gap, r.height())), second, tint, base);
+                        Self::ours_layout_mini(p, egui::Rect::from_min_size(r.min, egui::vec2(w, r.height())), first, tint, base);
+                        Self::ours_layout_mini(p, egui::Rect::from_min_size(egui::pos2(r.min.x + w + gap, r.min.y), egui::vec2(r.width() - w - gap, r.height())), second, tint, base);
                     }
                     _ => {
                         let h = (r.height() - gap) * frac;
-                        Self::ours_layout_mini(p, Rect::from_min_size(r.min, egui::vec2(r.width(), h)), first, tint, base);
-                        Self::ours_layout_mini(p, Rect::from_min_size(egui::pos2(r.min.x, r.min.y + h + gap), egui::vec2(r.width(), r.height() - h - gap)), second, tint, base);
+                        Self::ours_layout_mini(p, egui::Rect::from_min_size(r.min, egui::vec2(r.width(), h)), first, tint, base);
+                        Self::ours_layout_mini(p, egui::Rect::from_min_size(egui::pos2(r.min.x, r.min.y + h + gap), egui::vec2(r.width(), r.height() - h - gap)), second, tint, base);
                     }
                 }
             }
@@ -243,7 +243,7 @@ METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的�
                 let tint = Color32::from_rgba_unmultiplied(150, 205, 235, (alpha as f32 * 0.9) as u8);
                 let base = Color32::from_rgba_unmultiplied(40, 46, 56, alpha);
                 if let Some(root) = crate::dock::ours_layout(workspace).root.as_ref() {
-                    ours_layout_mini(ui.painter(), th, root, tint, base);
+                    Self::ours_layout_mini(ui.painter(), th, root, tint, base);
                 }
                 // 名称 + 说明
                 let np = Pos2::new(th.max.x + 12.0, r.min.y + 20.0);
