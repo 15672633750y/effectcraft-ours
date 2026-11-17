@@ -72,16 +72,27 @@ METHODS = r'''    // EFFECTCRAFT_OURS_LAYOUT_ROBUST_V1 — 「布局」只摆放
         let id = self.ui.workspace.clone();
         let ours = Self::OURS_LAYOUT_IDS.contains(&id.as_str());
         let builtin = crate::dock::WORKSPACES.contains(&id.as_str());
-        let target = if ours {
-            id.clone()
-        } else if builtin {
-            return;
-        } else {
-            "classic".to_string()
-        };
-        if !self.ours_apply_layout(&target) && target != "classic" {
-            // 连自己的 id 都建不出来：再退一步，回到经典，保证界面不会空
+        // 从 prefs 恢复出来的 dock 只要是完整的，就一直尊重它（用户可能调过分隔条）。
+        // 只有“名字坏掉”或者“dock 是空树”时才重建，绝不把好好的布局重置掉。
+        let dock_ok = self.ui.dock.layout.root.is_some() || !self.ui.dock.layout.floating.is_empty();
+        if ours {
+            if dock_ok {
+                return;
+            }
+            if self.ours_apply_layout(&id) {
+                return;
+            }
             let _ = self.ours_apply_layout("classic");
+            return;
+        }
+        if builtin {
+            return;
+        }
+        // 名字缺失 / 未知 / 损坏 / 旧中文值：一律按经典布局启动，绝不启动到空界面。
+        self.ui.workspace = "classic".to_string();
+        if !dock_ok && !self.ours_apply_layout("classic") {
+            // 连经典都建不出来：退回唯一保证非空的两块布局
+            let _ = self.ours_apply_layout("simple");
         }
     }
 

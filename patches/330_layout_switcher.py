@@ -118,7 +118,8 @@ METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的�
             }
         };
         let r = Rect::from_min_size(egui::pos2(area.max.x - 8.0 - 44.0, area.min.y + 8.0), Vec2::new(44.0, 26.0));
-        let resp = ui.interact(r, Id::unique("layout-entry-canvas"), Sense::click());
+        // 手机上 44×26 偏小：视觉不变，热区外扩 4px（52×34），更好点中。
+        let resp = ui.interact(r.expand(4.0), Id::unique("layout-entry-canvas"), Sense::click());
         let p = ui.painter().with_clip_rect(area);
         let base = if resp.hovered() { t.hover } else { t.switch_well };
         p.rect_filled(r, 4.0, Color32::from_rgba_unmultiplied(base.r(), base.g(), base.b(), (255.0 * fade) as u8));
@@ -291,8 +292,15 @@ METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的�
                 ui.painter().rect_filled(r, 12.0, fill);
                 let line = if resp.hovered() { t.accent.gamma_multiply(ease) } else { Color32::from_rgba_unmultiplied(255, 255, 255, (alpha as f32 * 0.22) as u8) };
                 ui.painter().rect_stroke(r, 12.0, Stroke::new(1.0, line), StrokeKind::Inside);
-                // 当前布局：三圈强调色描边（跟快捷键面板的多选发光一致）
-                if self.ui.workspace == workspace {
+                // 当前布局：三圈强调色描边（跟快捷键面板的多选发光一致）。
+                // 从旧版本升上来时 workspace 还是 Default/未知：一律当作「经典」，别让四张卡
+                // 全都不高亮、让用户看不出现在用的是哪套。
+                let current = if Self::OURS_LAYOUT_IDS.contains(&self.ui.workspace.as_str()) {
+                    self.ui.workspace.clone()
+                } else {
+                    "classic".to_string()
+                };
+                if current == workspace {
                     let base = r.expand(1.5);
                     ui.painter().rect_stroke(base, 12.0, Stroke::new(1.5, t.accent.gamma_multiply(0.86 * ease)), StrokeKind::Outside);
                     ui.painter().rect_stroke(base.expand(1.5), 12.0, Stroke::new(1.2, t.accent.gamma_multiply(0.47 * ease)), StrokeKind::Outside);
