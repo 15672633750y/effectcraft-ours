@@ -374,5 +374,20 @@ https://github.com/15672633750y/effectcraft-ours/releases/tag/ours-890
 2. 新 clone 的源码 mtime 全是新的，cargo 判 fresh 失败 → 必须在打补丁前把 mtime 归一
 3. concurrency 同组排队 → 新推送要等前一个编完
 
+### TLS 栈已验证（894 构建日志，2026-11-18 07:30）
+**ours-894 构建成功**（16.5 分钟）→ ureq 3.5.0 + rustls 0.23 + ring 在 Android/aarch64 上
+交叉编译通过，**0 warning**。日志里 `rustls` / `ring` / `webpki` / `platform-verifier` 都在，
+`openssl` 出现 0 次（不需要系统 OpenSSL）。
+
+关键结论：`ureq::tls::TlsConfig::default()` 的 `root_certs` 是 **`RootCerts::WebPki`**
+（内置 CA 列表，纯 Rust），**不走 Android 平台验证器**，所以运行时不需要 JNI 初始化。
+→ 手机上 `GET /health` 只要能发出去就能握手成功。
+
+### 当前队列（2026-11-18 07:30）
+- **ours-894 已出包**：有 HTTP 客户端，但**没有** health 调试入口（342 晚了一步）
+- **ours-898 在跑**：含 health 调试入口（长按版本号）+ health 的 ok/db_error 校验
+  + 布局入口每帧绘制（修掉「点下去按钮瞬间消失、没有发光/淡出动画」）
+- 之后还有 `341_account_ui.py` 未推：工具栏最左账号槽 + 登录/注册面板 + 资料卡
+
 ### 构建耗时实测
 888=10 分钟、890=17.5 分钟（同一量级改动）→ 免费 runner 波动很大，**缓存是唯一稳定手段**。
