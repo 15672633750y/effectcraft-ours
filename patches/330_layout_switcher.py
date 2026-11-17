@@ -22,6 +22,8 @@ MARKER = "EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1"
 
 CALL_OLD = "        curves_editor(self, ui, full);\n    }\n"
 CALL_NEW = "        curves_editor(self, ui, full);\n        self.draw_layout_switcher(ui, full);\n    }\n"
+BODY_OLD = "        self.dock_area(ui, body);\n"
+BODY_NEW = "        ui.data_mut(|d| d.insert_temp(egui::Id::new(\"ours-dock-body\"), body));\n        self.dock_area(ui, body);\n"
 
 SIG = (
     "    /// The status message or the latest toast, bottom left (`lift` points higher while the\n"
@@ -90,10 +92,66 @@ METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的�
         }
     }
 
+    // EFFECTCRAFT_OURS_CANVAS_LAYOUT_ENTRY_V2 — 画布内部右上角的「布局」按钮。
+    // 与工具栏的「曲线 / 插件」同款：44×26、4px 圆角、switch_well 底、12pt 字。
+    // 展开后先发光 120ms 再淡出 220ms，然后完全不画；展开期间不接受点击
+    // （所以打开它的那一次点击不可能再被它抢走）。
+    fn ours_layout_entry(&mut self, ui: &mut egui::Ui, area: egui::Rect) {
+        use egui::{Align2, Color32, Id, Rect, Sense, Stroke, StrokeKind, Vec2};
+        if area.width() < 90.0 || area.height() < 52.0 {
+            return;
+        }
+        let t = self.tokens;
+        let now = self.now;
+        let open_id = Id::new("layout-open-at");
+        let open_at: Option<f64> = ui.data(|d| d.get_temp(open_id));
+        let (fade, glow) = match open_at {
+            None => (1.0_f32, false),
+            Some(at) => {
+                let e = (now - at) as f32;
+                if e >= 0.34 {
+                    return;
+                }
+                ui.ctx().request_repaint();
+                let fade = if e < 0.12 { 1.0 } else { (1.0 - (e - 0.12) / 0.22).clamp(0.0, 1.0) };
+                (fade, e < 0.12)
+            }
+        };
+        let r = Rect::from_min_size(egui::pos2(area.max.x - 8.0 - 44.0, area.min.y + 8.0), Vec2::new(44.0, 26.0));
+        let resp = ui.interact(r, Id::unique("layout-entry-canvas"), Sense::click());
+        let p = ui.painter().with_clip_rect(area);
+        let base = if resp.hovered() { t.hover } else { t.switch_well };
+        p.rect_filled(r, 4.0, Color32::from_rgba_unmultiplied(base.r(), base.g(), base.b(), (255.0 * fade) as u8));
+        if glow {
+            p.rect_stroke(r.expand(1.5), 5.0, Stroke::new(1.5, t.accent.gamma_multiply(0.80)), StrokeKind::Outside);
+            p.rect_stroke(r.expand(3.0), 6.0, Stroke::new(1.0, t.accent.gamma_multiply(0.38)), StrokeKind::Outside);
+        }
+        p.text(r.center(), Align2::CENTER_CENTER, "布局", Tokens::ui(12.0), Color32::from_rgba_unmultiplied(t.text.r(), t.text.g(), t.text.b(), (255.0 * fade) as u8));
+        self.auto.add("layout.switcher", r, "布局");
+        if open_at.is_none() && resp.clicked() {
+            ui.data_mut(|d| d.insert_temp(open_id, now));
+            ui.data_mut(|d| d.insert_temp(Id::new("layout-last-activity"), now));
+            ui.ctx().request_repaint();
+        }
+    }
+
     fn draw_layout_switcher(&mut self, ui: &mut egui::Ui, full: egui::Rect) {
         use egui::{Color32, Key, Pos2, Rect, Sense, Stroke, StrokeKind, Vec2};
         let t = self.tokens;
         let now = self.now;
+        // 入口：刚被点开的那一帧只画发光就返回，遮罩和卡片下一帧再来——
+        // “打开它的那一次点击”因此永远不会被同一帧的遮罩判成点空白。
+        let was_open = ui.data(|d| d.get_temp::<f64>(egui::Id::new("layout-open-at")));
+        if was_open.is_none() {
+            let area = ui
+                .data(|d| d.get_temp::<egui::Rect>(egui::Id::new("ours-canvas-rect")))
+                .or_else(|| ui.data(|d| d.get_temp::<egui::Rect>(egui::Id::new("ours-dock-body"))))
+                .unwrap_or(full);
+            self.ours_layout_entry(ui, area);
+            if ui.data(|d| d.get_temp::<f64>(egui::Id::new("layout-open-at"))).is_some() {
+                return;
+            }
+        }
         let open_id = egui::Id::new("layout-open-at");
         let chosen_id = egui::Id::new("layout-chosen");
         // EFFECTCRAFT_OURS_LAYOUT_ROBUST_V1 — 每次会话第一次画「布局」时归一化一次：
@@ -181,15 +239,18 @@ METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的�
 
         // —— 展开状态 ——
         if let Some(at) = open_at {
-            // 8 秒没动作自动收起，避免任何情况下卡住
-            if now - at > 8.0 {
+            // 8 秒没有任何操作才自动收起（有操作就一直留着），避免任何情况下卡住
+            let idle_id = egui::Id::new("layout-last-activity");
+            if ui.input(|i| i.pointer.any_down() || i.pointer.delta() != egui::Vec2::ZERO) {
+                ui.data_mut(|d| d.insert_temp(idle_id, now));
+            }
+            let last_activity: f64 = ui.data(|d| d.get_temp(idle_id)).unwrap_or(at);
+            if now - last_activity > 8.0 {
                 ui.data_mut(|d| d.remove::<f64>(open_id));
                 return;
             }
             ui.ctx().request_repaint();
             let e = (now - at) as f32;
-            // 「布局」先亮一下再淡出（120ms 亮、180ms 淡）
-            let entry_fade = if e < 0.12 { 0.0 } else { (1.0 - (e - 0.12) / 0.18).clamp(0.0, 1.0) };
             let dim = (e / 0.2).clamp(0.0, 1.0);
             ui.painter().rect_filled(full, 0.0, Color32::from_black_alpha((196.0 * dim) as u8));
 
@@ -256,8 +317,17 @@ METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的�
                 }
             }
             // 取消：Esc 或点空白处（点卡片之外）。
-            // 刚点开的前 250ms 不认「点空白」——否则打开它的那一次点击会立刻把它关掉。
+            // 三重保护，确保打开它的那一次点击绝不会立刻把它关掉：
+            //   1) 打开后 250ms 内不认“点空白”；
+            //   2) 这次点按的按下时刻必须晚于打开时刻（layout-last-press）；
+            //   3) 指针还在卡片上时不算。
             let settling = (now - at) < 0.25;
+            let press_id = egui::Id::new("layout-last-press");
+            if ui.input(|i| i.pointer.any_pressed()) {
+                ui.data_mut(|d| d.insert_temp(press_id, now));
+            }
+            let press_at: f64 = ui.data(|d| d.get_temp(press_id)).unwrap_or(0.0);
+            let fresh_press = press_at > at + 0.10;
             let esc = ui.input(|i| i.key_pressed(Key::Escape));
             let bg_click = ui.input(|i| i.pointer.primary_clicked())
                 && ui.input(|i| i.pointer.interact_pos()).is_some_and(|p| {
@@ -267,7 +337,7 @@ METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的�
                         && p.y <= y0 + total + 12.0;
                     !inside
                 });
-            if esc || (bg_click && !hovered_any && !settling) {
+            if esc || (bg_click && !hovered_any && fresh_press && !settling) {
                 ui.data_mut(|d| d.remove::<f64>(open_id));
                 return;
             }
@@ -281,16 +351,10 @@ METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的�
                     self.ui.status = "布局切换失败，已保持当前布局（详见 DCIM/EffectCraft/layout-error.txt）".into();
                 }
             }
-            // 「布局」还在淡出中时，补画一次余影
-            if entry_fade > 0.01 {
-                let galley = ui.painter().layout_no_wrap("布局".to_string(), Tokens::ui(15.0), t.text_dim);
-                let r = Rect::from_min_size(Pos2::new(full.max.x - 10.0 - galley.size().x, full.min.y + 52.0), galley.size());
-                ui.painter().galley(r.min, galley, Color32::from_rgba_unmultiplied(200, 205, 215, (entry_fade * 200.0) as u8));
-            }
             return;
         }
 
-        // 收起状态：入口由预览区自己画（`panels/viewer.rs` 的 phase_press），这里什么都不画
+        // 收起状态：入口已经在上面画过了（画布内部右上角 8px）
     }
 
 '''
@@ -306,6 +370,9 @@ def main() -> None:
     if src.count(CALL_OLD) != 1:
         raise SystemExit(f"call anchor: {src.count(CALL_OLD)}")
     src = src.replace(CALL_OLD, CALL_NEW, 1)
+    if src.count(BODY_OLD) != 1:
+        raise SystemExit(f"body anchor: {src.count(BODY_OLD)}")
+    src = src.replace(BODY_OLD, BODY_NEW, 1)
     if src.count(SIG) != 1:
         raise SystemExit(f"method anchor: {src.count(SIG)}")
     src = src.replace(SIG, METHOD + SIG, 1)

@@ -1,63 +1,85 @@
 #!/usr/bin/env python3
-"""三个实测问题的修复（877 之后的 878 批）。
+"""布局真正的重排 + 入口位置（APP-交接 2.1 / 2.3）。
 
-1) 「布局」入口画到窗口最右上角（顶栏外面）→ 改成画进预览区内部，偏移 8px。
-   frame.rs 里那套只在展开时画遮罩/卡片；入口由 `panels/viewer.rs::phase_press` 用 `v.area` 画。
+1) 「布局」入口不再自己画在预览区里，只把**画布矩形**记进 ctx data
+   （`ours-canvas-rect`），按钮由 frame.rs 的 `draw_layout_switcher` 统一画。
+   这样没有打开合成时按钮照样在，样式也和「曲线 / 插件」完全同款。
 
-2) 点击布局不重排：移动端没有这些 dock 工作区 → `dock::ours_layout()` 直接返回四套布局树
-   （经典 / 简易 / 专业 / 极简），点击时直接换 `app.ui.dock`。极简只有预览，项目面板和时间线一定消失。
+2) 点击布局不重排：移动端没有这些 dock 命名工作区 → `dock::ours_layout()` 直接返回四套
+   布局树，点击时直接换 `app.ui.dock`。比例按 APP-交接 2.3：
+   - 经典：上游默认工作区（项目 + 合成 + 属性 + 时间线）；万一它是空树，退回一个
+     最小可用布局，绝不给空界面
+   - 简易：没有项目面板，时间线压到 35%
+   - 专业：项目 | 合成 | 属性 三栏 + 下方时间线 45%
+   - 极简：只有合成预览（项目面板与时间线都消失）
 
-（原先的第 3 项「PNG 拖动贴边」已由用户取消，不再改 `phase_drag`。）
+（PNG 拖动贴边已由用户取消，本补丁不碰 phase_drag。）
 """
 from __future__ import annotations
 
 import os
 from pathlib import Path
 
-MARKER = "EFFECTCRAFT_OURS_FIX_LAYOUT_TOUCH_V1"
+MARKER = "EFFECTCRAFT_OURS_LAYOUT_REAL_V3"
 
 DOCK_ANCHOR = "#[cfg(test)]\n"
-DOCK_INSERT = '''/// EFFECTCRAFT_OURS_LAYOUT_REAL_V1 — 「布局」切换器用的四套布局（不依赖 dock 的命名工作区，
-/// 所以手机上切了一定重排）：经典 = 默认；简易 = 上下两块（预览 + 时间线）；
-/// 专业 = 项目/效果控件 + 预览 + 时间线；极简 = 只有预览（项目面板与时间线消失）。
+DOCK_INSERT = '''/// EFFECTCRAFT_OURS_LAYOUT_REAL_V3 — 「布局」切换器用的四套布局树。
+/// 只负责“摆放”，全部复用现有面板与渲染代码，不复制任何绘制逻辑：
+/// 经典 = 上游默认工作区；简易 = 上预览 + 下时间线（时间线 35%，无项目面板）；
+/// 专业 = 项目 | 预览 | 属性 三栏 + 下方时间线 45%；极简 = 只有预览。
 pub fn ours_layout(name: &str) -> Layout {
     use PanelKind::*;
     use SplitSize::*;
+    let simple = || Layout { root: Some(vsplit(Ratio(0.65), tabs(&[Composition], 0), tabs(&[Timeline], 0))), floating: Vec::new() };
     match name {
-        "simple" => Layout { root: Some(vsplit(Ratio(0.56), tabs(&[Composition], 0), tabs(&[Timeline], 0))), floating: Vec::new() },
+        "simple" => simple(),
         "pro" => Layout {
             root: Some(vsplit(
-                Ratio(0.58),
-                hsplit(FixedFirst(220.0), tabs(&[Project, EffectControls], 0), tabs(&[Composition], 0)),
+                Ratio(0.55),
+                hsplit(
+                    FixedFirst(190.0),
+                    tabs(&[Project], 0),
+                    hsplit(Ratio(0.70), tabs(&[Composition], 0), tabs(&[EffectControls], 0)),
+                ),
                 tabs(&[Timeline], 0),
             )),
             floating: Vec::new(),
         },
         "minimal" => Layout { root: Some(tabs(&[Composition], 0)), floating: Vec::new() },
-        _ => workspace("Default"),
+        _ => {
+            // 经典：上游的 Default 工作区。它要是不存在（以后改了名）就给一个最小可用布局，
+            // 绝不把用户丢到空界面。
+            let classic = workspace("Default");
+            if classic.root.is_some() { classic } else { simple() }
+        }
     }
 }
 
 '''
 
-ENTRY_INSERT = r'''    // EFFECTCRAFT_OURS_CANVAS_LAYOUT_ENTRY_V1 — 画布（预览区）内部右上角 8px 处的「布局」按钮，
-    // 外观与工具栏的「曲线 / 插件」一致（同 26px 高、4px 圆角、switch_well 底、12pt 字）。
-    // 展开时不画：否则打开它的那次点击会被遮罩判成“点空白”而立刻关掉。
-    if ui.data(|d| d.get_temp::<f64>(egui::Id::new("layout-open-at"))).is_none() {
-        let t = app.tokens;
-        let galley = painter.layout_no_wrap("布局".to_string(), Tokens::ui(12.0), t.text);
-        let btn_w = (galley.size().x + 22.0).max(44.0);
-        let r = Rect::from_min_size(pos2(v.area.max.x - 8.0 - btn_w, v.area.min.y + 8.0), vec2(btn_w, 26.0));
-        let resp = ui.interact(r, egui::Id::unique("layout-entry-canvas"), Sense::click());
-        painter.rect_filled(r, 4.0, if resp.hovered() { t.hover } else { t.switch_well });
-        painter.text(r.center(), egui::Align2::CENTER_CENTER, "布局", Tokens::ui(12.0), t.text);
-        app.auto.add("layout.switcher", r, "布局");
-        if resp.clicked() {
-            ui.data_mut(|d| d.insert_temp(egui::Id::new("layout-open-at"), app.now));
-            ui.ctx().request_repaint();
-        }
-    }
-'''
+VIEWER_ANCHOR = (
+    "    let t = app.tokens;\n"
+    "    let ctx = ui.ctx().clone();\n"
+    "    let Some(cid) = app.session.active_comp_id() else {\n"
+    "        empty_state(app, ui, rect);\n"
+    "        return;\n"
+    "    };\n"
+)
+VIEWER_NEW = (
+    "    let t = app.tokens;\n"
+    "    let ctx = ui.ctx().clone();\n"
+    "    // EFFECTCRAFT_OURS_CANVAS_RECT_V1 — 记下画布矩形，「布局」按钮由 frame.rs 贴在它的\n"
+    "    // 右上角。先按整个预览面板记一次（没有打开合成时也照样在），下面算完再收窄到画布。\n"
+    "    ctx.data_mut(|d| d.insert_temp(egui::Id::new(\"ours-canvas-rect\"), rect));\n"
+    "    let Some(cid) = app.session.active_comp_id() else {\n"
+    "        empty_state(app, ui, rect);\n"
+    "        return;\n"
+    "    };\n"
+)
+
+TAIL_ANCHOR = "    phase_tail(app, ui, &ectx, &mut v);\n}\n"
+TAIL_NEW = "    ui.data_mut(|d| d.insert_temp(egui::Id::new(\"ours-canvas-rect\"), v.area));\n    phase_tail(app, ui, &ectx, &mut v);\n}\n"
+
 
 def main() -> None:
     root = Path(os.environ["EFFECTCRAFT_DIR"]).resolve()
@@ -65,23 +87,24 @@ def main() -> None:
     # 1) dock 里加四套布局
     dock = root / "crates/ui-egui/src/dock.rs"
     src = dock.read_text(encoding="utf-8")
-    if "pub fn ours_layout(" not in src:
+    if MARKER not in src:
         if src.count(DOCK_ANCHOR) != 1:
             raise SystemExit(f"dock anchor: {src.count(DOCK_ANCHOR)}")
         dock.write_text(src.replace(DOCK_ANCHOR, DOCK_INSERT + DOCK_ANCHOR, 1), encoding="utf-8")
         print("dock: four layouts added")
 
-    # 2) 预览区里画入口
+    # 2) 预览区把画布矩形记下来（入口本身由 frame.rs 画）
     viewer = root / "crates/ui-egui/src/panels/viewer.rs"
     src = viewer.read_text(encoding="utf-8")
-    if "EFFECTCRAFT_OURS_CANVAS_LAYOUT_ENTRY_V1" not in src:
-        anchor = "    v.mods = mods;\n    v.space_pan = space_pan;\n    v.text_owns = text_owns;\n}\n"
-        if src.count(anchor) != 1:
-            raise SystemExit(f"phase_press anchor: {src.count(anchor)}")
-        src = src.replace(anchor, ENTRY_INSERT + anchor, 1)
-        print("viewer: layout entry inside the canvas")
-
-    viewer.write_text(src, encoding="utf-8")
+    if "EFFECTCRAFT_OURS_CANVAS_RECT_V1" not in src:
+        if src.count(VIEWER_ANCHOR) != 1:
+            raise SystemExit(f"viewer show-head anchor: {src.count(VIEWER_ANCHOR)}")
+        src = src.replace(VIEWER_ANCHOR, VIEWER_NEW, 1)
+        if src.count(TAIL_ANCHOR) != 1:
+            raise SystemExit(f"viewer tail anchor: {src.count(TAIL_ANCHOR)}")
+        src = src.replace(TAIL_ANCHOR, TAIL_NEW, 1)
+        viewer.write_text(src, encoding="utf-8")
+        print("viewer: canvas rect recorded for the layout entry")
 
 
 if __name__ == "__main__":

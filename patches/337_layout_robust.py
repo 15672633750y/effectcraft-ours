@@ -17,16 +17,39 @@ MARKER = "EFFECTCRAFT_OURS_LAYOUT_ROBUST_FN_V1"
 
 ANCHOR = "    fn draw_toast(&mut self, ui: &mut egui::Ui, full: egui::Rect, lift: f32) {\n"
 
+# 330 已经在 draw_inner 里插好这一句；这里把它包进 catch_unwind。
+SAFE_OLD = "        curves_editor(self, ui, full);\n        self.draw_layout_switcher(ui, full);\n"
+SAFE_NEW = (
+    "        curves_editor(self, ui, full);\n"
+    "        // EFFECTCRAFT_OURS_LAYOUT_SAFE_CALL_V1 — 布局面板的 panic 绝不冒泡到主循环：\n"
+    "        // 捕获一次就永久关掉这个面板（其它功能一个不少），并写 layout-error.txt。\n"
+    "        let layout_crashed = ui.data(|d| d.get_temp::<bool>(egui::Id::new(\"ours-layout-crashed\")).unwrap_or(false));\n"
+    "        if !layout_crashed\n"
+    "            && std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.draw_layout_switcher(ui, full))).is_err()\n"
+    "        {\n"
+    "            ui.data_mut(|d| d.insert_temp(egui::Id::new(\"ours-layout-crashed\"), true));\n"
+    "            ui.data_mut(|d| d.remove::<f64>(egui::Id::new(\"layout-open-at\")));\n"
+    "            self.ours_layout_error(\"switcher\", \"panic inside draw_layout_switcher\");\n"
+    "        }\n"
+)
+
 METHODS = r'''    // EFFECTCRAFT_OURS_LAYOUT_ROBUST_V1 — 「布局」只摆放面板；失败保持原布局，异常不冒泡。
     /// 我们自己的四个布局 id（顺序与切换器里的卡片一致）。
     pub(crate) const OURS_LAYOUT_IDS: [&'static str; 4] = ["classic", "simple", "pro", "minimal"];
 
-    /// 切到布局 `id`：成功返回 true。布局树在 `catch_unwind` 里构建，panic 也算失败。
-    /// 失败时**不动**当前布局，只记日志并把原因写到 `DCIM/EffectCraft/layout-error.txt`。
+    /// 切到布局 `id`：成功返回 true。布局树在 `catch_unwind` 里构建，panic 也算失败；
+    /// 空树同样算失败。失败时**不动**当前布局，只记日志并把原因写到
+    /// `DCIM/EffectCraft/layout-error.txt`。
     pub(crate) fn ours_apply_layout(&mut self, id: &str) -> bool {
         let built = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| crate::dock::ours_layout(id)));
         match built {
             Ok(layout) => {
+                // 空树（没有 root、也没有浮动窗口）会把界面变成一片空：当成失败处理，
+                // 保持当前画面不动，并留下证据。
+                if layout.root.is_none() && layout.floating.is_empty() {
+                    self.ours_layout_error(id, "layout tree is empty");
+                    return false;
+                }
                 self.ui.dock = crate::dock::Workspace::new(layout);
                 self.ui.workspace = id.to_string();
                 self.ui.maximized = None;
@@ -87,6 +110,9 @@ def main() -> None:
     if src.count(ANCHOR) != 1:
         raise SystemExit(f"anchor: {src.count(ANCHOR)}")
     src = src.replace(ANCHOR, METHODS + ANCHOR, 1)
+    if src.count(SAFE_OLD) != 1:
+        raise SystemExit(f"safe-call anchor: {src.count(SAFE_OLD)}")
+    src = src.replace(SAFE_OLD, SAFE_NEW, 1)
     path.write_text(src, encoding="utf-8")
     print("layout robustness: apply + normalize + error file")
 
