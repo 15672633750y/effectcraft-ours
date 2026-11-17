@@ -178,7 +178,9 @@ METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的�
                     clicked = Some((workspace, name));
                 }
             }
-            // 取消：Esc 或点空白处（点卡片之外）
+            // 取消：Esc 或点空白处（点卡片之外）。
+            // 刚点开的前 250ms 不认「点空白」——否则打开它的那一次点击会立刻把它关掉。
+            let settling = (now - at) < 0.25;
             let esc = ui.input(|i| i.key_pressed(Key::Escape));
             let bg_click = ui.input(|i| i.pointer.primary_clicked())
                 && ui.input(|i| i.pointer.interact_pos()).is_some_and(|p| {
@@ -188,7 +190,7 @@ METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的�
                         && p.y <= y0 + total + 12.0;
                     !inside
                 });
-            if esc || (bg_click && !hovered_any) {
+            if esc || (bg_click && !hovered_any && !settling) {
                 ui.data_mut(|d| d.remove::<f64>(open_id));
                 return;
             }

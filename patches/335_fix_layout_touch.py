@@ -41,14 +41,17 @@ pub fn ours_layout(name: &str) -> Layout {
 
 '''
 
-ENTRY_INSERT = r'''    // EFFECTCRAFT_OURS_CANVAS_LAYOUT_ENTRY_V1 — 画布（预览区）内部右上角 8px 处的「布局」
-    {
+ENTRY_INSERT = r'''    // EFFECTCRAFT_OURS_CANVAS_LAYOUT_ENTRY_V1 — 画布（预览区）内部右上角 8px 处的「布局」按钮，
+    // 外观与工具栏的「曲线 / 插件」一致（同 26px 高、4px 圆角、switch_well 底、12pt 字）。
+    // 展开时不画：否则打开它的那次点击会被遮罩判成“点空白”而立刻关掉。
+    if ui.data(|d| d.get_temp::<f64>(egui::Id::new("layout-open-at"))).is_none() {
         let t = app.tokens;
-        let galley = painter.layout_no_wrap("布局".to_string(), Tokens::ui(15.0), t.text_dim);
-        let r = Rect::from_min_size(pos2(v.area.max.x - 8.0 - galley.size().x, v.area.min.y + 8.0), galley.size());
-        let resp = ui.interact(r.expand(8.0), egui::Id::unique("layout-entry-canvas"), Sense::click());
-        let col = if resp.hovered() { t.text } else { t.text_dim };
-        painter.galley(r.min, galley, col);
+        let galley = painter.layout_no_wrap("布局".to_string(), Tokens::ui(12.0), t.text);
+        let btn_w = (galley.size().x + 22.0).max(44.0);
+        let r = Rect::from_min_size(pos2(v.area.max.x - 8.0 - btn_w, v.area.min.y + 8.0), vec2(btn_w, 26.0));
+        let resp = ui.interact(r, egui::Id::unique("layout-entry-canvas"), Sense::click());
+        painter.rect_filled(r, 4.0, if resp.hovered() { t.hover } else { t.switch_well });
+        painter.text(r.center(), egui::Align2::CENTER_CENTER, "布局", Tokens::ui(12.0), t.text);
         app.auto.add("layout.switcher", r, "布局");
         if resp.clicked() {
             ui.data_mut(|d| d.insert_temp(egui::Id::new("layout-open-at"), app.now));
