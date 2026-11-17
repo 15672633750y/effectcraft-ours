@@ -23,7 +23,12 @@ MARKER = "EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1"
 CALL_OLD = "        curves_editor(self, ui, full);\n    }\n"
 CALL_NEW = "        curves_editor(self, ui, full);\n        self.draw_layout_switcher(ui, full);\n    }\n"
 BODY_OLD = "        self.dock_area(ui, body);\n"
-BODY_NEW = "        ui.data_mut(|d| d.insert_temp(egui::Id::new(\"ours-dock-body\"), body));\n        self.dock_area(ui, body);\n"
+BODY_NEW = (
+    "        // 画布矩形每帧重新记：这一帧预览区没画（首页 / 最大化别的面板）就保持为空，\n"
+    "        // 「布局」按钮也就不会浮在没画布的地方。\n"
+    "        ui.data_mut(|d| d.remove::<egui::Rect>(egui::Id::new(\"ours-canvas-rect\")));\n"
+    "        self.dock_area(ui, body);\n"
+)
 
 SIG = (
     "    /// The status message or the latest toast, bottom left (`lift` points higher while the\n"
@@ -142,15 +147,16 @@ METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的�
         let now = self.now;
         // 入口：刚被点开的那一帧只画发光就返回，遮罩和卡片下一帧再来——
         // “打开它的那一次点击”因此永远不会被同一帧的遮罩判成点空白。
+        // 「这一帧预览区真正画出来的画布矩形」：draw_inner 在画 dock 之前会清掉它，
+        // 所以首页 / 最大化别的面板时这里拿不到值（那些地方没有画布，也就不该有按钮）。
+        let canvas: Option<egui::Rect> = ui.data(|d| d.get_temp(egui::Id::new("ours-canvas-rect")));
         let was_open = ui.data(|d| d.get_temp::<f64>(egui::Id::new("layout-open-at")));
         if was_open.is_none() {
-            let area = ui
-                .data(|d| d.get_temp::<egui::Rect>(egui::Id::new("ours-canvas-rect")))
-                .or_else(|| ui.data(|d| d.get_temp::<egui::Rect>(egui::Id::new("ours-dock-body"))))
-                .unwrap_or(full);
-            self.ours_layout_entry(ui, area);
-            if ui.data(|d| d.get_temp::<f64>(egui::Id::new("layout-open-at"))).is_some() {
-                return;
+            if let Some(area) = canvas {
+                self.ours_layout_entry(ui, area);
+                if ui.data(|d| d.get_temp::<f64>(egui::Id::new("layout-open-at"))).is_some() {
+                    return;
+                }
             }
         }
         let open_id = egui::Id::new("layout-open-at");
@@ -167,26 +173,12 @@ METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的�
         // 布局目录：ours = dock 里的内置工作区名，used only when a card is clicked.
         // EFFECTCRAFT_OURS_LAYOUT_REAL_V1 — 名字是我们自己的布局 id，切换时直接换 dock 布局树，
         // 不走 set_workspace（移动端没有这些工作区，换了也不重排）
-        let entries: [(&str, &str, &str, usize); 4] = [
-            ("classic", "经典", "项目 | 合成 | 时间轴", 0),
-            ("simple", "简易", "上预览、下时间轴", 1),
-            ("pro", "专业", "左项目、右预览、下时间轴", 2),
-            ("minimal", "极简", "只有合成预览", 3),
+        let entries: [(&str, &str, &str); 4] = [
+            ("classic", "经典", "项目 | 合成 | 属性 | 时间轴"),
+            ("simple", "简易", "上预览、下时间轴"),
+            ("pro", "专业", "项目 | 预览 | 属性 + 时间轴"),
+            ("minimal", "极简", "只有合成预览"),
         ];
-        // 缩略示意图：四块小矩形，纯几何、不含任何 logo
-        let diagram = |p: &egui::Painter, r: Rect, kind: usize, col: Color32| {
-            let at = |x: f32, y: f32| Pos2::new(r.min.x + (r.width() - 6.0) * x + 3.0, r.min.y + (r.height() - 6.0) * y + 3.0);
-            let boxes: &[(f32, f32, f32, f32)] = match kind {
-                0 => &[(0.0, 0.0, 0.18, 1.0), (0.18, 0.0, 0.82, 0.62), (0.82, 0.0, 1.0, 0.62), (0.18, 0.62, 0.82, 1.0)],
-                1 => &[(0.0, 0.0, 1.0, 0.58), (0.0, 0.64, 1.0, 1.0)],
-                2 => &[(0.0, 0.0, 0.2, 0.55), (0.2, 0.0, 0.8, 0.55), (0.8, 0.0, 1.0, 0.55), (0.0, 0.6, 1.0, 1.0)],
-                _ => &[(0.0, 0.0, 1.0, 1.0)],
-            };
-            for (x0, y0, x1, y1) in boxes {
-                p.rect_filled(Rect::from_min_max(at(*x0, *y0), at(*x1, *y1)), 2.0, col);
-            }
-        };
-
         // —— 切换完成后的中央名字（约 900ms）——
         if let Some((at, name)) = chosen {
             let e = (now - at) as f32;
@@ -215,8 +207,10 @@ METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的�
                     glyphs.push((*ch, g));
                 }
                 total -= spacing;
-                let cy = full.center().y;
-                let mut x = full.center().x - total / 2.0;
+                // 名字浮在**画布**中央（要求见 HANDOFF 第 8 节），没有画布才退回窗口中央
+                let mid = canvas.unwrap_or(full);
+                let cy = mid.center().y;
+                let mut x = mid.center().x - total / 2.0;
                 for (_, g) in &glyphs {
                     let y = cy - g.size().y / 2.0;
                     for (spread, alpha) in [(3.0f32, 0.16f32), (1.5, 0.30)] {
@@ -227,7 +221,7 @@ METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的�
                     x += g.size().x + spacing;
                 }
                 // 下划线：两端各一段强调色短线，中间一条淡线
-                let under = Pos2::new(full.center().x - total / 2.0, cy + 46.0);
+                let under = Pos2::new(mid.center().x - total / 2.0, cy + 46.0);
                 let line_w = total;
                 ui.painter().line_segment([under, Pos2::new(under.x + line_w, under.y)], Stroke::new(1.0, t.accent.gamma_multiply(0.45 * fade)));
                 for (x0, w) in [(under.x, 26.0f32), (under.x + line_w - 26.0, 26.0)] {
@@ -276,7 +270,7 @@ METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的�
             let mut clicked: Option<(&'static str, &'static str)> = None;
             let mut hovered_any = false;
             for (i, entry) in entries.iter().enumerate() {
-                let (workspace, name, note, kind) = *entry;
+                let (workspace, name, note) = *entry;
                 let ti = (e - i as f32 * 0.06).clamp(0.0, 1.0) / 0.22;
                 let ti = ti.clamp(0.0, 1.0);
                 let ease = ti * ti * (3.0 - 2.0 * ti);

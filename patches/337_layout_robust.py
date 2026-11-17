@@ -50,9 +50,20 @@ METHODS = r'''    // EFFECTCRAFT_OURS_LAYOUT_ROBUST_V1 — 「布局」只摆放
                     self.ours_layout_error(id, "layout tree is empty");
                     return false;
                 }
-                self.ui.dock = crate::dock::Workspace::new(layout);
+                let workspace = crate::dock::Workspace::new(layout);
+                // 切到极简时 Timeline / Project 都被移除了：焦点要是还指着它们，
+                // “焦点一定在可见面板上”这条不变量就破了（快捷键、面板 chrome 都依赖它）。
+                let focus_visible = crate::dock::WorkspaceExt::is_visible(&workspace, self.ui.focused);
+                self.ui.dock = workspace;
+                if !focus_visible {
+                    self.ui.focused = crate::dock::PanelKind::Composition;
+                }
                 self.ui.workspace = id.to_string();
                 self.ui.maximized = None;
+                // 切完立刻落盘：否则用户切到极简后直接杀进程，下次启动还是旧布局。
+                if self.session.config.is_some() {
+                    self.save_workspace_state();
+                }
                 true
             }
             Err(panic) => {
