@@ -374,6 +374,14 @@ https://github.com/15672633750y/effectcraft-ours/releases/tag/ours-890
 2. 新 clone 的源码 mtime 全是新的，cargo 判 fresh 失败 → 必须在打补丁前把 mtime 归一
 3. concurrency 同组排队 → 新推送要等前一个编完
 
+### ⚠️ 本地还有两个从未推送、也没经过 CI 的补丁
+- `222_panic_hook.py`：Rust panic 也写 `DCIM/EffectCraft/crash-rust-<time>.txt`（含 backtrace）
+- `223_share_stale.py`：分享请求超过 60 秒未成功就丢掉，不再每 1.2 秒无限重试
+
+它们**只在本地 `ours-patches/`，远端 `patches/` 里没有**，所以用户手上的包**不含**这两个功能，
+而且它们**从未被任何一次 CI 编译过**（本地 preflight 只查括号/文档注释，不编译 Rust）。
+下次推它们时必须盯着构建结果，别当成"已经用过很多次的老补丁"。
+
 ### TLS 栈已验证（894 构建日志，2026-11-18 07:30）
 **ours-894 构建成功**（16.5 分钟）→ ureq 3.5.0 + rustls 0.23 + ring 在 Android/aarch64 上
 交叉编译通过，**0 warning**。日志里 `rustls` / `ring` / `webpki` / `platform-verifier` 都在，
