@@ -115,3 +115,33 @@ EffectCraft Sx = `storytold/effectcraft` 的补丁版，在 GitHub Actions 构�
 - `Frame2.png` 偏暗（luma 55.4）→ `shown` 提前计算 + `base_pass` 门控导致，已在 245/247 修
 - 拟合值和参数混用顺序错 → 视觉完全跑偏
 - 改曲线时若只改 FIT 不动径向增益/对比度，会和之前的校准结果打架
+
+## 汉化交接说明
+### 机制
+- 界面文案表：`crates/ui-egui/src/i18n/ui.rs` 里的 `SIMPLIFIED_CHINESE`
+  （新条目插在 `];\n/// EFFECTCRAFT_OURS_ZH_BLEND_SOLID_V1` 这个锚点之前）
+- 菜单/参数/效果名：`i18n.rs` / `i18n/prop.rs` / `i18n/effects.rs`（按 id 映射）
+- 弹窗走 `crate::i18n::tr(o)` 中心化翻译；带 `format!` 的句子要配合 `tr_args`
+- 补丁文件名决定应用顺序（字典序），新批次用 `30x_zh_batchNN.py`
+
+### 现状（2026-11-17 复核）
+- 已完成到第 17 批；界面直接硬编码的英文基本清零
+- 我复核后仍有约 236 条"候选英文"，其中真正该翻的约 120~150：
+  面板小词（Type slot、SOURCE FOOTAGE）、GPU/渲染提示（Shared GPU preview disabled…）、命令反馈长句
+- 不该翻的：字体名、快捷键名、测试数据/文件名、行业格式名（NTSC/PAL/HDV/UHD/Cineon…）、
+  其他语种表项（Servicios/Visa alla/Ukryj EffectCraft）
+
+### 踩过的坑（必读）
+- **含英文双引号的翻译行必须转义成 `\"`**，否则 Rust 字符串断裂、整条构建失败（踩过两次，
+  例子：`("leading: expected a number or \"auto\"", ...)`）
+- 补丁锚点若依赖别的补丁插入的行，要确认**字典序在自己之前**（`293` 曾排到 `59` 前面而失败）
+- 每个补丁都要有 MARKER 幂等检查，重复运行不能报错
+
+## 剩余待办总览（按优先级）
+1. 调色继续优化（见上面的交接说明，必须给数字）
+2. 汉化收尾：约 120~150 条（界面小词 + GPU 提示 + 命令反馈）
+3. 开屏细节微调：1 秒硬性时长不能变；圆角 22%；fit-center 不裁切
+4. 文字动画器导入（`inbox/奇峰自由文字出场.ffx` 的「蒸发」，已有真实数值读取）
+5. S_ 系列效果：131 已有实现，属"近似 Sapphire"，不要承诺"一模一样"
+6. RSMB、MB Looks（用户说先放着）
+7. 字体缺失提示（小项）
