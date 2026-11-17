@@ -160,19 +160,35 @@ pub fn clear_token() {
 ///
 /// 注意：`ureq::get()` 是 `RequestBuilder<WithoutBody>`，`post/put` 是 `<WithBody>`，
 /// 两者类型不同，所以不能放进同一个 match 里返回。
+/// 所有请求共用一个 Agent：连接池可以复用，更重要的是**有超时**——
+/// 没有超时的话服务器不回包，后台线程会永远挂着，界面上就是「点了没反应」。
+#[cfg(not(target_arch = "wasm32"))]
+fn agent() -> ureq::Agent {
+    static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
+    AGENT
+        .get_or_init(|| {
+            ureq::Agent::config_builder()
+                .timeout_global(Some(std::time::Duration::from_secs(10)))
+                .build()
+                .into()
+        })
+        .clone()
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 fn request(method: &str, path: &str, token: Option<&str>, body: Option<&str>) -> Result<(u16, String), String> {
     let url = format!("{BASE_URL}{path}");
     let bearer = token.map(|t| format!("Bearer {t}"));
+    let agent = agent();
     let result = if method == "GET" || body.is_none() {
-        let req = ureq::get(&url);
+        let req = agent.get(&url);
         let req = match &bearer {
             Some(b) => req.header("Authorization", b.as_str()),
             None => req,
         };
         req.header("Accept", "application/json").call()
     } else {
-        let req = if method == "PUT" { ureq::put(&url) } else { ureq::post(&url) };
+        let req = if method == "PUT" { agent.put(&url) } else { agent.post(&url) };
         let req = match &bearer {
             Some(b) => req.header("Authorization", b.as_str()),
             None => req,
