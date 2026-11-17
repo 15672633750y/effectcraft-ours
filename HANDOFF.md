@@ -51,3 +51,5 @@ EffectCraft Sx = `storytold/effectcraft` 的补丁版，在 GitHub Actions 构�
 - 补丁编号字典序：`2xx` < `5xx`，要晚于某补丁生效就起名 `zz_`/`99_`
 - 构建并发组已改成 per-run，不会互相取消
 # trigger 1794872140
+
+<!-- token 验证 09:32 -->
