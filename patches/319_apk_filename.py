@@ -20,7 +20,8 @@ def main() -> None:
     root = Path(os.environ["ARTCRAFT_DIR"]).resolve()
     path = root / "lib/build-common.sh"
     src = path.read_text(encoding="utf-8")
-    if MARKER in src:
+    if MARKER in src or (NEW_REL in src and NEW_DBG in src):
+        # 已经改过就是幂等的：这个补丁不写 MARKER（改的是 shell 变量行），所以按新文本判断
         print("apk filename already derived from the app name")
         return
     if src.count(OLD_REL) != 1 or src.count(OLD_DBG) != 1:
