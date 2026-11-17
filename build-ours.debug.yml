@@ -5,7 +5,7 @@
 # write” 权限，API 改 .github/workflows/ 下的文件会被 403 拒绝
 # （Resource not accessible by personal access token）。
 #
-# 这份改动解决“每轮构建 10 分钟以上”：
+# 这份改动解决“每轮构建 10 分钟以上 / 出包要 20 分钟”：
 #   1. 编译产物缓存的路径原来写的是 artcraft/source/effectcraft/target，
 #      但 builder 里是 export CARGO_TARGET_DIR="$ROOT/build/$APP/target"，
 #      真实目录是 artcraft/build/effectcraft/target —— 那个错误路径从来不存在，
@@ -15,6 +15,8 @@
 #   3. 额外缓存 cargo-ndk 二进制、Gradle caches/wrapper。
 #   4. 去掉 push 触发器：push.py 每次都会 dispatch，保留 push 会让一次推送跑两个
 #      构建（实测 884/885、886/887、888/889 都是成对出现）。
+#   5. concurrency 改成 ours-<run_id>：新推送不再排队等前一个编完（实测 890 在跑时
+#      891 只能 pending，出包时间翻倍）。
 #
 # 用法（二选一）：
 #   A. 给令牌勾上 Workflows: Read and write，然后让会话直接改 .github/workflows/；
@@ -43,8 +45,9 @@ permissions:
   contents: write
 
 concurrency:
-  group: ours-${{ github.ref }}-${{ inputs.tag }}-${{ inputs.package }}
-  # 不再互相取消：每次推送不会再打断正在编译的那一版
+  # 每次运行一个独立组：新推送既不会取消正在编的那一版，也不用排队等它 ——
+  # 原来同组排队，推一次要等前一个 10 分钟编完才开始（20 分钟才出包）。
+  group: ours-${{ github.run_id }}
   cancel-in-progress: false
 
 jobs:
