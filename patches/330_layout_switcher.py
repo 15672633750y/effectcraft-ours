@@ -91,6 +91,45 @@ METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的�
             let dim = (e / 0.2).clamp(0.0, 1.0);
             ui.painter().rect_filled(full, 0.0, Color32::from_black_alpha((196.0 * dim) as u8));
 
+            // 附加效果：HUD 四角短线 + 沿边框跑的扫描光（1.6s 一圈）
+            let accent = t.accent.gamma_multiply(dim * 0.75);
+            let tick = 18.0;
+            for (corner, dx, dy) in [
+                (Pos2::new(full.min.x + 14.0, full.min.y + 14.0), 1.0, 1.0),
+                (Pos2::new(full.max.x - 14.0, full.min.y + 14.0), -1.0, 1.0),
+                (Pos2::new(full.min.x + 14.0, full.max.y - 14.0), 1.0, -1.0),
+                (Pos2::new(full.max.x - 14.0, full.max.y - 14.0), -1.0, -1.0),
+            ] {
+                ui.painter().line_segment([corner, Pos2::new(corner.x + tick * dx, corner.y)], Stroke::new(1.5, accent));
+                ui.painter().line_segment([corner, Pos2::new(corner.x, corner.y + tick * dy)], Stroke::new(1.5, accent));
+            }
+            let cycle = ((now - at) / 1.6).fract() as f32;
+            let per = (full.width() * 2.0 + full.height() * 2.0) as f32;
+            let mut dpos = cycle * per;
+            let (ew, eh) = (full.width(), full.height());
+            let (sx, sy);
+            if dpos < ew {
+                sx = full.min.x + dpos;
+                sy = full.min.y;
+            } else {
+                dpos -= ew;
+                if dpos < eh {
+                    sx = full.max.x;
+                    sy = full.min.y + dpos;
+                } else {
+                    dpos -= eh;
+                    if dpos < ew {
+                        sx = full.max.x - dpos;
+                        sy = full.max.y;
+                    } else {
+                        dpos -= ew;
+                        sx = full.min.x;
+                        sy = full.max.y - dpos.min(eh);
+                    }
+                }
+            }
+            ui.painter().circle_filled(Pos2::new(sx, sy), 3.0, t.accent.gamma_multiply(dim));
+            ui.painter().circle_filled(Pos2::new(sx, sy), 9.0, t.accent.gamma_multiply(dim * 0.22));
             let card_w = 330.0_f32.min(full.width() - 32.0);
             let card_h = 86.0;
             let gap = 12.0;
