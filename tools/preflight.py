@@ -10,6 +10,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 from pathlib import Path
 
@@ -17,6 +18,30 @@ ROOT = Path(__file__).resolve().parent.parent
 REPO = ROOT / "repo"          # upstream checkout used as the patch target
 BUILDER = ROOT / "builder"    # builder checkout (ARTCRAFT_DIR)
 PATCHES = ROOT / "ours-patches"
+# builder 补丁**必须**在 CI 真正拉到的那份 cleaner builder 上验证：CI 是
+# `actions/checkout` 的 v0.5.0 tag，而本地 builder/ 会被补丁改脏 —— 在脏树上验锚点会假通过。
+# 这个 tarball 就是那份纯净的 0.5.0。
+BUILDER_TARBALL = ROOT / "tmp" / "artcraft-0.5.0.tar.gz"
+
+
+def extract_builder(dest: Path) -> None:
+    """把纯净 builder 解到 `dest`（去掉 tarball 的顶层目录）。
+
+    手动写文件而不是 tarfile.extractall：这个 Python 的 tar 安全过滤器在 FUSE 存储上
+    会因为 realpath(ALLOW_MISSING) 抛 FileNotFoundError。
+    """
+    with tarfile.open(BUILDER_TARBALL) as tar:
+        for member in tar.getmembers():
+            if not member.isfile():
+                continue
+            parts = Path(member.name).parts[1:]  # 去掉顶层 artcraft-android-0.5.0/
+            if not parts:
+                continue
+            out = dest.joinpath(*parts)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            handle = tar.extractfile(member)
+            if handle is not None:
+                out.write_bytes(handle.read())
 STATEMENT_RE = re.compile(r"^\s*(let|if|for|while|match|return|loop|unsafe\s*\{|\.\w+\(|\w+\s*=)")
 DOC_RE = re.compile(r"^\s*///")
 
@@ -123,14 +148,25 @@ def check_rust(root: Path, changed: set[Path]) -> list[str]:
 
 
 def main() -> int:
-    if not REPO.is_dir() or not BUILDER.is_dir():
-        print("repo/ and builder/ checkouts are required")
+    if not REPO.is_dir():
+        print("repo/ (a pristine upstream checkout) is required")
+        return 2
+    if not BUILDER_TARBALL.is_file():
+        print(f"{BUILDER_TARBALL} is required.")
+        print("Builder patches must be checked against the pristine v0.5.0 builder that CI checks")
+        print("out - the local builder/ has been modified by earlier patch runs, so anchors that")
+        print("only exist there would pass here and fail in CI (SafActivity.java: 2520 vs 1560 lines).")
         return 2
     ok = True
-    for target, env_key in ((REPO, "EFFECTCRAFT_DIR"), (BUILDER, "ARTCRAFT_DIR")):
+    for target, env_key in ((REPO, "EFFECTCRAFT_DIR"), (None, "ARTCRAFT_DIR")):
         scratch = Path(tempfile.mkdtemp())
         work = scratch / "src"
-        shutil.copytree(target, work, symlinks=True)
+        if target is None:
+            # 纯净 builder：每次从 tarball 还原，绝不用本地 builder/。
+            work.mkdir(parents=True)
+            extract_builder(work)
+        else:
+            shutil.copytree(target, work, symlinks=True)
         before = snapshot(work)
         if not apply({env_key: str(work)}, env_key == "ARTCRAFT_DIR"):
             ok = False

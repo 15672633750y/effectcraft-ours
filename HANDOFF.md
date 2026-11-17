@@ -382,6 +382,18 @@ https://github.com/15672633750y/effectcraft-ours/releases/tag/ours-890
 而且它们**从未被任何一次 CI 编译过**（本地 preflight 只查括号/文档注释，不编译 Rust）。
 下次推它们时必须盯着构建结果，别当成"已经用过很多次的老补丁"。
 
+### 铁律补充：builder 锚点必须在纯净树上验证（用户 2026-11-18 定）
+1. **本地 `builder/` 必须先用 `tmp/artcraft-0.5.0.tar.gz` 还原，再跑 preflight。**
+   否则锚点会在「脏树」里假通过 —— `223_share_stale.py` 就是活例子：它的锚点
+   `java.io.File f = new java.io.File(path);` 是 `210_share_bridge.py` **插入**的，
+   本地 builder 早就被改过，纯净 v0.5.0 里原本没有那一行。
+2. **任何补丁的锚点，必须在「纯净 builder」上验证通过，否则 preflight 直接失败。**
+   `tools/preflight.py` 已照此改造：builder 部分每次从 tarball 还原，tarball 缺失时
+   直接 `exit 2`（不再退回本地 builder），避免继续产生假通过。
+3. 推论：**锚点只能依赖「链上排在它前面的补丁」**。223 之所以在完整链上仍然成立，
+   是因为 `210`（插入锚点）排在 `223` 前面；以后再加 builder 补丁，先确认自己的锚点
+   是 v0.5.0 原生就有的，还是某个更早补丁插入的。
+
 ### ⚠️ `223_share_stale.py` 不能推（锚点只存在于本地 builder）
 - 本地 `builder/templates/android/SafActivity.java` 是 **2520 行**；
   CI 里 `actions/checkout` 拉的 **v0.5.0 tag** 只有 **1560 行**（两边 `BUILDER_VERSION` 都写 0.5.0，
