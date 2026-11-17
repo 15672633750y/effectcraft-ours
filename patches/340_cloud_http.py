@@ -217,23 +217,86 @@ fn json_or_null(text: &str) -> serde_json::Value {
     serde_json::from_str(text).unwrap_or(serde_json::Value::Null)
 }
 
+/// 解算数题：后端出的是 "3 + 5" / "9 - 2" 这种两个 1~9 的操作数（文档 3.0 节给了同样的做法）。
+/// 题目只含 ASCII，所以按字节切分是安全的。
+fn solve(question: &str) -> Option<i32> {
+    let compact: String = question.chars().filter(|c| !c.is_whitespace()).collect();
+    let pos = compact.find(|c| c == '+' || c == '-')?;
+    let (lhs, rest) = compact.split_at(pos);
+    let op = rest.chars().next()?;
+    let a: i32 = lhs.parse().ok()?;
+    let b: i32 = rest.get(1..)?.parse().ok()?;
+    Some(if op == '+' { a + b } else { a - b })
+}
+
+/// 取一道人机校验题并算好答案。取不到就返回 None（提交时就不带这两个字段，
+/// 老后端不需要它们，新后端会回 CAPTCHA_REQUIRED，上层会换题重试）。
+fn captcha_pair() -> Option<(String, i32)> {
+    let (code, text) = request("GET", "/auth/captcha", None, None).ok()?;
+    if !(200..300).contains(&code) {
+        return None;
+    }
+    let value = json_or_null(&text);
+    let id = value["id"].as_str()?.to_string();
+    let answer = solve(value["question"].as_str()?)?;
+    Some((id, answer))
+}
+
+/// 提交注册/登录：每次现取一道题；后端说 CAPTCHA_INVALID / CAPTCHA_REQUIRED 就换一道再来。
+/// 最多两次，避免在后端异常时死循环。
+fn post_auth(path: &str, username: &str, password: &str) -> Result<(u16, String), String> {
+    let mut last = String::new();
+    for _ in 0..2 {
+        let mut body = serde_json::json!({ "username": username, "password": password });
+        if let Some((id, answer)) = captcha_pair() {
+            body["captcha_id"] = serde_json::json!(id);
+            body["captcha_answer"] = serde_json::json!(answer);
+        }
+        let text = body.to_string();
+        let (code, response) = request("POST", path, None, Some(&text))?;
+        let value = json_or_null(&response);
+        let api = value["code"].as_str().unwrap_or_default();
+        if api == "CAPTCHA_INVALID" || api == "CAPTCHA_REQUIRED" {
+            last = "人机校验没通过，正在重试…".to_string();
+            continue;
+        }
+        return Ok((code, response));
+    }
+    Err(if last.is_empty() { "人机校验连续失败，请稍后再试".to_string() } else { last })
+}
+
 /// 登录失败时给用户的一句话（不泄露账号是否存在）。
 fn login_hint(code: u16, value: &serde_json::Value) -> String {
-    let api = value["error"]["code"].as_str().unwrap_or_default();
-    let message = match api {
-        "CREDENTIALS_INVALID" => "用户名或密码错误",
+    // 后端错误形状是 {"ok":false,"code":"...","message":"中文提示"}（文档第 0 节）。
+    let api = value["code"]
+        .as_str()
+        .or_else(|| value["error"]["code"].as_str())
+        .unwrap_or_default();
+    let server_message = value["message"]
+        .as_str()
+        .or_else(|| value["error"]["message"].as_str())
+        .unwrap_or_default();
+    // 账号不存在和密码错误后端给的是同一句话，直接用它，不要自己加工。
+    if api == "CREDENTIALS_INVALID" || code == 401 {
+        return "用户名或密码错误".to_string();
+    }
+    if api == "CAPTCHA_INVALID" || api == "CAPTCHA_REQUIRED" {
+        return "人机校验没通过，请再试一次".to_string();
+    }
+    if !server_message.is_empty() {
+        return server_message.to_string();
+    }
+    match api {
         "LOGIN_RATE_LIMITED" => "登录太频繁，请稍后再试",
         "REGISTER_RATE_LIMITED" => "注册太频繁，请稍后再试",
-        "TURNSTILE_REQUIRED" => "需要人机校验，请稍后再试",
         "USERNAME_TAKEN" => "用户名已被占用",
         "USERNAME_INVALID" => "用户名只能用 3~20 位字母、数字、下划线",
         "WEAK_PASSWORD" => "密码至少 8 位，别用常见密码",
         "PREFS_TOO_LARGE" => "资料内容太长",
-        _ if code == 401 => "用户名或密码错误",
         _ if code == 0 => "网络不可用，请检查网络后重试",
         _ => "请求失败，请稍后再试",
-    };
-    message.to_string()
+    }
+    .to_string()
 }
 
 // ---------------------------------------------------------------- 对外动作
@@ -241,8 +304,7 @@ fn login_hint(code: u16, value: &serde_json::Value) -> String {
 /// 登录：成功就记住 token 并推 [`Event::LoggedIn`]。
 pub fn login(username: String, password: String) {
     spawn(move || {
-        let body = serde_json::json!({ "username": username, "password": password }).to_string();
-        match request("POST", "/auth/login", None, Some(&body)) {
+        match post_auth("/auth/login", &username, &password) {
             Ok((code, text)) => {
                 let value = json_or_null(&text);
                 let token = value["token"].as_str().unwrap_or_default().to_string();
@@ -262,8 +324,7 @@ pub fn login(username: String, password: String) {
 /// 注册：成功同样直接登录。
 pub fn register(username: String, password: String) {
     spawn(move || {
-        let body = serde_json::json!({ "username": username, "password": password }).to_string();
-        match request("POST", "/auth/register", None, Some(&body)) {
+        match post_auth("/auth/register", &username, &password) {
             Ok((code, text)) => {
                 let value = json_or_null(&text);
                 let token = value["token"].as_str().unwrap_or_default().to_string();
@@ -301,7 +362,7 @@ pub fn save_profile(token: String, profile: Profile) {
     spawn(move || {
         let body = serde_json::json!({
             "display_name": profile.nickname.clone(),
-            "prefs_json": profile.to_prefs(),
+            "prefs": profile.to_prefs(),
         })
         .to_string();
         match request("PUT", "/me", Some(&token), Some(&body)) {
