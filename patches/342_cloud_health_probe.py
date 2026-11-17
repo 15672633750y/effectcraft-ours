@@ -33,9 +33,15 @@ pub fn health() {
         let message = match request("GET", "/health", None, None) {
             Ok((code, text)) if (200..300).contains(&code) => {
                 let value = json_or_null(&text);
-                let storage = value["storage"].as_str().unwrap_or("ok");
+                // 200 不等于健康：后端 db 挂了也会回 200，得看 ok / db_error。
+                let healthy = value["ok"].as_bool().unwrap_or(false);
+                let db_error = value["db_error"].as_str().unwrap_or_default();
+                let storage = value["storage"].as_str().unwrap_or("?");
                 let version = value["version"].as_str().unwrap_or_default();
-                if version.is_empty() {
+                if !healthy || !db_error.is_empty() {
+                    let why = if db_error.is_empty() { "后端报告 not ok".to_string() } else { db_error.to_string() };
+                    format!("云服务连接失败: {why}")
+                } else if version.is_empty() {
                     format!("云服务连接成功（存储 {storage}）")
                 } else {
                     format!("云服务连接成功（存储 {storage}，后端 v{version}）")

@@ -159,12 +159,14 @@ METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的�
             }
             ui.data_mut(|d| d.remove::<(f64, String)>(egui::Id::new("layout-chosen")));
         }
-        if was_open.is_none() && canvas.is_some() {
-            if let Some(area) = canvas {
-                self.ours_layout_entry(ui, area);
-                if ui.data(|d| d.get_temp::<f64>(egui::Id::new("layout-open-at"))).is_some() {
-                    return;
-                }
+        // 入口**每帧都画**：展开瞬间的「先发光 120ms、再淡出 220ms」就发生在 entry 内部。
+        // （之前只在未展开时调用 entry，点下去按钮就直接消失、根本没有动画。）
+        if let Some(area) = canvas {
+            self.ours_layout_entry(ui, area);
+            let opened_now = ui.data(|d| d.get_temp::<f64>(egui::Id::new("layout-open-at"))).is_some();
+            if was_open.is_none() && opened_now {
+                // 这一帧刚被点开：只画发光，遮罩与卡片下一帧再来
+                return;
             }
         }
         let open_id = egui::Id::new("layout-open-at");
