@@ -17,6 +17,7 @@ MARKER = "EFFECTCRAFT_OURS_PNG_EDGE_SNAP_V1"
 DRAG_ANCHOR = "                for (lid, p0, ax, ay) in layers {\n"
 
 DRAG_INSERT = r'''                // EFFECTCRAFT_OURS_PNG_EDGE_SNAP_V1 — 拖到画布边缘 24px 内就贴边（角上可同时吸两条边）
+                let comp = v.comp;
                 if let Some(lid) = layers.first().map(|x| x.0)
                     && let Some(layer) = comp.layer(lid)
                 {
