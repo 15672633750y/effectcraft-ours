@@ -35,6 +35,13 @@ METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的�
         let now = self.now;
         let open_id = egui::Id::new("layout-open-at");
         let chosen_id = egui::Id::new("layout-chosen");
+        // EFFECTCRAFT_OURS_LAYOUT_ROBUST_V1 — 每次会话第一次画「布局」时归一化一次：
+        // 存的布局 id 缺失/未知/损坏 → 回落经典，绝不让界面停在空的布局上。
+        let once = egui::Id::new("ours-layout-normalized");
+        if ui.data(|d| d.get_temp::<bool>(once)).is_none() {
+            ui.data_mut(|d| d.insert_temp(once, true));
+            self.ours_normalize_layout();
+        }
         let open_at: Option<f64> = ui.data(|d| d.get_temp(open_id));
         let chosen: Option<(f64, String)> = ui.data(|d| d.get_temp(chosen_id));
         // 布局目录：ours = dock 里的内置工作区名，used only when a card is clicked.
@@ -195,14 +202,14 @@ METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的�
                 return;
             }
             if let Some((workspace, name)) = clicked {
-                // 直接换 dock 布局树：面板显隐/比例都来自这棵树，手机上一定重排
-                self.ui.dock = crate::dock::Workspace::new(crate::dock::ours_layout(workspace));
-                self.ui.workspace = name.to_string();
-                self.ui.maximized = None;
-                ui.data_mut(|d| {
-                    d.remove::<f64>(open_id);
-                    d.insert_temp(chosen_id, (now, name.to_string()));
-                });
+                // 直接换 dock 布局树（带 panic 捕获）：失败就保持当前布局，并写 layout-error.txt
+                let applied = self.ours_apply_layout(workspace);
+                ui.data_mut(|d| d.remove::<f64>(open_id));
+                if applied {
+                    ui.data_mut(|d| d.insert_temp(chosen_id, (now, name.to_string())));
+                } else {
+                    self.ui.status = "布局切换失败，已保持当前布局（详见 DCIM/EffectCraft/layout-error.txt）".into();
+                }
             }
             // 「布局」还在淡出中时，补画一次余影
             if entry_fade > 0.01 {
