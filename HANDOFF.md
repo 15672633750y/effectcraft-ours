@@ -53,3 +53,31 @@ EffectCraft Sx = `storytold/effectcraft` 的补丁版，在 GitHub Actions 构�
 # trigger 1794872140
 
 <!-- token 验证 09:32 -->
+
+## 2026-11-17 交接补充（应用户要求，交给新会话）
+### 已定稿、不要改
+- 应用名 `ShimoveAex`，包名 `com.shimoveaex.effects`
+- 图标：`tools/app-icon.png`（1024，用户新画的 SA 图，白底干净版）
+- 签名：用户的 keystore，别名 `shimove`，密钥在 `DCIM/EffectCraft/keys/`，
+  GitHub Secrets `KEYSTORE_BASE64` / `KEYSTORE_PASSWORD` 已配好
+- 官方签名指纹（SHA-256）：
+  `6461ee2dbcdb7882575242218895f6ac4cab24abdfa97353bbe0d702bb4a75a3`
+- 工作流真身是 `.github/workflows/build-ours.yml`（根目录 build-ours.yml 不生效，别再改错）
+- `310_signing_alias.py` 把 builder 的别名改成 `${ARTCRAFT_KEY_ALIAS:-shimove}`
+- **绝不碰 `/storage/emulated/0/QQagent`**
+
+### 待做（按优先级）
+1. **开屏界面**：黑底 + 圆角图标（512 drawable，不要拉伸 mipmap）+ 主标题 `Shimove Aex`
+   + 副标题 `本软件由施信开发 · 基于开源项目`；图标淡入 350ms、文字延迟 120ms 跟上；
+   **总时长不得超过当前默认开屏时间**（约 1~2 秒，1 秒到点必须进主界面，另加 1.5 秒兜底）
+2. **签名指纹写死**：把上面的 SHA-256 写进校验；签名不符只提示「非官方版本」不阻止启动；
+   支持 `DCIM/EffectCraft/devmode.txt` 跳过 + `allowed-signatures.txt` 允许清单
+3. **汉化收尾**：剩约 200 条真该翻的（命令长句/效果控件零散/面板提示），
+   注意：含英文引号的翻译行必须转义成 \" ，否则 Rust 字符串断裂（踩过两次）
+4. 文字动画器导入（inbox/奇峰自由文字出场.ffx 的「蒸发」）
+5. S_射线/S_辉光/S_阴影/S_TextureFlux 真实实现（现在空壳）
+6. RSMB、MB Looks（用户说先放着）；字体缺失提示
+
+### 推送纪律
+`python3 tools/preflight.py` + `python3 tools/precheck.py` 都 OK 才 push；
+一次只推一批，推完等出包；失败自己查日志自己修，成功才通知用户。
