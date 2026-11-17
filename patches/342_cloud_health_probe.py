@@ -76,7 +76,11 @@ DIALOG_NEW = '''        Tokens::ui(12.0),
         let now = ui.input(|i| i.time);
         if resp.is_pointer_button_down_on() {
             match ui.data(|d| d.get_temp::<f64>(hold)) {
-                None => ui.data_mut(|d| d.insert_temp(hold, now)),
+                // 注意：`insert_temp` 返回 RawKey，这里必须用块丢掉它，
+                // 否则这个 match 的 arm 类型不一致（E0308: expected RawKey, found ()）。
+                None => {
+                    ui.data_mut(|d| d.insert_temp(hold, now));
+                }
                 Some(start) if now - start > 0.8 => {
                     ui.data_mut(|d| d.remove::<f64>(hold));
                     crate::cloud::health();
