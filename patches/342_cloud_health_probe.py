@@ -31,7 +31,7 @@ pub fn take_status() -> Option<String> {
 pub fn health() {
     spawn(move || {
         let message = match request("GET", "/health", None, None) {
-            Ok((200, text)) => {
+            Ok((code, text)) if (200..300).contains(&code) => {
                 let value = json_or_null(&text);
                 let storage = value["storage"].as_str().unwrap_or("ok");
                 let version = value["version"].as_str().unwrap_or_default();

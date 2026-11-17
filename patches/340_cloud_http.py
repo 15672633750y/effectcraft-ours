@@ -246,7 +246,8 @@ pub fn login(username: String, password: String) {
             Ok((code, text)) => {
                 let value = json_or_null(&text);
                 let token = value["token"].as_str().unwrap_or_default().to_string();
-                if code == 200 && !token.is_empty() {
+                // 实测：登录回 200，注册回 **201** —— 只认 200 的话注册会永远提示失败。
+                if (200..300).contains(&code) && !token.is_empty() {
                     save_token(&token);
                     push(Event::LoggedIn { token, profile: Profile::from_user(&value["user"]) });
                 } else {
@@ -266,7 +267,8 @@ pub fn register(username: String, password: String) {
             Ok((code, text)) => {
                 let value = json_or_null(&text);
                 let token = value["token"].as_str().unwrap_or_default().to_string();
-                if code == 200 && !token.is_empty() {
+                // 实测：登录回 200，注册回 **201** —— 只认 200 的话注册会永远提示失败。
+                if (200..300).contains(&code) && !token.is_empty() {
                     save_token(&token);
                     push(Event::LoggedIn { token, profile: Profile::from_user(&value["user"]) });
                 } else {
@@ -281,7 +283,7 @@ pub fn register(username: String, password: String) {
 /// 用已存的 token 拉一次资料（启动时用；token 失效会静默回到未登录）。
 pub fn fetch_me(token: String) {
     spawn(move || match request("GET", "/me", Some(&token), None) {
-        Ok((200, text)) => {
+        Ok((code, text)) if (200..300).contains(&code) => {
             let value = json_or_null(&text);
             push(Event::Profile(Profile::from_user(&value["user"])));
         }
@@ -303,7 +305,7 @@ pub fn save_profile(token: String, profile: Profile) {
         })
         .to_string();
         match request("PUT", "/me", Some(&token), Some(&body)) {
-            Ok((200, _)) => push(Event::SaveOk),
+            Ok((code, _)) if (200..300).contains(&code) => push(Event::SaveOk),
             Ok((401, _)) => {
                 clear_token();
                 push(Event::SessionExpired);
