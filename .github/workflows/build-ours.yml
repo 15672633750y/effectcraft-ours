@@ -10,7 +10,7 @@ on:
       package:
         description: 'Android package name (so builds can be installed side by side)'
         required: false
-        default: 'com.artcraft.effectcraft.sx'
+        default: 'com.shimoveaex.effects'
       patches:
         description: 'Apply our patches (yes/no). Use no for a test build of a bare upstream tag'
         required: false
@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 120
     env:
-      APP_NAME: 'EffectCraft Sx'
+      APP_NAME: 'ShimoveAex'
       ARTCRAFT_BUILD_TOOLS_VERSION: '35.0.0'
       CARGO_PROFILE_RELEASE_CODEGEN_UNITS: '16'
       CARGO_PROFILE_RELEASE_LTO: 'false'
@@ -150,8 +150,27 @@ jobs:
       - name: Render the temporary launcher icon
         run: |
           set -euo pipefail
-          python3 ours/tools/make_icon.py "$GITHUB_WORKSPACE/app-icon.png"
+          if [ -f ours/tools/app-icon.png ]; then
+            cp ours/tools/app-icon.png "$GITHUB_WORKSPACE/app-icon.png"
+          else
+            python3 ours/tools/make_icon.py "$GITHUB_WORKSPACE/app-icon.png"
+          fi
           ls -l "$GITHUB_WORKSPACE/app-icon.png"
+
+      - name: Use the fixed signing key (if configured)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          set -e
+          if [ -n "${KEYSTORE_BASE64:-}" ]; then
+            mkdir -p artcraft/keys
+            printf '%s' "$KEYSTORE_BASE64" | base64 -d > artcraft/keys/artcraft-builder.jks
+            printf '%s' "${KEYSTORE_PASSWORD:-}" > artcraft/keys/.keystore-password
+            echo "signing key restored from repository secrets"
+          else
+            echo "no KEYSTORE_BASE64 secret: the build keeps using/generating its cached key"
+          fi
 
       - name: Build the APK
         run: |
@@ -161,7 +180,7 @@ jobs:
           bash build.sh -effectcraft --noupdate \
             -appname="${APP_NAME}" \
             -appicon="$GITHUB_WORKSPACE/app-icon.png" \
-            -packagename="${{ inputs.package || 'com.artcraft.effectcraft.sx' }}" 2>&1 | tee logs/effectcraft-build.log
+            -packagename="${{ inputs.package || 'com.shimoveaex.effects' }}" 2>&1 | tee logs/effectcraft-build.log
 
       - name: Save the signing key
         if: always()
