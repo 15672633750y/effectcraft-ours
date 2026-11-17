@@ -81,3 +81,8 @@ EffectCraft Sx = `storytold/effectcraft` 的补丁版，在 GitHub Actions 构�
 ### 推送纪律
 `python3 tools/preflight.py` + `python3 tools/precheck.py` 都 OK 才 push；
 一次只推一批，推完等出包；失败自己查日志自己修，成功才通知用户。
+
+### 开屏现状（重要，别走老路）
+官方开屏用的是 windowBackground 贴图路径，会把图**裁切**（底部硬切边）并在边缘产生**黑斑**
+（源图与打包内的图标文件都验证过是干净的：源图 0.02% 深色噪点、包内 0.00%）。
+所以必须改成**自绘 View**：加载 512 drawable → 自己画圆角(22%) → 等比缩放不裁切 → 淡入淡出。
