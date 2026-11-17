@@ -38,11 +38,13 @@ METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的�
         let open_at: Option<f64> = ui.data(|d| d.get_temp(open_id));
         let chosen: Option<(f64, String)> = ui.data(|d| d.get_temp(chosen_id));
         // 布局目录：ours = dock 里的内置工作区名，used only when a card is clicked.
+        // EFFECTCRAFT_OURS_LAYOUT_REAL_V1 — 名字是我们自己的布局 id，切换时直接换 dock 布局树，
+        // 不走 set_workspace（移动端没有这些工作区，换了也不重排）
         let entries: [(&str, &str, &str, usize); 4] = [
-            ("Default", "经典", "多面板，功能全开", 0),
-            ("Small Screen", "简易", "上预览、下时间线，底部标签栏", 1),
-            ("Standard", "专业", "多面板 + 时间线居中", 2),
-            ("Minimal", "极简", "全屏预览，时间线浮在小条上", 3),
+            ("classic", "经典", "多面板，功能全开", 0),
+            ("simple", "简易", "上预览、下时间线", 1),
+            ("pro", "专业", "项目 + 预览 + 时间线", 2),
+            ("minimal", "极简", "只剩预览", 3),
         ];
         // 缩略示意图：四块小矩形，纯几何、不含任何 logo
         let diagram = |p: &egui::Painter, r: Rect, kind: usize, col: Color32| {
@@ -191,7 +193,10 @@ METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的�
                 return;
             }
             if let Some((workspace, name)) = clicked {
-                self.set_workspace(workspace);
+                // 直接换 dock 布局树：面板显隐/比例都来自这棵树，手机上一定重排
+                self.ui.dock = crate::dock::Workspace::new(crate::dock::ours_layout(workspace));
+                self.ui.workspace = name.to_string();
+                self.ui.maximized = None;
                 ui.data_mut(|d| {
                     d.remove::<f64>(open_id);
                     d.insert_temp(chosen_id, (now, name.to_string()));
@@ -206,17 +211,7 @@ METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的�
             return;
         }
 
-        // —— 收起状态：右上角常驻的「布局」——
-        let galley = ui.painter().layout_no_wrap("布局".to_string(), Tokens::ui(15.0), t.text_dim);
-        let r = Rect::from_min_size(Pos2::new(full.max.x - 10.0 - galley.size().x, full.min.y + 52.0), galley.size());
-        let resp = ui.interact(r.expand(10.0), egui::Id::new("layout-entry"), Sense::click());
-        let col = if resp.hovered() { t.text } else { t.text_dim };
-        ui.painter().galley(r.min, galley, col);
-        self.auto.add("layout.switcher", r, "布局");
-        if resp.clicked() {
-            ui.data_mut(|d| d.insert_temp(open_id, now));
-            ui.ctx().request_repaint();
-        }
+        // 收起状态：入口由预览区自己画（`panels/viewer.rs` 的 phase_press），这里什么都不画
     }
 
 '''
