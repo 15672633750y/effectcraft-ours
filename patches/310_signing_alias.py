@@ -23,6 +23,9 @@ def main() -> None:
     if MARKER in src:
         print("signing alias already configurable")
         return
+    if src.count(OLD) == 0 and 'ARTCRAFT_KEY_ALIAS="${ARTCRAFT_KEY_ALIAS:-shimove}"' in src:
+        print("signing alias already applied")
+        return
     if src.count(OLD) != 1:
         raise SystemExit(f"anchor: {src.count(OLD)}")
     path.write_text(src.replace(OLD, NEW, 1), encoding="utf-8")
