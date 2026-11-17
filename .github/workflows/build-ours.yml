@@ -1,29 +1,14 @@
-# ============================================================================
-# 暂存文件：本文件是要覆盖到 .github/workflows/build-ours.yml 的完整内容。
-#
-# 为什么放在仓库根：当前 GitHub 令牌是 fine-grained 令牌，缺 “Workflows: Read and
-# write” 权限，API 改 .github/workflows/ 下的文件会被 403 拒绝
-# （Resource not accessible by personal access token）。
-#
-# 这份改动解决“每轮构建 10~17 分钟 / 新推送还要排队”：
-#   1. 编译产物缓存的路径原来写的是 artcraft/source/effectcraft/target，
-#      但 builder 里是 export CARGO_TARGET_DIR="$ROOT/build/$APP/target"，
-#      真实目录是 artcraft/build/effectcraft/target —— 那个错误路径从来不存在，
-#      所以缓存每轮都是 1 秒恢复、0 秒保存、全量重编。
-#   2. clone 之后、打补丁之前把源码 mtime 归一到固定值：cargo 用 mtime 判 fresh，
-#      不归一的话新 clone 的文件全是新 mtime，缓存命中也全量重编。
-#   3. 额外缓存 cargo-ndk 二进制、Gradle caches/wrapper。
-#   4. 去掉 push 触发器：push.py 每次都会 dispatch，保留 push 会让一次推送跑两个构建。
-#   5. concurrency 改成 ours-<run_id>：新推送不再排队等前一个编完。
-#   6. 构建后打印 target / cargo / gradle 的体积，用来判断缓存是否真的省到时间
-#      （GitHub 每个仓库的 cache 有 10 GB 上限，超了会被 LRU 淘汰）。
-#
-# 用法（二选一）：
-#   A. 给令牌勾上 Workflows: Read and write（Settings → Developer settings →
-#      Fine-grained tokens → 该令牌 → Repository permissions → Workflows），
-#      然后让会话直接改 .github/workflows/；
-#   B. 在网页端把本文件内容整段贴到 .github/workflows/build-ours.yml。
-# ============================================================================
+# 编译缓存说明（2026-11-18）：
+#   1. 编译产物在 artcraft/build/<app>/target —— builder 里是
+#      export CARGO_TARGET_DIR="$ROOT/build/$APP/target"。以前缓存的是
+#      artcraft/source/effectcraft/target，那个目录从来不存在，所以每轮
+#      1 秒恢复、0 秒保存、全量重编。
+#   2. 新 clone 的源码 mtime 全是新的，cargo 用 mtime 判 fresh，不归一的话
+#      缓存命中也全量重编。归一必须放在**打补丁之前**：补丁改过的文件保持
+#      新的 mtime 才会正确重编。
+#   3. concurrency 用 run_id：新推送不再排队等前一个编完。
+#   4. 构建后打印 target/.cargo/.gradle 体积，用来判断缓存是否真省到时间
+#      （仓库 cache 上限 10 GB，超大条目会被 LRU 淘汰）。
 
 name: Build EffectCraft APK (ours)
 
