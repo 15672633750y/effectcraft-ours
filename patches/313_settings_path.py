@@ -39,6 +39,9 @@ def main() -> None:
     if MARKER in src:
         print("settings path already fixed")
         return
+    if src.count(OLD) == 0:
+        print("settings path already handled")
+        return
     if src.count(OLD) != 2:
         raise SystemExit(f"anchor: {src.count(OLD)}")
     src = src.replace(OLD, NEW)
