@@ -382,6 +382,21 @@ https://github.com/15672633750y/effectcraft-ours/releases/tag/ours-890
 而且它们**从未被任何一次 CI 编译过**（本地 preflight 只查括号/文档注释，不编译 Rust）。
 下次推它们时必须盯着构建结果，别当成"已经用过很多次的老补丁"。
 
+### 后端 2.3.0 起：注册/登录必须先过人机校验（2026-11-18 08:00 实测）
+```
+GET /auth/captcha  → {"ok":true,"id":"z2Ds...","question":"7 + 7","expires_in":300}
+POST /auth/register {"username","password","captcha_id","captcha_answer"}
+POST /auth/login    同上
+```
+- 题目是两个 1~9 的算数（`+` / `-`），5 分钟有效、一题一次、答错 5 次作废
+- **客户端要自己算**：文档 3.0 节给了 `solve()`，`340_cloud_http.py` 里按同样算法实现
+- 每次提交**现取新题**；`400 CAPTCHA_INVALID` / `CAPTCHA_REQUIRED` 就换题重试（实现里最多两次）
+- 错误体是**顶层** `{"ok":false,"code":"...","message":"中文"}`
+  —— **不是** `error.code`（我之前读错，已修；后端 message 直接拿来显示最准）
+- 实测：注册 → 201、登录 → 200、故意答错 → 400 `CAPTCHA_INVALID`
+  「人机校验无效或已使用，请重新获取」
+- `PUT /me` 文档用 `prefs`（后端也兼容 `prefs_json`），序列化后 ≤ 8 KB
+
 ### TLS 栈已验证（894 构建日志，2026-11-18 07:30）
 **ours-894 构建成功**（16.5 分钟）→ ureq 3.5.0 + rustls 0.23 + ring 在 Android/aarch64 上
 交叉编译通过，**0 warning**。日志里 `rustls` / `ring` / `webpki` / `platform-verifier` 都在，
