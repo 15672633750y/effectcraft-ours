@@ -83,6 +83,13 @@ pub(crate) fn specs() -> Vec<EffectSpec> {
                 p("length", "Length", num(50.0), slider(0.0, 100.0, 0.0, 100.0, 0)),
                 p("raysBrightness", "Rays Brightness", num(100.0), slider(0.0, 300.0, 0.0, 300.0, 0)),
                 p("threshold", "Threshold", num(20.0), slider(0.0, 100.0, 0.0, 100.0, 0)),
+                p("reverseRays", "Reverse Rays", Value::Bool(false), ParamUi::Checkbox),
+                p("raysColor", "Rays Color", col(1.0, 1.0, 1.0), ParamUi::Color),
+                p("sourceOpacity", "Source Opacity", num(100.0), slider(0.0, 100.0, 0.0, 100.0, 0)),
+                p("bgBrightness", "Bg Brightness", num(100.0), slider(0.0, 200.0, 0.0, 200.0, 0)),
+                p("raysFromAlpha", "Rays From Alpha", Value::Bool(false), ParamUi::Checkbox),
+                p("raysUnderSource", "Rays Under Source", Value::Bool(false), ParamUi::Checkbox),
+                p("affectAlpha", "Affect Alpha", Value::Bool(false), ParamUi::Checkbox),
             ],
             render_rays,
         ),
@@ -189,13 +196,20 @@ fn render_rays(cx: &EffectCtx, mut buf: Buf) -> Buf {
     let brightness = (cx.params.f("raysBrightness") / 100.0).clamp(0.0, 4.0) as f32;
     let threshold = (cx.params.f("threshold") / 100.0).clamp(0.0, 1.0) as f32;
     let length = (cx.params.f("length") / 100.0).clamp(0.0, 1.0) as f32;
+    let reverse = cx.params.b("reverseRays");
+    let colour = cx.params.color("raysColor");
+    let source_opacity = (cx.params.f("sourceOpacity") / 100.0).clamp(0.0, 1.0) as f32;
+    let background = (cx.params.f("bgBrightness") / 100.0).clamp(0.0, 4.0) as f32;
+    let from_alpha = cx.params.b("raysFromAlpha");
+    let under = cx.params.b("raysUnderSource");
+    let affect_alpha = cx.params.b("affectAlpha");
     let img = &buf.img;
     let (w, h) = (img.width as f32, img.height as f32);
     let cx0 = (cx.params.f("centerX") / 100.0).clamp(0.0, 1.0) as f32 * w;
     let cy0 = (cx.params.f("centerY") / 100.0).clamp(0.0, 1.0) as f32 * h;
     let lum = Plane::from_image(img, |px| {
         let (c, a) = unpremul(px);
-        luma(c) * a
+        if from_alpha { a } else { luma(c) * a }
     });
     let max_r = (w.max(h)) * length;
     let steps = 24;
@@ -212,7 +226,8 @@ fn render_rays(cx: &EffectCtx, mut buf: Buf) -> Buf {
             let (ux, uy) = (dx / dist, dy / dist);
             let mut acc = 0.0f32;
             for k in 0..steps {
-                let t = dist - (dist.min(max_r)) * (k as f32 / steps as f32);
+                let f = k as f32 / steps as f32;
+                let t = if reverse { dist + max_r * f } else { dist - dist.min(max_r) * f };
                 let s = lum.sample(f64::from(cx0 + ux * t), f64::from(cy0 + uy * t));
                 acc = acc.max(s);
             }
@@ -222,12 +237,28 @@ fn render_rays(cx: &EffectCtx, mut buf: Buf) -> Buf {
     let data = &mut buf.img.data;
     data.par_iter_mut().enumerate().for_each(|(i, px)| {
         let r = rays.get(i).copied().unwrap_or(0.0) * brightness;
-        if r <= 0.0 {
-            return;
-        }
         let (c, a) = unpremul(*px);
-        let out = if dark { [c[0] * (1.0 - r.min(1.0)), c[1] * (1.0 - r.min(1.0)), c[2] * (1.0 - r.min(1.0))] } else { [c[0] + r, c[1] + r, c[2] + r] };
-        *px = premul(out, a);
+        // 没有光线的地方按 Bg Brightness 提亮/压暗背景，有光线的地方交给光线合成。
+        let bgain = if r > 0.0 { 1.0 } else { background };
+        let src = [c[0] * source_opacity * bgain, c[1] * source_opacity * bgain, c[2] * source_opacity * bgain];
+        let lit = [colour[0] * r, colour[1] * r, colour[2] * r];
+        let out = if r <= 0.0 {
+            src
+        } else if dark {
+            let k = 1.0 - r.min(1.0);
+            [src[0] * k, src[1] * k, src[2] * k]
+        } else if under {
+            // 光线垫在源下面：源不透明的地方看不见光线。
+            [
+                lit[0] + src[0] * source_opacity,
+                lit[1] + src[1] * source_opacity,
+                lit[2] + src[2] * source_opacity,
+            ]
+        } else {
+            [src[0] + lit[0], src[1] + lit[1], src[2] + lit[2]]
+        };
+        let alpha = if affect_alpha { (a + r.min(1.0)).clamp(0.0, 1.0) } else { a };
+        *px = premul(out, alpha);
     });
     buf
 }

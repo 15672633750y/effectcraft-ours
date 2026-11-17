@@ -63,6 +63,33 @@ fn ffx_param(name: &str) -> Option<(&'static str, bool)> {
         "Source Brightness" | "SourceBrightness" => ("sourceBrightness", true),
         "Blur Amount" | "BlurAmount" => ("blurAmount", false),
         "Blur Inside" | "BlurInside" => ("blurInside", false),
+        // Sapphire 的 S_Rays / S_Glow / S_DropShadow / S_TextureFlux
+        "Rays Length" => ("length", true),
+        "Rays Brightness" => ("raysBrightness", true),
+        "Threshold" => ("threshold", true),
+        "Reverse Rays" => ("reverseRays", false),
+        "Rays Color" => ("raysColor", false),
+        "Source Opacity" => ("sourceOpacity", true),
+        "Bg Brightness" => ("bgBrightness", true),
+        "Rays From Alpha" => ("raysFromAlpha", false),
+        "Rays Under Source" => ("raysUnderSource", false),
+        "Affect Alpha" => ("affectAlpha", false),
+        "Light Rays|Dark Rays" => ("rayKind", false),
+        "Glow Width" => ("glowWidth", true),
+        "Glow" => ("glow", true),
+        "Glow Color" => ("glowColor", false),
+        "Glow From Alpha" => ("glowFromAlpha", false),
+        "Glow Under Source" => ("glowUnderSource", false),
+        "Distance" => ("distance", false),
+        "Direction" => ("direction", false),
+        "Softness" => ("softness", false),
+        "Shadow Color" => ("shadowColor", false),
+        "Frequency" => ("frequency", true),
+        "Speed" => ("speed", false),
+        "Detail" => ("detail", false),
+        "Random Seed" => ("seed", false),
+        "Center X" => ("centerX", true),
+        "Center Y" => ("centerY", true),
         _ => return None,
     })
 }
@@ -80,14 +107,19 @@ fn apply_ffx_values(s: &mut Session, effect_id: &str, values: &[(String, Vec<u8>
             continue;
         }
         // 枚举/布尔参数（Show / Effect / Combine / Invert Mask…）在 RIFX 里是 4 字节整数
-        let enumeration = matches!(param, "show" | "effect" | "combine");
-        let boolean = matches!(param, "invertMask" | "blurInside");
+        let enumeration = matches!(param, "show" | "effect" | "combine" | "rayKind");
+        let boolean = matches!(
+            param,
+            "invertMask" | "blurInside" | "reverseRays" | "raysFromAlpha" | "raysUnderSource" | "affectAlpha" | "glowFromAlpha" | "glowUnderSource"
+        );
         let value = if boolean {
             let v = u32::from_be_bytes([raw[0], raw[1], raw[2], raw[3]]);
             json!(v != 0)
         } else if enumeration {
             let v = u32::from_be_bytes([raw[0], raw[1], raw[2], raw[3]]);
-            json!(v.min(15))
+            // AE 的枚举从 1 开始，我们的参数从 0 开始
+            let index = if param == "rayKind" { v.saturating_sub(1).min(15) } else { v.min(15) };
+            json!(index)
         } else if nums.len() >= 3 {
             json!([nums[0], nums[1], nums[2], 1.0])
         } else {
