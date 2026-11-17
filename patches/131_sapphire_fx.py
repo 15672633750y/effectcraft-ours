@@ -105,8 +105,17 @@ pub(crate) fn specs() -> Vec<EffectSpec> {
                 p("amount", "Amount", num(35.0), slider(0.0, 100.0, 0.0, 100.0, 1)),
                 p("frequency", "Frequency", num(25.0), slider(1.0, 100.0, 1.0, 100.0, 1)),
                 p("speed", "Speed", num(20.0), slider(-100.0, 100.0, -100.0, 100.0, 0)),
-                p("detail", "Detail", num(3.0), slider(1.0, 6.0, 1.0, 6.0, 0)),
+                p("detail", "Octaves", num(3.0), slider(1.0, 6.0, 1.0, 6.0, 0)),
                 p("seed", "Random Seed", num(1.0), slider(0.0, 100.0, 0.0, 100.0, 0)),
+                p("shiftX", "Shift X", num(0.0), slider(-100.0, 100.0, -100.0, 100.0, 0)),
+                p("shiftY", "Shift Y", num(0.0), slider(-100.0, 100.0, -100.0, 100.0, 0)),
+                p("color0", "Color 0", col(0.0, 0.0, 0.0), ParamUi::Color),
+                p("color1", "Color 1", col(1.0, 1.0, 1.0), ParamUi::Color),
+                p("brightness1", "Brightness", num(100.0), slider(0.0, 200.0, 0.0, 200.0, 0)),
+                p("bgBrightness", "Bg Brightness", num(100.0), slider(0.0, 200.0, 0.0, 200.0, 0)),
+                p("bubbleAmount", "Bubble Amount", num(0.0), slider(0.0, 100.0, 0.0, 100.0, 0)),
+                p("inputOpacity", "Input Opacity", num(100.0), slider(0.0, 100.0, 0.0, 100.0, 0)),
+                p("outputOpacity", "Output Opacity", num(100.0), slider(0.0, 100.0, 0.0, 100.0, 0)),
             ],
             render_texture_flux,
         ),
@@ -299,6 +308,17 @@ fn render_texture_flux(cx: &EffectCtx, mut buf: Buf) -> Buf {
     let detail = cx.params.f("detail").clamp(1.0, 6.0) as u32;
     let seed = (cx.params.f("seed") * 977.0) as u32 ^ cx.seed;
     let t = cx.time as f32 * speed * 0.01;
+    // Sapphire 的「流光」是一层流动纹理：Shift 挪相位，Color0/Color1 给纹理上色，
+    // Brightness 提亮，Bubble 加一层圆泡扭曲，Input/Output Opacity 控进出。
+    let shift_x = cx.params.f("shiftX") as f32 * 0.01;
+    let shift_y = cx.params.f("shiftY") as f32 * 0.01;
+    let color0 = cx.params.color("color0");
+    let color1 = cx.params.color("color1");
+    let bright1 = (cx.params.f("brightness1") / 100.0).clamp(0.0, 4.0) as f32;
+    let background = (cx.params.f("bgBrightness") / 100.0).clamp(0.0, 4.0) as f32;
+    let bubble = (cx.params.f("bubbleAmount") / 100.0).clamp(0.0, 1.0) as f32;
+    let input_opacity = (cx.params.f("inputOpacity") / 100.0).clamp(0.0, 1.0) as f32;
+    let output_opacity = (cx.params.f("outputOpacity") / 100.0).clamp(0.0, 1.0) as f32;
     let img = &buf.img;
     let (w, h) = (img.width as f32, img.height as f32);
     let src = img.data.clone();
@@ -319,8 +339,16 @@ fn render_texture_flux(cx: &EffectCtx, mut buf: Buf) -> Buf {
                 amp *= 0.5;
                 f *= 2.0;
             }
-            let dx = nx * amount * 40.0;
-            let dy = ny * amount * 40.0;
+            let mut dx = nx * amount * 40.0;
+            let mut dy = ny * amount * 40.0;
+            if bubble > 0.0 {
+                let bx = (x * 0.05 + t).sin() * (y * 0.07).cos();
+                let by = (y * 0.05 - t).cos() * (x * 0.07).sin();
+                dx += bx * bubble * 60.0;
+                dy += by * bubble * 60.0;
+            }
+            dx += shift_x * w;
+            dy += shift_y * h;
             let sx = (x + dx).clamp(0.0, w - 1.0);
             let sy = (y + dy).clamp(0.0, h - 1.0);
             let x0 = sx.floor() as usize;
@@ -336,7 +364,18 @@ fn render_texture_flux(cx: &EffectCtx, mut buf: Buf) -> Buf {
                 let bottom = p01[k] + (p11[k] - p01[k]) * fx;
                 o[k] = top + (bottom - top) * fy;
             }
-            o
+            // 输入不透明度 + 纹理上色：用源亮度在 Color0..Color1 之间取色，再乘 Brightness。
+            let (c, a) = unpremul(o);
+            let l = luma(c).clamp(0.0, 1.0);
+            let tinted = [
+                (color0[0] + (color1[0] - color0[0]) * l) * bright1,
+                (color0[1] + (color1[1] - color0[1]) * l) * bright1,
+                (color0[2] + (color1[2] - color0[2]) * l) * bright1,
+            ];
+            let mix = amount * input_opacity;
+            let base = if amount < 1.0 { [c[0] * (1.0 - mix) + tinted[0] * mix, c[1] * (1.0 - mix) + tinted[1] * mix, c[2] * (1.0 - mix) + tinted[2] * mix] } else { tinted };
+            let alpha = (a * (input_opacity + (1.0 - input_opacity) * amount) * output_opacity * background).clamp(0.0, 1.0);
+            premul(base, alpha)
         })
         .collect();
     buf.img.data = out;
