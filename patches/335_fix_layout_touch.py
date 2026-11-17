@@ -65,6 +65,7 @@ TOUCH_INSERT = r'''    // EFFECTCRAFT_OURS_TOUCH_DRAG_V1 — 触屏兜底：没�
         let delta = resp.drag_delta();
         if delta != egui::Vec2::ZERO {
             let comp = v.comp;
+            let zoom = zoom as f64;
             let d = [(delta.x as f64) / zoom, (delta.y as f64) / zoom];
             let merge = drag_merge_key(ui);
             for lid in app.session.state.selected_layers.clone() {
