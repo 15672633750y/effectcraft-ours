@@ -69,6 +69,10 @@ pub(crate) fn specs() -> Vec<EffectSpec> {
                 p("glowColor", "Glow Color", col(1.0, 1.0, 1.0), ParamUi::Color),
                 p("glowFromAlpha", "Glow From Alpha", Value::Bool(false), ParamUi::Checkbox),
                 p("glowUnderSource", "Glow Under Source", Value::Bool(false), ParamUi::Checkbox),
+                p("widthX", "Width X", num(100.0), slider(0.0, 300.0, 0.0, 300.0, 0)),
+                p("widthY", "Width Y", num(100.0), slider(0.0, 300.0, 0.0, 300.0, 0)),
+                p("lightBackground", "Light Background", Value::Bool(false), ParamUi::Checkbox),
+                p("glowResult", "Show", Value::Enum(0), popup(&["Result", "Threshold"])),
             ],
             render_glow,
         ),
@@ -116,6 +120,9 @@ pub(crate) fn specs() -> Vec<EffectSpec> {
                 p("softness", "Softness", num(14.0), slider(0.0, 100.0, 0.0, 100.0, 1)),
                 p("opacity", "Opacity", num(60.0), slider(0.0, 100.0, 0.0, 100.0, 0)),
                 p("shadowColor", "Shadow Color", col(0.0, 0.0, 0.0), ParamUi::Color),
+                p("shiftX", "Shift X", num(0.0), slider(-400.0, 400.0, -400.0, 400.0, 1)),
+                p("shiftY", "Shift Y", num(0.0), slider(-400.0, 400.0, -400.0, 400.0, 1)),
+                p("fgOpacity", "Fg Opacity", num(100.0), slider(0.0, 100.0, 0.0, 100.0, 0)),
             ],
             render_drop_shadow,
         ),
@@ -138,18 +145,31 @@ fn render_glow(cx: &EffectCtx, mut buf: Buf) -> Buf {
             (luma(c) * bright).clamp(0.0, 1.0) * a
         }
     });
-    let sigma = f64::from(width) * 0.5;
-    let blurred = gauss_plane(&src, sigma, sigma);
+    let width_x = cx.params.f("widthX").clamp(0.0, 300.0) / 100.0;
+    let width_y = cx.params.f("widthY").clamp(0.0, 300.0) / 100.0;
+    let light_background = cx.params.b("lightBackground");
+    let threshold_view = cx.params.e("glowResult") == 1;
+    let sigma_x = f64::from(width) * 0.5 * width_x;
+    let sigma_y = f64::from(width) * 0.5 * width_y;
+    let blurred = gauss_plane(&src, sigma_x, sigma_y);
     let g = &blurred.data;
     buf.img.data.par_iter_mut().enumerate().for_each(|(i, px)| {
         let glow = g.get(i).copied().unwrap_or(0.0) * amount;
+        if threshold_view {
+            // Show ▸ Threshold：只看辉光遮罩本身
+            let v = glow.clamp(0.0, 1.0);
+            *px = premul([v, v, v], 1.0);
+            return;
+        }
         if glow <= 0.0 {
             return;
         }
         let (c, a) = unpremul(*px);
         let add = [colour[0] * glow, colour[1] * glow, colour[2] * glow];
+        // Glow Under Source：只在源透明的地方加；Light Background：源本身也提亮。
         let k = if under { 1.0 - a } else { 1.0 };
-        let out = [c[0] + add[0] * k, c[1] + add[1] * k, c[2] + add[2] * k];
+        let base = if light_background { 1.0 + glow } else { 1.0 };
+        let out = [c[0] * base + add[0] * k, c[1] * base + add[1] * k, c[2] * base + add[2] * k];
         let a_out = (a + (glow * k) * colour[3]).clamp(0.0, 1.0);
         *px = premul(out, a_out);
     });
@@ -165,8 +185,16 @@ fn render_drop_shadow(cx: &EffectCtx, mut buf: Buf) -> Buf {
     let alpha = Plane::alpha(&buf.img);
     let sigma = soft * 0.5;
     let blurred = gauss_plane(&alpha, sigma, sigma);
-    let ox = (dist * dir.cos()) as i64;
-    let oy = (dist * dir.sin()) as i64;
+    // AE 的 Sapphire 投影用 Shift X / Shift Y；我们原来用 Distance+Direction。
+    // 只要 Shift 非零就优先用它，这样预设里的位移能真的落下来。
+    let shift_x = cx.params.f("shiftX");
+    let shift_y = cx.params.f("shiftY");
+    let fg = (cx.params.f("fgOpacity") / 100.0).clamp(0.0, 1.0) as f32;
+    let (ox, oy) = if shift_x.abs() > 0.01 || shift_y.abs() > 0.01 {
+        (shift_x as i64, shift_y as i64)
+    } else {
+        ((dist * dir.cos()) as i64, (dist * dir.sin()) as i64)
+    };
     let w = buf.img.width as i64;
     let src = &buf.img.data;
     let out: Vec<[f32; 4]> = (0..src.len())
@@ -176,6 +204,7 @@ fn render_drop_shadow(cx: &EffectCtx, mut buf: Buf) -> Buf {
             let y = (i as i64) / w;
             let sa = (blurred.get_clamped(x - ox, y - oy) * opacity).clamp(0.0, 1.0);
             let (c, a) = unpremul(src[i]);
+            let a = a * fg;
             let shadow = [colour[0] * sa, colour[1] * sa, colour[2] * sa];
             // Source over the shadow.
             let a_out = a + sa * (1.0 - a);

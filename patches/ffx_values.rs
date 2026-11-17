@@ -84,6 +84,14 @@ fn ffx_param(name: &str) -> Option<(&'static str, bool)> {
         "Direction" => ("direction", false),
         "Softness" => ("softness", false),
         "Shadow Color" => ("shadowColor", false),
+        "Shift X" => ("shiftX", false),
+        "Shift Y" => ("shiftY", false),
+        "Fg Opacity" => ("fgOpacity", true),
+        "Shadow Opacity" => ("opacity", true),
+        "Shadow Blur" => ("softness", false),
+        "Width X" => ("widthX", true),
+        "Width Y" => ("widthY", true),
+        "Light Background" => ("lightBackground", false),
         "Frequency" => ("frequency", true),
         "Speed" => ("speed", false),
         "Detail" => ("detail", false),
@@ -110,7 +118,7 @@ fn apply_ffx_values(s: &mut Session, effect_id: &str, values: &[(String, Vec<u8>
         let enumeration = matches!(param, "show" | "effect" | "combine" | "rayKind");
         let boolean = matches!(
             param,
-            "invertMask" | "blurInside" | "reverseRays" | "raysFromAlpha" | "raysUnderSource" | "affectAlpha" | "glowFromAlpha" | "glowUnderSource"
+            "invertMask" | "blurInside" | "reverseRays" | "raysFromAlpha" | "raysUnderSource" | "affectAlpha" | "glowFromAlpha" | "glowUnderSource" | "lightBackground"
         );
         let value = if boolean {
             let v = u32::from_be_bytes([raw[0], raw[1], raw[2], raw[3]]);
