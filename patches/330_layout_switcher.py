@@ -151,7 +151,15 @@ METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的�
         // 所以首页 / 最大化别的面板时这里拿不到值（那些地方没有画布，也就不该有按钮）。
         let canvas: Option<egui::Rect> = ui.data(|d| d.get_temp(egui::Id::new("ours-canvas-rect")));
         let was_open = ui.data(|d| d.get_temp::<f64>(egui::Id::new("layout-open-at")));
-        if was_open.is_none() {
+        // 没有画布的地方（首页、最大化别的面板）不该留着展开状态和浮出的名字，
+        // 否则遮罩会盖在首页上、只能等 8 秒自动收。
+        if canvas.is_none() {
+            if was_open.is_some() {
+                ui.data_mut(|d| d.remove::<f64>(egui::Id::new("layout-open-at")));
+            }
+            ui.data_mut(|d| d.remove::<(f64, String)>(egui::Id::new("layout-chosen")));
+        }
+        if was_open.is_none() && canvas.is_some() {
             if let Some(area) = canvas {
                 self.ours_layout_entry(ui, area);
                 if ui.data(|d| d.get_temp::<f64>(egui::Id::new("layout-open-at"))).is_some() {
