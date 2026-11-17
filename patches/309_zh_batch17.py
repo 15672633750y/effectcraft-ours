@@ -61,7 +61,7 @@ ROWS = """    // EFFECTCRAFT_OURS_ZH_BATCH17_V1 — 状态栏与命令报错
     ("invalid syntax", "语法无效"),
     ("it has no path", "它没有路径"),
     ("item vanished", "项目项已消失"),
-    ("leading: expected a number or \"auto\"", "leading：需要数字或 \"auto\""),
+    ("leading: expected a number or \\"auto\\"", "leading：需要数字或 “auto”"),
     ("media import is not available in this build", "此版本不支持导入媒体"),
     ("no 3D Camera Tracker", "没有 3D 摄像机跟踪"),
     ("no 3D Camera Tracker analysis is running", "没有正在运行的 3D 摄像机跟踪分析"),
