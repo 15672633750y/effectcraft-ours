@@ -30,21 +30,24 @@ EffectCraft Sx = `storytold/effectcraft` 的补丁版，在 GitHub Actions 构�
 - 快捷键面板（P/S/R/T/A、裁剪、裁剪前后、U、预合成 Ctrl+Shift+C、音频频谱 L、多选 M）
 - 长按/多选开关、预合成多图层、面板折叠/拖动/穿透、输入框每次点击弹键盘
 - CapCut 导出、系统分享、NV 导入、崩溃取证
-- 汉化 5 批 + 混合模式/纯色设置（约 465 行已进翻译表）
+- 汉化 19 批（`ui.rs` 表 3302 行）、开屏自绘 View、签名指纹校验、文字动画器「蒸发」
 
 ## 未完成
-1. **汉化**：界面文字已收口，剩效果参数名长尾
-   - 进度（2026-11-17 07:00，已推 1–11 批）：`ui.rs` 表 1074 → 2310 行；`prop.rs` 196 → 672 臂；
-     `tr()` 字面量 606/606；tooltip 100%；裸画英文 0；**参数名还剩 ~321 条**
-   - 做法：中文行加到 `crates/ui-egui/src/i18n/ui.rs` 的 `SIMPLIFIED_CHINESE` 表
-   - 插入锚点：`];\n/// EFFECTCRAFT_OURS_ZH_BLEND_SOLID_V1`（把新行插在 `];` 之前）
-   - **参数名也走这张表**：`zzzzzzzzzzzzzzzzz_zh_prop_fallback.py` 把 `i18n/prop.rs` 的兜底改成查表
-   - 裸画文字的坑：控件若直接 `painter.text(...)`，表里有中文也不显示 → 见 `zzzzzzzzzzzzzzzz_zh_draw_routes.py`
-   - 文件名就是执行顺序（`3xx` < `70_` < `9x` < `1xx` < `zz_`）；改 `prop.rs` 的补丁必须排在 `70_property_names_zh.py` 之后
-2. 文字动画器导入（inbox/奇峰自由文字出场.ffx 的“蒸发”）
-3. S_射线 / S_辉光 / S_阴影 / S_TextureFlux 真实实现（现在是空壳）
+1. **汉化**：已收口到 0 英文（2026-11-17 12:00，ours-808）
+   - `ui.rs` 表 3302 行；`tr()` 覆盖 610/610；直接画的英文 0（只剩两行 Download 路径提示不翻）
+   - 效果参数名 1071 条全部有中文（`prop::name` 兜底查表，见 `zzzzzzzzzzzzzzzzz_zh_prop_fallback.py`）
+   - 新加字符串请按「第十八/十九批」的做法：普通文案进 `ui.rs` 表；`format!` 拼出来的改成 `tr_args`
+2. 文字动画器导入：已支持 `.ffx` 的 `Evaporate Animator` → 内置「蒸发」预设（`314_ffx_text_animator.py`）
+   - 其它 AE 文字动画器还没做；要加就往 `presets/text_animators.json` 加条目 + 在 `ffx_text_presets` 认名字
+3. S_射线 / S_辉光 / S_阴影 / S_TextureFlux：**不是空壳**（`131_sapphire_fx.py` 有真实实现）
+   - 2026-11-17 已把四个效果的 Sapphire 参数集补齐并接进渲染（ours-812/814/815）：
+     射线（Reverse/Rays Color/Source Opacity/Bg Brightness/From Alpha/Under Source/Affect Alpha）、
+     辉光（Width X、Y/Light Background/Show▸Threshold）、
+     阴影（Shift X、Y 优先于 Distance+Direction/Fg Opacity）、
+     流光（Shift X、Y/Color 0、1/Brightness/Bg/Bubble/Input、Output Opacity）
+   - `ffx_values.rs` 的名字映射同步补齐，导入 `.ffx` 时这些值能真正写进效果
 4. RSMB 运动模糊、MB Looks（用户说先放着）
-5. 字体缺失提示
+5. 字体缺失提示（缺字体时提示放 /sdcard/Fonts/）
 
 ## 环境坑
 - 本机**没有 Rust 工具链**，编译错误只能等 CI；所以 precheck 是唯一防线
@@ -86,3 +89,29 @@ EffectCraft Sx = `storytold/effectcraft` 的补丁版，在 GitHub Actions 构�
 官方开屏用的是 windowBackground 贴图路径，会把图**裁切**（底部硬切边）并在边缘产生**黑斑**
 （源图与打包内的图标文件都验证过是干净的：源图 0.02% 深色噪点、包内 0.00%）。
 所以必须改成**自绘 View**：加载 512 drawable → 自己画圆角(22%) → 等比缩放不裁切 → 淡入淡出。
+
+## 调色（ffx_vintage）交接说明 —— 任何会话接手前先读这段
+### 文件与结构
+- 实现：`crates/effects/src/ffx_vintage.rs`
+- 处理链（顺序不能乱）：
+  `fitted(base[0..2])` → 对比度 → 径向增益（1.10 − 0.16·r²）→ 饱和度/亮度/色调/暗部 (+chroma)
+  → `shown` → 按 amount 混合
+- 拟合表：`FIT: [[f32; 20]; 3]`，三次多项式，三通道各 20 个系数
+- **参数必须在拟合之后应用**，否则 AE 的参数语义对不上
+
+### 已知基准（2026-11-16 实测，别改坏）
+- 用户 `原图.png` → AE `调色.png`，57 600 采样点
+- 拟合误差 MAE ≈ 3.19 / 2.90 / 2.67（R/G/B）
+- luma 77.2（AE 77.2）、对比度 38.4（AE 39.1）、饱和度 0.181（AE 0.183）
+- 交叉验证用户自己导的 `Frame3.png`：MAE 3.01 / 2.88 / 2.60、luma 77.2 vs 77.2、
+  对比度 39.3 vs 39.0、饱和度 0.177 vs 0.183
+
+### 验证方法
+1. 用同一张源图，App 里只套这个效果、默认参数，导出 PNG
+2. 与 AE 导出对比：算三通道 MAE、平均亮度、对比度（std）、饱和度
+3. **必须给数字**：只有"看着不对"无法定位；说"暗部偏红 3 点 / 高光 luma 82"才能改
+
+### 受过的伤（不要重犯）
+- `Frame2.png` 偏暗（luma 55.4）→ `shown` 提前计算 + `base_pass` 门控导致，已在 245/247 修
+- 拟合值和参数混用顺序错 → 视觉完全跑偏
+- 改曲线时若只改 FIT 不动径向增益/对比度，会和之前的校准结果打架
