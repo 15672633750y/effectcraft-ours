@@ -382,6 +382,17 @@ https://github.com/15672633750y/effectcraft-ours/releases/tag/ours-890
 而且它们**从未被任何一次 CI 编译过**（本地 preflight 只查括号/文档注释，不编译 Rust）。
 下次推它们时必须盯着构建结果，别当成"已经用过很多次的老补丁"。
 
+### ⚠️ `223_share_stale.py` 不能推（锚点只存在于本地 builder）
+- 本地 `builder/templates/android/SafActivity.java` 是 **2520 行**；
+  CI 里 `actions/checkout` 拉的 **v0.5.0 tag** 只有 **1560 行**（两边 `BUILDER_VERSION` 都写 0.5.0，
+  所以光看版本号看不出来）。
+- `223` 的锚点 `java.io.File f = new java.io.File(path);` 在 v0.5.0 里**不存在** →
+  推上去就是 `anchor: 0`，配 `set -euo pipefail` 直接让构建失败。
+- 结论：**222 可以单独推**（它改 `crates/ui-egui/src/app.rs`，与 builder 版本无关）；
+  **223 要么放弃，要么按 v0.5.0 的真实代码重写锚点**。
+- 附带：`tools/preflight.py` 拿**本地 builder** 验证 builder 补丁，所以「preflight 过了」并不
+  等于「CI 上锚点能命中」。这正是第 11 节那条「本地 builder 被改脏 → preflight 假通过」。
+
 ### 后端 2.3.0 起：注册/登录必须先过人机校验（2026-11-18 08:00 实测）
 ```
 GET /auth/captcha  → {"ok":true,"id":"z2Ds...","question":"7 + 7","expires_in":300}
