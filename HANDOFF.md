@@ -145,3 +145,33 @@ EffectCraft Sx = `storytold/effectcraft` 的补丁版，在 GitHub Actions 构�
 5. S_ 系列效果：131 已有实现，属"近似 Sapphire"，不要承诺"一模一样"
 6. RSMB、MB Looks（用户说先放着）
 7. 字体缺失提示（小项）
+
+## 布局切换器（下一轮的主任务）
+### 交互规格（用户定的）
+- 入口：**画布右上角一个按钮**（就是当前"预览"标题栏那块），点击向下展开面板，面板尽量矮
+- 面板内容：每个布局一行「**缩略示意图 + 名称**」（缩略图按布局画几个色块示意，不要用别人的 logo）
+- 选中态：**沿用快捷键面板的"多选发光"做法**（见下）
+- 切换时：播放过渡动画 + 屏幕中部短暂显示新布局名字（约 700ms 淡出）
+- 布局命名用中性词：经典 / 简易 / 专业 / 极简（副标题可写风格描述，不写 CapCut/Blurrr/AE 等商标）
+
+### 「多选发光」怎么做的（用户特别交代要写清楚）
+在 `crates/ui-egui/src/app/frame.rs` 的快捷键面板里，「多选 M」那个磁贴选中时的画法：
+1. **不填充背景**，只在磁贴矩形外画 **3 圈描边**，半径依次外扩 1.5 / 3 / 4.5 px
+2. 三圈颜色都用主题强调色 `t.accent`，透明度递减：约 220 / 120 / 60（越外越淡）
+3. 描边宽度都是 1.0~1.5 px，圆角 `CornerRadius` 与磁贴一致
+4. 因此文字和图标**不会被白色蒙层压暗**，在发光背景上依然清晰
+5. 动画：选中时最外圈 alpha 从 0 渐入（约 120ms），取消时直接消失
+
+代码骨架（egui）：
+```rust
+let r = rect.expand(1.5);
+ui.painter().rect_stroke(r, radius, Stroke::new(1.5, t.accent.gamma_multiply(0.86)));
+ui.painter().rect_stroke(r.expand(1.5), radius, Stroke::new(1.2, t.accent.gamma_multiply(0.47)));
+ui.painter().rect_stroke(r.expand(3.0), radius, Stroke::new(1.0, t.accent.gamma_multiply(0.24)));
+```
+
+### 额外可加（用户想要的"比它好看"）
+- 扫描光线：沿选中卡片边框移动一段高光（t 0→1，循环 1.6s）
+- HUD 角标：四角短线段
+- 自定义主色：设置里取色 → 存 prefs，所有发光/描边跟随
+- 赛博主题：背景 #0A0E14、主色 #00E5FF、次色 #FF2E88 + 扫描线纹理
