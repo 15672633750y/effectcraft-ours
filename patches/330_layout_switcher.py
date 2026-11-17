@@ -29,6 +29,67 @@ SIG = (
 )
 
 METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的「布局」与四套布局切换面板
+    // EFFECTCRAFT_OURS_LAYOUT_PREVIEW_V1 — 用真实布局树画卡片里的缩略预览
+    fn ours_layout_mini(p: &egui::Painter, r: Rect, node: &crate::dock::Node<crate::dock::PanelKind>, tint: crate::theme::Color32, base: crate::theme::Color32) {
+        use crate::dock::PanelKind::*;
+        let gap = 2.0;
+        match node {
+            crate::dock::Node::Tabs { panels, active } => {
+                let Some(kind) = panels.get(*active).or_else(|| panels.first()) else { return };
+                p.rect_filled(r, 2.0, base);
+                match kind {
+                    Composition | Layer | Preview => {
+                        p.rect_stroke(r.shrink(1.0), 2.0, egui::Stroke::new(1.0, tint), egui::StrokeKind::Inside);
+                        let inner = r.shrink(r.width().min(r.height()) * 0.18);
+                        p.rect_filled(inner, 1.0, crate::theme::Color32::from_black_alpha(210));
+                        let c = inner.center();
+                        let s = inner.width().min(inner.height()) * 0.20;
+                        p.add(egui::Shape::convex_polygon(
+                            vec![c + egui::vec2(-s * 0.7, -s), c + egui::vec2(-s * 0.7, s), c + egui::vec2(s, 0.0)],
+                            tint,
+                            egui::Stroke::NONE,
+                        ));
+                    }
+                    Timeline | RenderQueue => {
+                        for i in 0..6 {
+                            let x = r.min.x + 3.0 + (r.width() - 6.0) * (i as f32 / 5.0);
+                            p.line_segment([egui::pos2(x, r.min.y + 2.0), egui::pos2(x, r.max.y - 2.0)], egui::Stroke::new(1.0, tint.gamma_multiply(0.25)));
+                        }
+                        let bar = Rect::from_min_size(egui::pos2(r.min.x + 3.0, r.min.y + r.height() * 0.42), egui::vec2(r.width() - 6.0, r.height() * 0.34));
+                        p.rect_filled(bar, 1.0, tint.gamma_multiply(0.65));
+                    }
+                    _ => {
+                        for i in 0..3 {
+                            let y = r.min.y + 4.0 + i as f32 * (r.height() - 8.0) / 3.0;
+                            let w = (r.width() - 8.0) * (0.82 - 0.14 * i as f32);
+                            p.rect_filled(Rect::from_min_size(egui::pos2(r.min.x + 4.0, y), egui::vec2(w, 2.0)), 1.0, tint.gamma_multiply(0.45));
+                        }
+                    }
+                }
+            }
+            crate::dock::Node::Split { axis, size, first, second } => {
+                let frac = match size {
+                    crate::dock::SplitSize::Ratio(f) => (*f).clamp(0.15, 0.85),
+                    crate::dock::SplitSize::FixedFirst(n) => (n / (n + 420.0)).clamp(0.2, 0.6),
+                    _ => 0.5,
+                };
+                match axis {
+                    crate::dock::SplitAxis::Horizontal => {
+                        let w = (r.width() - gap) * frac;
+                        Self::ours_layout_mini(p, Rect::from_min_size(r.min, egui::vec2(w, r.height())), first, tint, base);
+                        Self::ours_layout_mini(p, Rect::from_min_size(egui::pos2(r.min.x + w + gap, r.min.y), egui::vec2(r.width() - w - gap, r.height())), second, tint, base);
+                    }
+                    _ => {
+                        let h = (r.height() - gap) * frac;
+                        Self::ours_layout_mini(p, Rect::from_min_size(r.min, egui::vec2(r.width(), h)), first, tint, base);
+                        Self::ours_layout_mini(p, Rect::from_min_size(egui::pos2(r.min.x, r.min.y + h + gap), egui::vec2(r.width(), r.height() - h - gap)), second, tint, base);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
     fn draw_layout_switcher(&mut self, ui: &mut egui::Ui, full: egui::Rect) {
         use egui::{Color32, Key, Pos2, Rect, Sense, Stroke, StrokeKind, Vec2};
         let t = self.tokens;
@@ -48,10 +109,10 @@ METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的�
         // EFFECTCRAFT_OURS_LAYOUT_REAL_V1 — 名字是我们自己的布局 id，切换时直接换 dock 布局树，
         // 不走 set_workspace（移动端没有这些工作区，换了也不重排）
         let entries: [(&str, &str, &str, usize); 4] = [
-            ("classic", "经典", "多面板，功能全开", 0),
-            ("simple", "简易", "上预览、下时间线", 1),
-            ("pro", "专业", "项目 + 预览 + 时间线", 2),
-            ("minimal", "极简", "只剩预览", 3),
+            ("classic", "经典", "项目 | 合成 | 时间轴", 0),
+            ("simple", "简易", "上预览、下时间轴", 1),
+            ("pro", "专业", "左项目、右预览、下时间轴", 2),
+            ("minimal", "极简", "只有合成预览", 3),
         ];
         // 缩略示意图：四块小矩形，纯几何、不含任何 logo
         let diagram = |p: &egui::Painter, r: Rect, kind: usize, col: Color32| {
@@ -70,17 +131,49 @@ METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的�
         // —— 切换完成后的中央名字（约 900ms）——
         if let Some((at, name)) = chosen {
             let e = (now - at) as f32;
-            if e < 0.95 {
+            if e < 1.05 {
                 ui.ctx().request_repaint();
-                let fade = if e < 0.18 { e / 0.18 } else { (1.0 - (e - 0.18) / 0.72).clamp(0.0, 1.0) };
-                let galley = ui.painter().layout_no_wrap(name.clone(), Tokens::semibold(30.0), Color32::WHITE);
-                let r = Rect::from_center_size(full.center(), galley.size() + Vec2::new(28.0, 16.0));
-                let a = (fade * 235.0) as u8;
-                ui.painter().rect_filled(r.expand(6.0), 12.0, Color32::from_rgba_unmultiplied(10, 12, 18, (a as f32 * 0.72) as u8));
-                ui.painter().galley(r.min + Vec2::new(14.0, 8.0), galley, Color32::from_rgba_unmultiplied(255, 255, 255, a));
-                // 扫光：一条强调色的细线从左扫到右
-                let sx = r.min.x + r.width() * ((e / 0.6).clamp(0.0, 1.0));
-                ui.painter().line_segment([Pos2::new(sx, r.min.y), Pos2::new(sx + 26.0, r.max.y)], Stroke::new(2.0, t.accent.gamma_multiply(fade)));
+                let fade = if e < 0.16 { e / 0.16 } else { (1.0 - (e - 0.16) / 0.86).clamp(0.0, 1.0) };
+                // EFFECTCRAFT_OURS_LAYOUT_SWEEP_V2 — 点击后**整个界面**扫一遍：一条竖直的强调色光带
+                // 从左扫到右（不再是沿边框跑的小点）。
+                let sweep = (e / 0.85).clamp(0.0, 1.0);
+                let band = full.width() * 0.22;
+                let sx = full.min.x - band + (full.width() + band) * sweep;
+                for (k, a) in [(1.0f32, 0.10f32), (0.55, 0.18), (0.22, 0.34)] {
+                    let hw = band * k * 0.5;
+                    let g = Rect::from_min_max(Pos2::new(sx - hw, full.min.y), Pos2::new(sx + hw, full.max.y));
+                    ui.painter().rect_filled(g, 0.0, t.accent.gamma_multiply(a * fade));
+                }
+                // 布局名：主题色、字号放大、加字距 + 三层辉光 + 下划线（赛博感）
+                let font = Tokens::semibold(46.0);
+                let chars: Vec<char> = name.chars().collect();
+                let spacing = 10.0_f32;
+                let mut glyphs: Vec<(char, std::sync::Arc<egui::Galley>)> = Vec::new();
+                let mut total = 0.0_f32;
+                for ch in &chars {
+                    let g = ui.painter().layout_no_wrap(ch.to_string(), font.clone(), t.accent);
+                    total += g.size().x + spacing;
+                    glyphs.push((*ch, g));
+                }
+                total -= spacing;
+                let cy = full.center().y;
+                let mut x = full.center().x - total / 2.0;
+                for (_, g) in &glyphs {
+                    let y = cy - g.size().y / 2.0;
+                    for (spread, alpha) in [(3.0f32, 0.16f32), (1.5, 0.30)] {
+                        ui.painter().galley(Pos2::new(x + spread, y), g.clone(), t.accent.gamma_multiply(alpha * fade));
+                        ui.painter().galley(Pos2::new(x - spread, y), g.clone(), t.accent.gamma_multiply(alpha * fade));
+                    }
+                    ui.painter().galley(Pos2::new(x, y), g.clone(), t.accent.gamma_multiply(fade));
+                    x += g.size().x + spacing;
+                }
+                // 下划线：两端各一段强调色短线，中间一条淡线
+                let under = Pos2::new(full.center().x - total / 2.0, cy + 46.0);
+                let line_w = total;
+                ui.painter().line_segment([under, Pos2::new(under.x + line_w, under.y)], Stroke::new(1.0, t.accent.gamma_multiply(0.45 * fade)));
+                for (x0, w) in [(under.x, 26.0f32), (under.x + line_w - 26.0, 26.0)] {
+                    ui.painter().line_segment([Pos2::new(x0, under.y), Pos2::new(x0 + w, under.y)], Stroke::new(2.0, t.accent.gamma_multiply(fade)));
+                }
             } else {
                 ui.data_mut(|d| d.remove::<(f64, String)>(chosen_id));
             }
@@ -100,7 +193,7 @@ METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的�
             let dim = (e / 0.2).clamp(0.0, 1.0);
             ui.painter().rect_filled(full, 0.0, Color32::from_black_alpha((196.0 * dim) as u8));
 
-            // 附加效果：HUD 四角短线 + 沿边框跑的扫描光（1.6s 一圈）
+            // HUD 四角短线（保留）
             let accent = t.accent.gamma_multiply(dim * 0.75);
             let tick = 18.0;
             for (corner, dx, dy) in [
@@ -112,35 +205,8 @@ METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的�
                 ui.painter().line_segment([corner, Pos2::new(corner.x + tick * dx, corner.y)], Stroke::new(1.5, accent));
                 ui.painter().line_segment([corner, Pos2::new(corner.x, corner.y + tick * dy)], Stroke::new(1.5, accent));
             }
-            let cycle = ((now - at) / 1.6).fract() as f32;
-            let per = (full.width() * 2.0 + full.height() * 2.0) as f32;
-            let mut dpos = cycle * per;
-            let (ew, eh) = (full.width(), full.height());
-            let (sx, sy);
-            if dpos < ew {
-                sx = full.min.x + dpos;
-                sy = full.min.y;
-            } else {
-                dpos -= ew;
-                if dpos < eh {
-                    sx = full.max.x;
-                    sy = full.min.y + dpos;
-                } else {
-                    dpos -= eh;
-                    if dpos < ew {
-                        sx = full.max.x - dpos;
-                        sy = full.max.y;
-                    } else {
-                        dpos -= ew;
-                        sx = full.min.x;
-                        sy = full.max.y - dpos.min(eh);
-                    }
-                }
-            }
-            ui.painter().circle_filled(Pos2::new(sx, sy), 3.0, t.accent.gamma_multiply(dim));
-            ui.painter().circle_filled(Pos2::new(sx, sy), 9.0, t.accent.gamma_multiply(dim * 0.22));
             let card_w = 330.0_f32.min(full.width() - 32.0);
-            let card_h = 86.0;
+            let card_h = 92.0;
             let gap = 12.0;
             let total = card_h * entries.len() as f32 + gap * (entries.len() as f32 - 1.0);
             let x0 = full.center().x - card_w / 2.0;
@@ -171,10 +237,14 @@ METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的�
                     ui.painter().rect_stroke(base.expand(1.5), 12.0, Stroke::new(1.2, t.accent.gamma_multiply(0.47 * ease)), StrokeKind::Outside);
                     ui.painter().rect_stroke(base.expand(3.0), 12.0, Stroke::new(1.0, t.accent.gamma_multiply(0.24 * ease)), StrokeKind::Outside);
                 }
-                // 缩略示意图
-                let th = Rect::from_min_size(Pos2::new(r.min.x + 12.0, r.min.y + 13.0), Vec2::new(60.0, 60.0));
-                ui.painter().rect_filled(th, 6.0, Color32::from_rgba_unmultiplied(12, 14, 18, alpha));
-                diagram(ui.painter(), th, kind, Color32::from_rgba_unmultiplied(150, 200, 230, (alpha as f32 * 0.85) as u8));
+                // 缩略图：真实布局预览（直接按 dock 布局树画，比例就是真实比例）
+                let th = Rect::from_min_size(Pos2::new(r.min.x + 12.0, r.min.y + 11.0), Vec2::new(104.0, 64.0));
+                ui.painter().rect_filled(th, 4.0, Color32::from_rgba_unmultiplied(10, 12, 16, alpha));
+                let tint = Color32::from_rgba_unmultiplied(150, 205, 235, (alpha as f32 * 0.9) as u8);
+                let base = Color32::from_rgba_unmultiplied(40, 46, 56, alpha);
+                if let Some(root) = crate::dock::ours_layout(workspace).root.as_ref() {
+                    ours_layout_mini(ui.painter(), th, root, tint, base);
+                }
                 // 名称 + 说明
                 let np = Pos2::new(th.max.x + 12.0, r.min.y + 20.0);
                 let ng = ui.painter().layout_no_wrap(name.to_string(), Tokens::semibold(16.0), Color32::WHITE);
