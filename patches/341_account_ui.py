@@ -430,7 +430,8 @@ fn panel_inner(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
 }
 
 fn scrim(ui: &egui::Ui, full: Rect) {
-    ui.painter().rect_filled(full, 0.0, Color32::from_black_alpha(95));
+    // 遮罩很淡（45）：玻璃卡片本身已经足够区分，太深会把后面的头像/控件压偏色。
+    ui.painter().rect_filled(full, 0.0, Color32::from_black_alpha(45));
 }
 
 fn card(t: &Tokens, ui: &egui::Ui, full: Rect, width: f32, height: f32, title: &str) -> Rect {
