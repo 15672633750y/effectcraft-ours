@@ -686,6 +686,11 @@ fn paint_eye(p: &egui::Painter, center: Pos2, open: bool, color: Color32) {
     }
 }
 
+/// 给别的面板（比如保存预设弹窗）复用同一套按钮样式。
+pub fn button_pub(ui: &mut egui::Ui, t: &Tokens, r: Rect, label: &str, primary: bool) -> bool {
+    button(ui, t, r, label, primary)
+}
+
 fn button(ui: &mut egui::Ui, t: &Tokens, r: Rect, label: &str, primary: bool) -> bool {
     // Id 里必须带上位置：三个生日 stepper 的 "-"/"+" 文字相同，只用 label 会撞成同一个
     // widget，表现就是「只有第一个能点，日期改不了」。
