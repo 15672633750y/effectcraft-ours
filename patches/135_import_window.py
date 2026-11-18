@@ -397,7 +397,7 @@ fn import_row(
     }
 }
 
-/// 不支持的条目：同样的行样式，整体 40% 透明，右侧「暂不支持」。
+/// 不支持的条目：同样的行样式，整体 40% 透明，右侧「敬请期待」。
 fn import_disabled_row(ui: &mut egui::Ui, t: &Tokens, title: &str) {
     let width = ui.available_width();
     let (rect, _) = ui.allocate_exact_size(vec2(width, 52.0), Sense::hover());
@@ -416,7 +416,7 @@ fn import_disabled_row(ui: &mut egui::Ui, t: &Tokens, title: &str) {
     p.text(
         egui::pos2(rect.max.x - 14.0, rect.center().y),
         egui::Align2::RIGHT_CENTER,
-        "暂不支持",
+        "敬请期待",
         Tokens::ui(11.0),
         t.text_faint,
     );
@@ -432,29 +432,20 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
     dispatch_import(app, ctx);
     let t = app.tokens;
     let style = ctx.style_of(ctx.theme());
-    let dark = style.visuals.dark_mode;
-    // 和「快捷」同材质：暗色 rgba(20,22,26,0.86) / 亮色 rgba(250,250,252,0.9)，1px 发丝边。
-    let bg = if dark {
-        Color32::from_rgba_unmultiplied(20, 22, 26, 219)
-    } else {
-        Color32::from_rgba_unmultiplied(250, 250, 252, 230)
-    };
-    let border = if dark {
-        Color32::from_rgba_unmultiplied(255, 255, 255, 26)
-    } else {
-        Color32::from_rgba_unmultiplied(0, 0, 0, 26)
-    };
+    // 和「快捷键」面板**完全相同**的材质：rgba(12,12,14,130) 半透明底 + 白色 90 细边 + 圆角 14。
+    let bg = Color32::from_rgba_unmultiplied(12, 12, 14, 130);
+    let border = Color32::from_rgba_unmultiplied(255, 255, 255, 90);
     let frame = egui::Frame::window(&style)
         .fill(bg)
-        .corner_radius(16.0)
-        .inner_margin(egui::Margin::same(18))
+        .corner_radius(14.0)
+        .inner_margin(egui::Margin::same(16))
         .stroke(egui::Stroke::new(1.0, border));
     egui::Window::new(egui::RichText::new("导入").size(16.0).strong())
         .open(&mut open)
         .frame(frame)
         .collapsible(false)
         .resizable(false)
-        .default_width(420.0)
+        .default_width(360.0)
         .show(ctx, |ui| {
             ui.spacing_mut().item_spacing.y = 6.0;
             import_section(ui, &t, "工程");

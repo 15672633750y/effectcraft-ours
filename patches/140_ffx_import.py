@@ -88,43 +88,41 @@ fn rifx_effect_names(data: &[u8]) -> Vec<String> {
         }
     }
     let keep = |b: u8| b.is_ascii_alphanumeric() || b == b' ' || b == b'-' || b == b'.';
-    // ASCII
-    let mut i = 0usize;
-    while i + 5 <= data.len() {
-        if &data[i..i + 5] == b"ADBE " {
-            let mut j = i;
-            while j < data.len() && keep(data[j]) {
-                j += 1;
+    // 预设里出现的效果名前缀：AE 内置用 ADBE，Corel/CC 用 CC，Sapphire 用 Sapphire/S_，
+    // Boris 用 BCC。扫到前缀就把后面那段连着空格/字母数字的名字整段取出来。
+    const PREFIXES: [&[u8]; 5] = [b"ADBE ", b"CC ", b"Sapphire ", b"S_", b"BCC "];
+    for prefix in PREFIXES {
+        let mut i = 0usize;
+        while i + prefix.len() <= data.len() {
+            if &data[i..i + prefix.len()] == prefix {
+                let mut j = i;
+                while j < data.len() && keep(data[j]) {
+                    j += 1;
+                }
+                push(&mut out, &String::from_utf8_lossy(&data[i..j]));
+                i = j.max(i + 1);
+            } else {
+                i += 1;
             }
-            push(&mut out, &String::from_utf8_lossy(&data[i..j]));
-            i = j;
-        } else {
-            i += 1;
         }
     }
-    // UTF-16BE：每两字节一个 ASCII 字符
-    let mut i = 0usize;
-    while i + 10 <= data.len() {
-        let starts = data[i] == 0
-            && data[i + 1] == b'A'
-            && data[i + 2] == 0
-            && data[i + 3] == b'D'
-            && data[i + 4] == 0
-            && data[i + 5] == b'B'
-            && data[i + 6] == 0
-            && data[i + 7] == b'E'
-            && data[i + 8] == 0;
-        if starts {
-            let mut j = i;
-            let mut text = String::new();
-            while j + 1 < data.len() && data[j] == 0 && keep(data[j + 1]) {
-                text.push(data[j + 1] as char);
-                j += 2;
+    // UTF-16BE：每两字节一个 ASCII 字符（不同 .ffx 版本两种编码都出现过）
+    for prefix in PREFIXES {
+        let wide: Vec<u8> = prefix.iter().flat_map(|b| [0u8, *b]).collect();
+        let mut i = 0usize;
+        while i + wide.len() <= data.len() {
+            if &data[i..i + wide.len()] == wide.as_slice() {
+                let mut j = i;
+                let mut text = String::new();
+                while j + 1 < data.len() && data[j] == 0 && keep(data[j + 1]) {
+                    text.push(data[j + 1] as char);
+                    j += 2;
+                }
+                push(&mut out, &text);
+                i = j.max(i + 2);
+            } else {
+                i += 1;
             }
-            push(&mut out, &text);
-            i = j;
-        } else {
-            i += 1;
         }
     }
     out

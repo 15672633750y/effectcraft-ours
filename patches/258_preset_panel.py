@@ -77,7 +77,7 @@ fn preset_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: egui::Rect) {
         };
         p.text(row.center() - egui::vec2(if supported { 0.0 } else { 22.0 }, 0.0), egui::Align2::CENTER_CENTER, name, Tokens::ui(11.0), text_color);
         if !supported {
-            p.text(row.right_center() - egui::vec2(10.0, 0.0), egui::Align2::RIGHT_CENTER, "不支持", Tokens::ui(9.0), egui::Color32::from_rgb(150, 120, 120));
+            p.text(row.right_center() - egui::vec2(10.0, 0.0), egui::Align2::RIGHT_CENTER, "敬请期待", Tokens::ui(9.0), egui::Color32::from_rgb(150, 120, 120));
         }
         // 行在面板内后注册，所以行优先于整块面板
         let resp = ui.interact(row, egui::Id::new(("ours-preset", name)), egui::Sense::click());
