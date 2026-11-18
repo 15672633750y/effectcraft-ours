@@ -156,6 +156,12 @@ pub fn save_token(token: &str, username: &str) {
     let _ = std::fs::write(account_path(), body);
 }
 
+/// 旧版单文件头像（没有登录账号时用它当兜底）。343 曾把它加在这里，
+/// 后来 343 并入 341 变成了空操作，这个函数就必须由 340 自己提供。
+pub fn avatar_path() -> std::path::PathBuf {
+    config_dir().join("avatar.png")
+}
+
 /// 头像目录：`<config>/avatar/`，每个账号一张 `<username>.png`（256×256 正方形）。
 pub fn avatar_dir() -> std::path::PathBuf {
     config_dir().join("avatar")
