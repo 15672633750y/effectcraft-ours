@@ -383,7 +383,7 @@ fn import_row(
     sub: &str,
 ) {
     let width = ui.available_width();
-    let (rect, resp) = ui.allocate_exact_size(vec2(width, 52.0), egui::Sense::click());
+    let (rect, resp) = ui.allocate_exact_size(vec2(width, 40.0), egui::Sense::click());
     let accent = t.accent;
     let fill = if resp.is_pointer_button_down_on() {
         import_tint(accent, 52)
@@ -398,21 +398,21 @@ fn import_row(
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }
     // 18×18 图标方块（随 196 宽等比缩小），主题色 25% 底
-    let icon_rect = egui::Rect::from_center_size(egui::pos2(rect.min.x + 22.0, rect.center().y), vec2(24.0, 24.0));
+    let icon_rect = egui::Rect::from_center_size(egui::pos2(rect.min.x + 18.0, rect.center().y), vec2(20.0, 20.0));
     p.rect_filled(icon_rect, 8.0, import_tint(accent, 64));
-    p.text(icon_rect.center(), egui::Align2::CENTER_CENTER, icon, Tokens::ui(11.0), t.text);
+    p.text(icon_rect.center(), egui::Align2::CENTER_CENTER, icon, Tokens::ui(10.0), t.text);
     p.text(
         egui::pos2(icon_rect.max.x + 6.0, rect.center().y - 9.0),
         egui::Align2::LEFT_CENTER,
         title,
-        Tokens::ui(12.0),
+        Tokens::ui(11.0),
         t.text,
     );
     p.text(
-        egui::pos2(icon_rect.max.x + 8.0, rect.center().y + 8.0),
+        egui::pos2(icon_rect.max.x + 8.0, rect.center().y + 7.0),
         egui::Align2::LEFT_CENTER,
         sub,
-        Tokens::ui(9.0),
+        Tokens::ui(8.5),
         t.text_dim,
     );
     if resp.clicked() {
@@ -424,10 +424,10 @@ fn import_row(
 /// 只有末尾的「敬请期待」用灰字（不再整行压成 40% 透明）。
 fn import_disabled_row(ui: &mut egui::Ui, t: &Tokens, title: &str) {
     let width = ui.available_width();
-    let (rect, _) = ui.allocate_exact_size(vec2(width, 52.0), egui::Sense::hover());
+    let (rect, _) = ui.allocate_exact_size(vec2(width, 40.0), egui::Sense::hover());
     let p = ui.painter();
     p.rect_filled(rect, 10.0, t.field_bg);
-    let icon_rect = egui::Rect::from_center_size(egui::pos2(rect.min.x + 22.0, rect.center().y), vec2(24.0, 24.0));
+    let icon_rect = egui::Rect::from_center_size(egui::pos2(rect.min.x + 18.0, rect.center().y), vec2(20.0, 20.0));
     p.rect_filled(icon_rect, 8.0, import_tint(t.accent, 64));
     p.text(
         egui::pos2(icon_rect.max.x + 8.0, rect.center().y),
