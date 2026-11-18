@@ -16,7 +16,7 @@ fn keyframe_buttons(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Paint
     let mut x = x;
 
     let add = Rect::from_min_size(pos2(x, cy - 13.0), vec2(78.0, 26.0));
-    let add_resp = ui.interact(add, egui::Id::unique("ours-add-keyframe"), Sense::click());
+    let add_resp = ui.interact(add, egui::Id::unique("ours-add-keyframe"), egui::Sense::click());
     p.rect_filled(add, 4.0, t.switch_well);
     p.text(add.center(), Align2::CENTER_CENTER, "添加关键帧", Tokens::ui(12.0), t.text);
     if add_resp.clicked() {
@@ -36,7 +36,7 @@ fn keyframe_buttons(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Paint
     x += 82.0;
 
     let curve = Rect::from_min_size(pos2(x, cy - 13.0), vec2(44.0, 26.0));
-    let curve_resp = ui.interact(curve, egui::Id::unique("ours-curve-button"), Sense::click());
+    let curve_resp = ui.interact(curve, egui::Id::unique("ours-curve-button"), egui::Sense::click());
     p.rect_filled(curve, 4.0, t.switch_well);
     p.text(curve.center(), Align2::CENTER_CENTER, "曲线", Tokens::ui(12.0), t.text);
     if curve_resp.clicked() {
@@ -44,7 +44,7 @@ fn keyframe_buttons(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Paint
     }
     x += 50.0;
     let plug_rect = Rect::from_min_size(pos2(x, cy - 13.0), vec2(44.0, 26.0));
-    let plug_resp = ui.interact(plug_rect, egui::Id::unique("ours-plugin-button"), Sense::click());
+    let plug_resp = ui.interact(plug_rect, egui::Id::unique("ours-plugin-button"), egui::Sense::click());
     p.rect_filled(plug_rect, 4.0, t.switch_well);
     p.text(plug_rect.center(), Align2::CENTER_CENTER, "插件", Tokens::ui(12.0), t.text);
     if plug_resp.clicked() {
@@ -65,7 +65,7 @@ fn keyframe_buttons(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Paint
         ("⟳", "edit.redo", "恢复", redo_ready),
     ] {
         let r = Rect::from_min_size(pos2(x, cy - 13.0), vec2(30.0, 26.0));
-        let resp = ui.interact(r, egui::Id::unique(("ours-history", cmd)), Sense::click());
+        let resp = ui.interact(r, egui::Id::unique(("ours-history", cmd)), egui::Sense::click());
         p.rect_filled(r, 5.0, t.switch_well);
         let tint = if ready { t.text } else { t.text_faint };
         // The curved arrows are drawn as vectors: the bundled font has no ↶/↷ glyph, and a
@@ -109,7 +109,7 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
             ui.label("速度曲线（拖山峰：左右=位置，上下=快慢）");
             let pts_id = egui::Id::new("ours-curve-arch");
             let mut pts: [f32; 4] = ctx.data(|d| d.get_temp::<[f32; 4]>(pts_id)).unwrap_or([0.5, 1.0, 0.0, 0.0]);
-            let (canvas, _) = ui.allocate_exact_size(vec2(248.0, 248.0), Sense::hover());
+            let (canvas, _) = ui.allocate_exact_size(vec2(248.0, 248.0), egui::Sense::hover());
             ui.painter().rect_filled(canvas, 6.0, t.switch_well);
             let plot = canvas.shrink2(vec2(18.0, 18.0));
             let px = |v: f32| plot.left() + plot.width() * v.clamp(0.0, 1.0);
@@ -254,7 +254,7 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
             });
             let mut restore = None;
             if let Some(sv) = ctx.data(|d| d.get_temp::<[f32; 9]>(save_id)) {
-                let (thumb, tresp) = ui.allocate_exact_size(vec2(248.0, 54.0), Sense::click());
+                let (thumb, tresp) = ui.allocate_exact_size(vec2(248.0, 54.0), egui::Sense::click());
                 ui.painter().rect_filled(thumb, 5.0, t.switch_well);
                 let p0 = thumb.shrink2(vec2(8.0, 6.0));
                 let mut tp: Vec<egui::Pos2> = Vec::new();
@@ -296,7 +296,7 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
             ];
             ui.horizontal_wrapped(|ui| {
                 for (label, cmd, k, need) in presets {
-                    let (rect, resp) = ui.allocate_exact_size(vec2(66.0, 74.0), Sense::click());
+                    let (rect, resp) = ui.allocate_exact_size(vec2(66.0, 74.0), egui::Sense::click());
                     let bg = if kind == k { t.accent.gamma_multiply(0.35) } else if resp.hovered() { t.hover } else { t.switch_well };
                     ui.painter().rect_filled(rect, 5.0, bg);
                     let cell = Rect::from_min_size(rect.min + vec2(9.0, 8.0), vec2(46.0, 40.0));
@@ -413,7 +413,7 @@ fn plugin_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
             ui.label(egui::RichText::new("把 .wasm / .jsx / .zip 拖进来，或点下面的框选文件").size(12.0).color(t.text_dim));
             // —— 拖放区 ——
             let width = ui.available_width();
-            let (drop, resp) = ui.allocate_exact_size(egui::vec2(width, 72.0), Sense::click());
+            let (drop, resp) = ui.allocate_exact_size(egui::vec2(width, 72.0), egui::Sense::click());
             let accent = t.accent;
             let stroke_color = if resp.hovered() { accent } else { t.field_border };
             ui.painter().rect_stroke(drop, 10.0, egui::Stroke::new(1.5, stroke_color), StrokeKind::Inside);
@@ -447,7 +447,7 @@ fn plugin_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
                 ui.label(egui::RichText::new("还没有插件，放进上面两个目录即可").size(11.0).color(t.text_faint));
             }
             for (name, ext) in list.iter().take(3) {
-                let (row, rresp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), crate::panel_style::ROW_H), Sense::hover());
+                let (row, rresp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), crate::panel_style::ROW_H), egui::Sense::hover());
                 ui.painter().rect_filled(row, 8.0, t.field_bg);
                 ui.painter().circle_filled(egui::pos2(row.min.x + 14.0, row.center().y), 4.0, accent);
                 ui.painter().text(egui::pos2(row.min.x + 26.0, row.center().y), egui::Align2::LEFT_CENTER, name, Tokens::ui(12.5), t.text);

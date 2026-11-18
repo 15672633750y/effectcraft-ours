@@ -59,7 +59,7 @@ fn preset_save_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: egui::Re
     let mut error: String = ui.ctx().data(|d| d.get_temp::<String>(err_id).unwrap_or_default());
 
     ui.painter().rect_filled(full, 0.0, egui::Color32::from_black_alpha(89));
-    let backdrop = ui.interact(full, egui::Id::unique("ours-preset-save-backdrop"), Sense::click());
+    let backdrop = ui.interact(full, egui::Id::unique("ours-preset-save-backdrop"), egui::Sense::click());
     if backdrop.clicked() || ui.input(|i| i.key_pressed(egui::Key::Escape)) {
         ui.ctx().data_mut(|d| d.insert_temp(open_id, false));
         return;
@@ -213,7 +213,7 @@ fn preset_save_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: egui::Re
             ui.painter().text(egui::pos2(left, card.min.y + 56.0), egui::Align2::LEFT_CENTER, file, Tokens::ui(13.0), t.text);
             ui.painter().text(egui::pos2(left, card.min.y + 78.0), egui::Align2::LEFT_CENTER, path, Tokens::ui(10.5), t.text_faint);
             let copy_rect = egui::Rect::from_min_size(egui::pos2(left, card.min.y + 68.0), egui::vec2(inner_w, 22.0));
-            let copy = ui.interact(copy_rect, egui::Id::unique("ours-preset-save-copy"), Sense::click());
+            let copy = ui.interact(copy_rect, egui::Id::unique("ours-preset-save-copy"), egui::Sense::click());
             if copy.hovered() {
                 ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
             }
