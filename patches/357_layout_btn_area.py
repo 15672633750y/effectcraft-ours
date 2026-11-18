@@ -49,6 +49,8 @@ SCAN_INSERT = """        // EFFECTCRAFT_OURS_IMPORT_SHIM_SCAN_V1 — ImportShim 
             if now - last > 1.0 {
                 ui.data_mut(|d| d.insert_temp(egui::Id::new("ours-import-shim-at"), now));
                 let dir = std::path::Path::new("/storage/emulated/0/DCIM/EffectCraft/Import");
+                // 目录不存在就建出来：这样 ImportShim 写失败时，用户也能一眼看出目录在不在。
+                let _ = std::fs::create_dir_all(dir);
                 if let Ok(entries) = std::fs::read_dir(dir) {
                     for entry in entries.flatten() {
                         let path = entry.path();
@@ -72,12 +74,18 @@ SCAN_INSERT = """        // EFFECTCRAFT_OURS_IMPORT_SHIM_SCAN_V1 — ImportShim 
                             "ffx" | "gp" => ("ours.applyPreset", serde_json::json!({ "path": p })),
                             _ => ("file.import", serde_json::json!({ "paths": [p] })),
                         };
+                        let name = path
+                            .file_name()
+                            .map(|n| n.to_string_lossy().to_string())
+                            .unwrap_or_default();
+                        self.ui.status = format!("导入中：{name}");
                         match crate::menus::invoke(self, ui.ctx(), cmd, params) {
                             Ok(_) => {
+                                self.ui.status = format!("已导入 {name}");
                                 let _ = std::fs::remove_file(&path);
                             }
                             Err(e) => {
-                                self.ui.status = format!("导入失败：{e}");
+                                self.ui.status = format!("导入失败 {name}：{e}");
                                 let _ = std::fs::remove_file(&path);
                             }
                         }

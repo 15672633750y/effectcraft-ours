@@ -482,19 +482,19 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
             ui.spacing_mut().item_spacing.y = 4.0;
             // 自绘紧凑标题栏：高 28，标题居中，右侧 ✕ 关闭。
             let (bar, _) = ui.allocate_exact_size(
-                egui::vec2(ui.available_width(), 12.0),
+                egui::vec2(ui.available_width(), 22.0),
                 egui::Sense::hover(),
             );
             ui.painter().text(
                 bar.center(),
                 egui::Align2::CENTER_CENTER,
                 "导入",
-                Tokens::ui(11.0),
+                Tokens::ui(11.5),
                 t.text,
             );
             let close = egui::Rect::from_center_size(
-                egui::pos2(bar.max.x - 16.0, bar.center().y),
-                egui::vec2(30.0, 26.0),
+                egui::pos2(bar.max.x - 15.0, bar.center().y),
+                egui::vec2(28.0, 22.0),
             );
             let close_resp = ui.interact(close, egui::Id::unique("ours-import-close"), egui::Sense::click());
             if close_resp.hovered() {
@@ -504,7 +504,7 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
                 close.center(),
                 egui::Align2::CENTER_CENTER,
                 "\u{00d7}",
-                Tokens::ui(14.0),
+                Tokens::ui(16.0),
                 t.text_dim,
             );
             if close_resp.clicked() || ui.input(|i| i.key_pressed(egui::Key::Escape)) {

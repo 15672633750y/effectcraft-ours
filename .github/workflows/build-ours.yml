@@ -320,7 +320,9 @@ jobs:
           find . -name AndroidManifest.xml 2>/dev/null | head -8 | while read -r f; do
             if grep -q 'intent-filter' "$f" 2>/dev/null; then
               echo "--- $f"
-              grep -n 'intent-filter\|<data\|<activity\|<action' "$f" | head -40
+              echo "   ImportShim occurrences: $(grep -c ImportShim "$f" || true)"
+              grep -n 'ImportShim' "$f" | head -12 || true
+              grep -n 'android:name=".ImportShim"' "$f" | head -3 || true
             fi
           done
           echo "== aapt2 badging (what the launcher sees) =="
