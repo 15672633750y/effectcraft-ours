@@ -134,7 +134,7 @@ pub(crate) fn export_preset(s: &mut Session, p: &Value) -> Result<Value> {
     if path.is_empty() {
         return Err(bad("ours.exportPreset", "no path"));
     }
-    let comp = s.active_comp().ok_or(EngineError::NoComp)?;
+    let comp = s.active_comp().ok_or(crate::EngineError::NoComp)?;
     // selected_layers 是 Vec<LayerId>，参数里给的 layers 是数字：统一成 LayerId。
     let lid: effectcraft_project::LayerId = if let Some(list) = p.get("layers").and_then(Value::as_array) {
         list.first().and_then(Value::as_u64).map(effectcraft_project::LayerId)
@@ -172,8 +172,8 @@ pub(crate) fn export_preset(s: &mut Session, p: &Value) -> Result<Value> {
         "name": name,
         "effects": list,
     });
-    let text = serde_json::to_string_pretty(&doc).map_err(|e| EngineError::Other(format!("序列化失败: {e}")))?;
-    std::fs::write(&path, text).map_err(|e| EngineError::Other(format!("写不进 {path}: {e}")))?;
+    let text = serde_json::to_string_pretty(&doc).map_err(|e| crate::EngineError::Other(format!("序列化失败: {e}")))?;
+    std::fs::write(&path, text).map_err(|e| crate::EngineError::Other(format!("写不进 {path}: {e}")))?;
     Ok(json!({ "path": path, "effects": list.len() }))
 }
 '''
