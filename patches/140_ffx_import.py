@@ -76,10 +76,82 @@ fn ffx_effect_names(text: &str) -> Vec<String> {
     out
 }
 
+/// RIFX（AE 的二进制预设）里的效果 matchName：ASCII 与 UTF-16BE 两种编码都扫一遍。
+/// 不解析 chunk 树：不同 `.ffx` 版本的 form type 不一定是 `Egg!`，`read::parse` 会直接拒掉，
+/// 而 matchName 在字节流里就是以这两种编码出现的。
+fn rifx_effect_names(data: &[u8]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    fn push(out: &mut Vec<String>, text: &str) {
+        let name = text.trim().to_string();
+        if name.len() > 3 && !out.contains(&name) {
+            out.push(name);
+        }
+    }
+    let keep = |b: u8| b.is_ascii_alphanumeric() || b == b' ' || b == b'-' || b == b'.';
+    // ASCII
+    let mut i = 0usize;
+    while i + 5 <= data.len() {
+        if &data[i..i + 5] == b"ADBE " {
+            let mut j = i;
+            while j < data.len() && keep(data[j]) {
+                j += 1;
+            }
+            push(&mut out, &String::from_utf8_lossy(&data[i..j]));
+            i = j;
+        } else {
+            i += 1;
+        }
+    }
+    // UTF-16BE：每两字节一个 ASCII 字符
+    let mut i = 0usize;
+    while i + 10 <= data.len() {
+        let starts = data[i] == 0
+            && data[i + 1] == b'A'
+            && data[i + 2] == 0
+            && data[i + 3] == b'D'
+            && data[i + 4] == 0
+            && data[i + 5] == b'B'
+            && data[i + 6] == 0
+            && data[i + 7] == b'E'
+            && data[i + 8] == 0;
+        if starts {
+            let mut j = i;
+            let mut text = String::new();
+            while j + 1 < data.len() && data[j] == 0 && keep(data[j + 1]) {
+                text.push(data[j + 1] as char);
+                j += 2;
+            }
+            push(&mut out, &text);
+            i = j;
+        } else {
+            i += 1;
+        }
+    }
+    out
+}
+
+fn apply_rifx(s: &mut Session, path: &str, bytes: &[u8]) -> Result<(usize, Vec<String>)> {
+    let names = rifx_effect_names(bytes);
+    if names.is_empty() {
+        return Err(EngineError::Other(format!("{path}: RIFX 预设里没找到效果名")));
+    }
+    let mut applied = 0usize;
+    let mut missing: Vec<String> = Vec::new();
+    for name in names {
+        // aep 里那份 matchName → EffectCraft id 的映射表（by_match_name）
+        let id = effectcraft_aep::container::effect_map::by_match_name(&name)
+            .map(|m| m.effect.to_string())
+            .unwrap_or_else(|| name.clone());
+        match s.execute("effect.apply", serde_json::json!({"effect": id})) {
+            Ok(_) => applied += 1,
+            Err(_) => missing.push(name),
+        }
+    }
+    Ok((applied, missing))
+}
+
 /// Apply a preset's effects to the selected layer. Returns how many were added.
-/// The two-tuple is `(applied, missing)`: `missing` lists the preset's effect names this build does
-/// not have, so the panel can say what is absent instead of reporting a silent success.
-pub(crate) fn apply_ffx(s: &mut Session, path: &str) -> Result<(usize, Vec<String>)> {
+pub(crate) fn apply_ffx(s: &mut Session, path: &str) -> Result<usize> {
     let bytes = s.services.read_file(path).map_err(|e| EngineError::Other(format!("cannot read {path}: {e}")))?;
     let text = String::from_utf8_lossy(&bytes);
     let ids = ffx_effect_ids(&text);
@@ -94,20 +166,31 @@ pub(crate) fn apply_ffx(s: &mut Session, path: &str) -> Result<(usize, Vec<Strin
             Err(_) => unknown.push(id),
         }
     }
-    // 我们认识并能应用的名字
-    let known: Vec<String> = FFX_KNOWN
-        .iter()
-        .flat_map(|(name, _)| {
-            let mut both = vec![name.to_string()];
-            both.push(name.to_ascii_lowercase());
-            both
-        })
-        .collect();
+    Ok(applied)
+}
+
+/// 面板用的报告版：先按文件头分派，再给出「套上了几个 / 缺哪些」。
+/// 单独一个函数是为了不动 `apply_ffx` 的签名（JSON 预设与文字动画器都依赖它返回 usize）。
+pub(crate) fn apply_preset_report(s: &mut Session, path: &str) -> Result<(usize, Vec<String>)> {
+    let bytes = s.services.read_file(path).map_err(|e| EngineError::Other(format!("cannot read {path}: {e}")))?;
+    // ① RIFX 二进制（AE 的 .ffx 多数是它）
+    if bytes.starts_with(b"RIFX") {
+        return apply_rifx(s, path, &bytes);
+    }
+    let text = String::from_utf8_lossy(&bytes);
+    let head = text.trim_start();
+    // ② 既不是 RIFX 也不是 XML/JSON：明确报「无法识别」，绝不静默成功。
+    if !head.starts_with('<') && !head.starts_with('{') {
+        return Err(EngineError::Other(format!("{path}: 无法识别的预设格式")));
+    }
+    // ③ 交给现有 apply_ffx（XML / JSON / .gp / 文字动画器都在里面）
+    let applied = apply_ffx(s, path)?;
+    // ④ 预设里出现、但我们不认识的名字，作为「缺失」
+    let known: Vec<String> = FFX_KNOWN.iter().map(|(name, _)| name.to_ascii_lowercase()).collect();
     let mut missing: Vec<String> = Vec::new();
     for name in ffx_effect_names(&text) {
         let lower = name.to_ascii_lowercase();
-        let matched = known.iter().any(|k| lower.contains(&k.to_ascii_lowercase()) || k.eq_ignore_ascii_case(&name));
-        if !matched && !missing.contains(&name) {
+        if !known.iter().any(|k| lower.contains(k) || k.eq_ignore_ascii_case(&name)) && !missing.contains(&name) {
             missing.push(name);
         }
     }

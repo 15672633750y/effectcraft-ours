@@ -69,8 +69,14 @@ fn apply_preset(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad("ours.applyPreset", "no path"));
     }
     // 不能只回一个数字：面板要能把「缺哪些效果」说清楚。
-    let (applied, missing) = super::import_ext::apply_ffx(s, &path)?;
-    Ok(json!({ "effects": applied, "missing": missing }))
+    match super::import_ext::apply_preset_report(s, &path) {
+        Ok((applied, missing)) => Ok(json!({ "effects": applied, "missing": missing, "unsupported": false })),
+        // 格式本身不认得（不是 RIFX 也不是 XML）：单独标出来，面板好说「格式不支持」。
+        Err(e) if e.to_string().contains("无法识别的预设格式") => {
+            Ok(json!({ "effects": 0, "missing": [], "unsupported": true, "why": e.to_string() }))
+        }
+        Err(e) => Err(e),
+    }
 }
 '''
 
