@@ -399,10 +399,11 @@ fn import_row(
     }
     // 18×18 图标方块（随 196 宽等比缩小），主题色 25% 底
     let icon_rect = egui::Rect::from_center_size(egui::pos2(rect.min.x + 18.0, rect.center().y), vec2(20.0, 20.0));
-    p.rect_filled(icon_rect, 8.0, import_tint(accent, 64));
-    p.text(icon_rect.center(), egui::Align2::CENTER_CENTER, icon, Tokens::ui(10.0), t.text);
+    // 图标块压暗，字母本身用荧光主题色（原来是暗绿/灰，和主题色不一致）
+    p.rect_filled(icon_rect, 8.0, import_tint(accent, 26));
+    p.text(icon_rect.center(), egui::Align2::CENTER_CENTER, icon, Tokens::ui(10.0), accent);
     p.text(
-        egui::pos2(icon_rect.max.x + 6.0, rect.center().y - 9.0),
+        egui::pos2(icon_rect.max.x + 6.0, rect.center().y - 7.0),
         egui::Align2::LEFT_CENTER,
         title,
         Tokens::ui(11.0),
@@ -428,12 +429,12 @@ fn import_disabled_row(ui: &mut egui::Ui, t: &Tokens, title: &str) {
     let p = ui.painter();
     p.rect_filled(rect, 10.0, t.field_bg);
     let icon_rect = egui::Rect::from_center_size(egui::pos2(rect.min.x + 18.0, rect.center().y), vec2(20.0, 20.0));
-    p.rect_filled(icon_rect, 8.0, import_tint(t.accent, 64));
+    p.rect_filled(icon_rect, 8.0, import_tint(t.accent, 26));
     p.text(
         egui::pos2(icon_rect.max.x + 8.0, rect.center().y),
         egui::Align2::LEFT_CENTER,
         title,
-        Tokens::ui(12.0),
+        Tokens::ui(11.0),
         t.text,
     );
     // 只有末尾这三个字是灰的
@@ -459,7 +460,7 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
     // 和「快捷键」面板**完全相同**的材质：rgba(12,12,14,130) 半透明底 + 白色 90 细边 + 圆角 14。
     // 统一走「快捷键」面板的基准（panel_style.rs），不在各处写死。
     let frame = crate::panel_style::frame(&style);
-    egui::Window::new(egui::RichText::new("导入").size(crate::panel_style::TITLE_SIZE).strong())
+    egui::Window::new(egui::RichText::new("导入").size(12.0).strong())
         .open(&mut open)
         .frame(frame)
         .collapsible(false)
@@ -474,13 +475,12 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
             import_row(ui, app, &t, ImportKind::Aep, "A", "After Effects 工程", ".aep / .aepx · 合成、图层、关键帧可还原，效果缺失会先提示");
             import_row(ui, app, &t, ImportKind::Ecproj, "E", "EffectCraft 工程", ".ecproj / .ecprojx · 整个工程原样打开");
             import_row(ui, app, &t, ImportKind::Timeline, "T", "Premiere / AM / FCP XML", ".xml .fcpxml .otio .edl .aaf .omf · 重建时间线");
+            // NodeVideo 已经能导入，所以放在**工程**组里；剪映暂不支持，也留在同一组，只标灰。
+            import_row(ui, app, &t, ImportKind::Nv, "N", "NodeVideo 工程", ".nv / .zip · 重建时间线");
+            import_disabled_row(ui, &t, "剪映 / CapCut 工程");
             import_section(ui, &t, "素材");
             import_row(ui, app, &t, ImportKind::Media, "M", "媒体文件", "mp4 / mov / png / jpg / wav / mp3 · 作为素材导入");
             import_row(ui, app, &t, ImportKind::Ffx, "F", "AE 效果预设", ".ffx · 效果套到选中图层，参数用默认值");
-            import_row(ui, app, &t, ImportKind::Gp, "G", "Sapphire 预设", ".gp · 参数名和数值可还原");
-            import_row(ui, app, &t, ImportKind::Nv, "N", "NodeVideo 工程", ".nv / .zip · 重建时间线");
-            import_disabled_row(ui, &t, "剪映 / CapCut 工程");
-            import_disabled_row(ui, &t, "NodeVideo 工程");
             ui.add_space(8.0);
             // 主按钮：固定 44 高，居中的胶囊（宽度 = 文字 + 48），圆角 12
             let accent = t.accent;

@@ -107,6 +107,22 @@ jobs:
               print('pathPattern already single')
           else:
               raise SystemExit('path pattern anchor missing')
+          # 分享面板（ACTION_SEND）一直缺我们：SEND filter 只在有已知 MIME 类型时才追加，
+          # 而 effectcraft 的 .ffx/.ecproj 这些扩展名没有 MIME，于是整条 SEND filter 不存在。
+          send_anchor = '\n    if exts:\n'
+          send_block = (
+              '\n    # Always advertise ACTION_SEND: without a known MIME type the typed SEND filter\n'
+              '    # above is skipped, which kept the app out of the system share sheet entirely.\n'
+              "    filters.append('{ actions = [\"android.intent.action.SEND\", \"android.intent.action.SEND_MULTIPLE\"], "
+              "categories = [\"android.intent.category.DEFAULT\"], data = [{ mime_type = \"*/*\" }] }')\n"
+          )
+          if 'Always advertise ACTION_SEND' in s:
+              print('SEND filter already added')
+          elif s.count(send_anchor) == 1:
+              s = s.replace(send_anchor, send_block + send_anchor, 1)
+              print('SEND filter added unconditionally (share sheet)')
+          else:
+              raise SystemExit('SEND anchor missing')
           p.write_text(s, encoding='utf-8')
           PY
 
