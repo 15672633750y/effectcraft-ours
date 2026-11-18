@@ -213,26 +213,11 @@ jobs:
             mkdir -p artcraft/keys
             printf '%s' "$KEYSTORE_BASE64" | base64 -d > artcraft/keys/artcraft-builder.jks
             printf '%s' "${KEYSTORE_PASSWORD:-}" > artcraft/keys/.keystore-password
-            # 以前这里用 keytool -changealias 把别名改成 artcraftbuilder，而 310 补丁让构建脚本
-            # 用 ${ARTCRAFT_KEY_ALIAS:-shimove} —— 两边名字相反：改名成功的那次构建必然
-            # 「No key with alias 'shimove'」失败（903 就是这样挂的）。
-            # 现在不改名，直接读出密钥里真实的别名，让构建脚本用它。
-            ALIAS=""
-            for cand in shimove artcraftbuilder; do
-              if keytool -list -keystore artcraft/keys/artcraft-builder.jks \
-                   -alias "$cand" -storepass "$KEYSTORE_PASSWORD" >/dev/null 2>&1; then
-                ALIAS="$cand"
-                break
-              fi
-            done
-            if [ -n "$ALIAS" ]; then
-              echo "ARTCRAFT_KEY_ALIAS=$ALIAS" >> "$GITHUB_ENV"
-              echo "signing key alias: $ALIAS"
-            else
-              echo "::warning::could not read a known alias from the keystore; the build will fall back to its default"
-              keytool -list -keystore artcraft/keys/artcraft-builder.jks -storepass "$KEYSTORE_PASSWORD" 2>/dev/null | head -20 || true
-            fi
-            echo "signing key restored from repository secrets"
+            # 这里原来有一段 keytool -changealias，把别名从 shimove 改成 artcraftbuilder。
+            # 而 310_signing_alias.py 让构建脚本用 ${ARTCRAFT_KEY_ALIAS:-shimove} —— 两边要的
+            # 名字相反：改名成功的那次构建必然报「No key with alias 'shimove' found」
+            # （903 就是这么挂的）。现在整段删掉，keystore 保持原别名 shimove，与 310 一致。
+            echo "signing key restored from repository secrets (alias left untouched: shimove)"
           else
             echo "no KEYSTORE_BASE64 secret: the build keeps using/generating its cached key"
           fi
