@@ -98,8 +98,8 @@ jobs:
 
       - name: Add the ImportShim trampoline
         run: |
-          cp tools/ImportShim.java "$GITHUB_WORKSPACE/ImportShim.java"
-          python3 tools/patch_builder_import_shim.py artcraft
+          cp ours/tools/ImportShim.java "$GITHUB_WORKSPACE/ImportShim.java"
+          python3 ours/tools/patch_builder_import_shim.py artcraft
 
       - name: Apply our patches (none yet)
         run: |
