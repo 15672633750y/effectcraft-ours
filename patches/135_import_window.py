@@ -1,10 +1,22 @@
 #!/usr/bin/env python3
-"""The import window: plug-ins and the project formats the app can read, in one place.
+"""导入面板（最终版）：只讲工程与素材，插件走它自己的入口。
 
-The Import File entry only opened the system picker, which silently accepted anything. This adds
-"导入插件与工程…" to the same menu (the import tab the user asked for, not the scrolling tool row):
-a window that says what each extension brings in, offers the picker, and has a button that rescans
-the folder plug-ins are dropped in.
+面板上五个可点条目，每个都按扩展名分发到对应命令：
+
+| 条目 | 扩展名 | 命令 |
+|---|---|---|
+| After Effects 工程 | `.aep` / `.aepx` | `file.importAep` |
+| EffectCraft 工程 | `.ecproj` / `.ecprojx` | `file.importProject` |
+| Premiere / AM / FCP XML | `.xml .fcpxml .otio .edl .aaf .omf` | `file.importTimeline` |
+| 媒体文件 | mp4/mov/png/jpg/wav/mp3 … | `file.import` |
+| AE 效果预设 | `.ffx` | 自己的解析器（见下） |
+
+`.ffx` 不走命令：读 XML 里每个效果节点的 `name` / `matchName`，用
+`effectcraft_effects::lookup`（id → 显示名大小写不敏感 → 别名表）去匹配，匹配上的用
+`effect.apply` 套到当前选中图层，最后用玻璃弹窗汇总「已应用 X 个 / 缺少哪些」。
+参数不设置：`.ffx` 只给参数显示名，拿不到效果内部的参数 id 路径，保持默认值。
+
+灰字（不可点）：剪映 / CapCut 工程、NodeVideo 工程 —— 这两种上游确实没有解析器。
 """
 from __future__ import annotations
 
@@ -20,7 +32,7 @@ MENU_NEW = '''            [
                 ("newFolder", "New Folder", "project.newFolder"),
                 ("import", "Import File…", "file.import"),
                 // EFFECTCRAFT_OURS_IMPORT_WINDOW_V1 — 插件与工程格式都从这里进
-                ("importAll", "导入插件与工程…", "ours.import"),
+                ("importAll", "导入工程与素材…", "ours.import"),
             ]
 '''
 
@@ -50,19 +62,69 @@ fn pending_import() -> &'static std::sync::Mutex<Option<String>> {
     PENDING.get_or_init(|| std::sync::Mutex::new(None))
 }
 
-/// 「导入文件…」能选的扩展名（按类别分发的依据）。
-const IMPORT_EXTS: [&str; 24] = [
-    "aep", "aepx", "ecproj", "ecprojx", "xml", "fcpxml", "otio", "edl", "aaf", "omf",
-    "mp4", "mov", "mxf", "mkv", "webm", "png", "jpg", "jpeg", "webp", "tif", "tiff", "wav", "mp3", "flac",
-];
+/// 面板上可点的五个条目。
+#[derive(Clone, Copy, PartialEq)]
+enum ImportKind {
+    Aep,
+    Ecproj,
+    Timeline,
+    Media,
+    Ffx,
+}
 
-fn pick_for_import(app: &mut EffectcraftApp) {
+impl ImportKind {
+    fn exts(self) -> Vec<&'static str> {
+        match self {
+            ImportKind::Aep => vec!["aep", "aepx"],
+            ImportKind::Ecproj => vec!["ecproj", "ecprojx"],
+            ImportKind::Timeline => vec!["xml", "fcpxml", "otio", "edl", "aaf", "omf"],
+            ImportKind::Ffx => vec!["ffx"],
+            ImportKind::Media => vec![
+                "mp4", "mov", "mxf", "mkv", "webm", "png", "jpg", "jpeg", "webp", "tif", "tiff", "wav", "mp3", "flac",
+            ],
+        }
+    }
+
+    fn command(self) -> &'static str {
+        match self {
+            ImportKind::Aep => "file.importAep",
+            ImportKind::Ecproj => "file.importProject",
+            ImportKind::Timeline => "file.importTimeline",
+            ImportKind::Ffx => "",
+            ImportKind::Media => "file.import",
+        }
+    }
+}
+
+/// 看扩展名推断属于哪一类（底部「导入文件…」不预设类别时用）。
+fn kind_for_ext(ext: &str) -> ImportKind {
+    let lower = ext.to_ascii_lowercase();
+    if ["aep", "aepx"].contains(&lower.as_str()) {
+        ImportKind::Aep
+    } else if ["ecproj", "ecprojx"].contains(&lower.as_str()) {
+        ImportKind::Ecproj
+    } else if ["xml", "fcpxml", "otio", "edl", "aaf", "omf"].contains(&lower.as_str()) {
+        ImportKind::Timeline
+    } else if lower == "ffx" {
+        ImportKind::Ffx
+    } else {
+        ImportKind::Media
+    }
+}
+
+/// 记下这次点的是哪个条目（`.ffx` 不走命令，要自己解析）。
+fn pending_kind() -> &'static std::sync::Mutex<Option<ImportKind>> {
+    static KIND: std::sync::OnceLock<std::sync::Mutex<Option<ImportKind>>> = std::sync::OnceLock::new();
+    KIND.get_or_init(|| std::sync::Mutex::new(None))
+}
+
+fn pick_for(app: &mut EffectcraftApp, kind: ImportKind) {
     let Some(spawn) = app.hooks.file_dialog_async.as_ref() else {
         app.ui.status = "这个平台没有文件选择器".to_string();
         return;
     };
     let dialog = crate::FileDialog::Open {
-        exts: IMPORT_EXTS.iter().map(|e| e.to_string()).collect(),
+        exts: kind.exts().iter().map(|e| e.to_string()).collect(),
         many: false,
     };
     let done: crate::DialogDone = Box::new(|paths| {
@@ -72,100 +134,320 @@ fn pick_for_import(app: &mut EffectcraftApp) {
             }
         }
     });
+    if let Ok(mut slot) = pending_kind().lock() {
+        *slot = Some(kind);
+    }
     spawn(dialog, done);
 }
 
-/// 按扩展名分发：这才是「选 .aep 却按素材导入」的修法——不再一律 `file.import`。
-fn dispatch_import(app: &mut EffectcraftApp, ctx: &egui::Context) {
-    let Some(path) = pending_import().lock().ok().and_then(|mut slot| slot.take()) else {
+/// 底部主按钮：所有扩展名都列出来，选完再按扩展名推断类别。
+fn pick_any(app: &mut EffectcraftApp) {
+    let Some(spawn) = app.hooks.file_dialog_async.as_ref() else {
+        app.ui.status = "这个平台没有文件选择器".to_string();
         return;
     };
-    let ext = std::path::Path::new(&path)
-        .extension()
-        .map(|e| e.to_string_lossy().to_ascii_lowercase())
-        .unwrap_or_default();
-    let id = match ext.as_str() {
-        "aep" | "aepx" => "file.importAep",
-        "ecproj" | "ecprojx" => "file.importProject",
-        "xml" | "fcpxml" | "otio" | "edl" | "aaf" | "omf" => "file.importTimeline",
-        // 这两类上游确实没有实现（anim_presets.rs 明确说 ffx 不支持），不要假装能导。
-        "ffx" => {
-            app.ui.status = "暂不支持 .ffx 效果预设".to_string();
-            return;
+    let all = [
+        ImportKind::Aep,
+        ImportKind::Ecproj,
+        ImportKind::Timeline,
+        ImportKind::Media,
+        ImportKind::Ffx,
+    ];
+    let mut exts: Vec<String> = Vec::new();
+    for kind in all {
+        for ext in kind.exts() {
+            let ext = ext.to_string();
+            if !exts.contains(&ext) {
+                exts.push(ext);
+            }
         }
-        "zip" | "nv" => {
-            app.ui.status = "暂不支持剪映 / NodeVideo 工程包".to_string();
-            return;
+    }
+    let dialog = crate::FileDialog::Open { exts, many: false };
+    let done: crate::DialogDone = Box::new(|paths| {
+        if let Some(path) = paths.into_iter().next() {
+            if let Ok(mut slot) = pending_import().lock() {
+                *slot = Some(path);
+            }
         }
-        _ => "file.import",
+    });
+    if let Ok(mut slot) = pending_kind().lock() {
+        *slot = None;
+    }
+    spawn(dialog, done);
+}
+
+/// 从标签里取一个属性值（大小写不敏感找 `key="`）。
+fn ffx_attr(head: &str, key: &str) -> String {
+    let lower = head.to_ascii_lowercase();
+    let needle = format!("{}=\"", key.to_ascii_lowercase());
+    let Some(at) = lower.find(&needle) else {
+        return String::new();
     };
-    let params = if id == "file.import" {
+    head[at + needle.len()..].chars().take_while(|c| *c != '"').collect()
+}
+
+/// `.ffx` 里每个效果节点：`<Effect name="Glow" matchName="ADBE Glo2">`（也见过 `<Filter …>`）。
+fn parse_ffx_effects(xml: &str) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = Vec::new();
+    for raw in xml.split('<').skip(1) {
+        let head: String = raw.chars().take_while(|c| *c != '>').collect();
+        let lower = head.to_ascii_lowercase();
+        if !(lower.starts_with("effect") || lower.starts_with("filter")) {
+            continue;
+        }
+        let mut name = ffx_attr(&head, "name");
+        if name.is_empty() {
+            name = ffx_attr(&head, "displayname");
+        }
+        let mut match_name = ffx_attr(&head, "matchname");
+        if match_name.is_empty() {
+            match_name = ffx_attr(&head, "match_name");
+        }
+        if name.is_empty() && match_name.is_empty() {
+            continue;
+        }
+        out.push((name, match_name));
+    }
+    out
+}
+
+/// 按名字找效果：`lookup` 覆盖 id、显示名（大小写不敏感）、别名表；再补 AE matchName 的
+/// 常见写法（`ADBE Glo2` → 去掉前缀 → 去掉尾部数字 → `Glow`）。
+fn lookup_effect(name: &str, match_name: &str) -> Option<&'static effectcraft_effects::EffectSpec> {
+    for candidate in [name, match_name] {
+        if candidate.is_empty() {
+            continue;
+        }
+        if let Some(spec) = effectcraft_effects::lookup(candidate) {
+            return Some(spec);
+        }
+        let tail = candidate
+            .strip_prefix("ADBE ")
+            .or_else(|| candidate.strip_prefix("ADBE"))
+            .map(str::trim)
+            .unwrap_or(candidate);
+        if tail != candidate
+            && let Some(spec) = effectcraft_effects::lookup(tail)
+        {
+            return Some(spec);
+        }
+        // "Glo2" 去掉尾部数字 → "Glo"（长度够才有意义）
+        let letters: String = tail.chars().take_while(|c| !c.is_ascii_digit()).collect();
+        if letters.len() >= 4
+            && letters.len() < tail.len()
+            && let Some(spec) = effectcraft_effects::lookup(&letters)
+        {
+            return Some(spec);
+        }
+        // 把尾部数字换成常见词尾再试一次（Glo2 → Glow）
+        if letters.len() >= 3 {
+            for suffix in ["w", "e", "ow"] {
+                let guess = format!("{letters}{suffix}");
+                if let Some(spec) = effectcraft_effects::lookup(&guess) {
+                    return Some(spec);
+                }
+            }
+        }
+    }
+    None
+}
+
+fn apply_ffx(app: &mut EffectcraftApp, ctx: &egui::Context, path: &str) {
+    let Some(xml) = std::fs::read(path)
+        .ok()
+        .map(|bytes| String::from_utf8_lossy(&bytes).trim_start_matches('\u{feff}').to_string())
+        .filter(|text| text.trim_start().starts_with('<'))
+    else {
+        app.ui.status = "这个 .ffx 读不了".to_string();
+        return;
+    };
+    let effects = parse_ffx_effects(&xml);
+    if effects.is_empty() {
+        app.ui.status = "这个 .ffx 里没有效果".to_string();
+        return;
+    }
+    let mut applied = 0usize;
+    let mut missing: Vec<String> = Vec::new();
+    for (name, match_name) in &effects {
+        match lookup_effect(name, match_name) {
+            Some(spec) => {
+                let params = serde_json::json!({ "effect": spec.id });
+                if crate::menus::invoke(app, ctx, "effect.apply", params).is_ok() {
+                    applied += 1;
+                } else {
+                    missing.push(if name.is_empty() { match_name.clone() } else { name.clone() });
+                }
+            }
+            None => missing.push(if name.is_empty() { match_name.clone() } else { name.clone() }),
+        }
+    }
+    let body = if applied == 0 && !missing.is_empty() {
+        "此预设用到的效果本软件都没有".to_string()
+    } else if missing.is_empty() {
+        format!("已应用 {applied} 个效果（参数为默认值，可在效果面板里调）")
+    } else {
+        let list: Vec<String> = missing.iter().take(6).cloned().collect();
+        let more = missing.len().saturating_sub(list.len());
+        let tail = if more > 0 { format!(" 等 {more} 个") } else { String::new() };
+        format!(
+            "已应用 {applied} 个效果，缺少 {} 个：{}{}",
+            missing.len(),
+            list.join("、"),
+            tail
+        )
+    };
+    crate::account_ui::show_notice_ctx(ctx, "AE 效果预设", &body);
+}
+
+fn dispatch_import(app: &mut EffectcraftApp, ctx: &egui::Context) {
+    let path = pending_import().lock().ok().and_then(|mut slot| slot.take());
+    let kind = pending_kind().lock().ok().and_then(|mut slot| slot.take());
+    let Some(path) = path else { return };
+    let kind = kind.unwrap_or_else(|| {
+        let ext = std::path::Path::new(&path)
+            .extension()
+            .map(|e| e.to_string_lossy().to_string())
+            .unwrap_or_default();
+        kind_for_ext(&ext)
+    });
+    if kind == ImportKind::Ffx {
+        apply_ffx(app, ctx, &path);
+        return;
+    }
+    let params = if kind == ImportKind::Media {
         serde_json::json!({ "paths": [path] })
     } else {
         serde_json::json!({ "path": path })
     };
-    if let Err(e) = crate::menus::invoke(app, ctx, id, params) {
+    if let Err(e) = crate::menus::invoke(app, ctx, kind.command(), params) {
         app.ui.status = format!("导入失败：{e}");
     }
 }
 
-/// 导入：插件与工程格式，各带一句说明。
+/// 分组小标题：13px、灰、加一点字距。
+fn import_section(ui: &mut egui::Ui, t: &Tokens, title: &str) {
+    ui.add_space(6.0);
+    let spaced: String = title.chars().flat_map(|c| [c, '\u{2009}']).collect();
+    ui.label(egui::RichText::new(spaced.trim_end()).size(13.0).color(t.text_dim).strong());
+    ui.add_space(2.0);
+}
+
+/// 一行可点的条目：40 高、左图标 20、主副两行、整行 hover。
+#[allow(clippy::too_many_arguments)]
+fn import_row(
+    ui: &mut egui::Ui,
+    app: &mut EffectcraftApp,
+    t: &Tokens,
+    kind: ImportKind,
+    icon: &str,
+    title: &str,
+    sub: &str,
+) {
+    let width = ui.available_width();
+    let (rect, resp) = ui.allocate_exact_size(vec2(width, 40.0), Sense::click());
+    if resp.hovered() {
+        // hover 用 8% 主题色，够了但不会抢眼
+        let accent = t.accent;
+        let tint = Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 20);
+        ui.painter().rect_filled(rect, 8.0, tint);
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+    let icon_rect = Rect::from_center_size(pos2(rect.min.x + 22.0, rect.center().y), Vec2::splat(20.0));
+    ui.painter().rect_filled(icon_rect, 6.0, t.switch_well);
+    ui.painter().text(icon_rect.center(), Align2::CENTER_CENTER, icon, Tokens::ui(11.0), t.text);
+    ui.painter().text(
+        pos2(rect.min.x + 42.0, rect.center().y - 8.0),
+        Align2::LEFT_CENTER,
+        title,
+        Tokens::ui(15.0),
+        t.text,
+    );
+    ui.painter().text(
+        pos2(rect.min.x + 42.0, rect.center().y + 8.0),
+        Align2::LEFT_CENTER,
+        sub,
+        Tokens::ui(12.0),
+        t.text_dim,
+    );
+    if resp.clicked() {
+        pick_for(app, kind);
+    }
+}
+
+/// 不支持的条目：40% 灰、不可点、右侧「暂不支持」小标签。
+fn import_disabled_row(ui: &mut egui::Ui, t: &Tokens, title: &str) {
+    let width = ui.available_width();
+    let (rect, _) = ui.allocate_exact_size(vec2(width, 40.0), Sense::hover());
+    let faint = Color32::from_rgba_unmultiplied(t.text.r(), t.text.g(), t.text.b(), 102);
+    let icon_rect = Rect::from_center_size(pos2(rect.min.x + 22.0, rect.center().y), Vec2::splat(20.0));
+    ui.painter().rect_filled(icon_rect, 6.0, t.switch_well);
+    ui.painter().text(
+        pos2(rect.min.x + 42.0, rect.center().y),
+        Align2::LEFT_CENTER,
+        title,
+        Tokens::ui(15.0),
+        faint,
+    );
+    ui.painter().text(
+        pos2(rect.max.x - 8.0, rect.center().y),
+        Align2::RIGHT_CENTER,
+        "暂不支持",
+        Tokens::ui(11.0),
+        t.text_faint,
+    );
+}
+
+/// 导入面板：工程三类 + 素材两类；插件不在这里。
 fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
     let open_id = egui::Id::new("ours-import-open");
     let mut open = ctx.data(|d| d.get_temp::<bool>(open_id).unwrap_or(false));
     if !open {
         return;
     }
-    // 上一帧选好的文件：按扩展名走对应命令。
     dispatch_import(app, ctx);
     let t = app.tokens;
-    let rows: [(&str, &str); 8] = [
-        ("After Effects 工程", "`.aep` / `.aepx` → 合成、图层、关键帧、效果、音频（多数可还原）"),
-        ("EffectCraft 工程", "`.ecproj` → 整个工程，原样打开"),
-        ("剪映 / CapCut 工程", "`draft_content.json` 或草稿 zip → 重建时间线：切点、顺序、时长、音视频分轨"),
-        ("NodeVideo 工程（仿AE）", "`.zip` / `.nv` → 重建时间线：图层位置、时长、素材（速度/效果不转换）"),
-        ("快影工程", "暂不支持（需要工程文件样本才能做时间线重建）"),
-        ("AM / FCP7 XML 工程", "`.xml` → 重建时间线：切点、顺序、时长（Premiere/AM 导出）"),
-        ("After Effects 效果预设", "`.ffx` → 把预设里的效果套到选中图层（效果参数可再调）"),
-        ("媒体", "mp4 / mov / png / jpg / wav / mp3 … → 作为素材导入"),
-    ];
-    egui::Window::new("导入")
+    let style = ctx.style_of(ctx.theme());
+    let frame = egui::Frame::window(&style)
+        .corner_radius(16.0)
+        .inner_margin(egui::Margin::same(18));
+    egui::Window::new(egui::RichText::new("导入").size(16.0).strong())
         .open(&mut open)
+        .frame(frame)
         .collapsible(false)
         .resizable(false)
-        .default_width(460.0)
+        .default_width(420.0)
         .show(ctx, |ui| {
-            ui.heading("插件");
-            ui.label("把 .wasm（效果）/ .jsx（脚本）/ .zip 放进 Download 或 Download/EffectCraftPlugins，");
-            ui.label("重启 App 会自动安装；也可以点下面这个按钮现在扫一遍。");
-            ui.horizontal(|ui| {
-                if ui.button("扫描并安装插件").clicked() {
-                    match crate::menus::invoke(app, ctx, "effect.plugins.load", serde_json::json!({
-                        "path": "/storage/emulated/0/Download/EffectCraftPlugins"
-                    })) {
-                        Ok(_) => app.ui.status = "插件已扫描".into(),
-                        Err(e) => app.ui.status = format!("扫描失败：{}", crate::i18n::tr(&e)),
-                    }
-                }
-                if ui.button("插件说明").clicked() {
-                    ctx.data_mut(|d| d.insert_temp(egui::Id::new("ours-plugin-open"), true));
-                }
-            });
-            ui.separator();
-            ui.heading("工程与素材");
-            for (name, hint) in rows {
-                ui.horizontal(|ui| {
-                    ui.add_sized(vec2(150.0, 16.0), egui::Label::new(egui::RichText::new(name).strong()).truncate());
-                    ui.label(egui::RichText::new(hint).weak());
-                });
+            ui.spacing_mut().item_spacing.y = 4.0;
+            import_section(ui, &t, "工程");
+            import_row(ui, app, &t, ImportKind::Aep, "A", "After Effects 工程", ".aep / .aepx · 合成、图层、关键帧可还原，效果缺失会先提示");
+            import_row(ui, app, &t, ImportKind::Ecproj, "E", "EffectCraft 工程", ".ecproj / .ecprojx · 整个工程原样打开");
+            import_row(ui, app, &t, ImportKind::Timeline, "T", "Premiere / AM / FCP XML", ".xml .fcpxml .otio .edl .aaf .omf · 重建时间线");
+            import_section(ui, &t, "素材");
+            import_row(ui, app, &t, ImportKind::Media, "M", "媒体文件", "mp4 / mov / png / jpg / wav / mp3 · 作为素材导入");
+            import_row(ui, app, &t, ImportKind::Ffx, "F", "AE 效果预设", ".ffx · 效果套到选中图层，参数用默认值");
+            import_disabled_row(ui, &t, "剪映 / CapCut 工程");
+            import_disabled_row(ui, &t, "NodeVideo 工程");
+            ui.add_space(10.0);
+            // 底部唯一的主按钮：打开文件选择，按扩展名分发
+            let accent = t.accent;
+            let button = egui::Button::new(
+                egui::RichText::new("导入文件…")
+                    .size(14.0)
+                    .color(Color32::from_rgb(8, 10, 12)),
+            )
+            .fill(accent)
+            .corner_radius(10.0)
+            .min_size(vec2(ui.available_width(), 40.0));
+            if ui.add(button).clicked() {
+                pick_any(app);
             }
             ui.add_space(6.0);
-            if ui.button("导入文件…").clicked() {
-                pick_for_import(app);
-            }
-            ui.label(egui::RichText::new("提示：`.ffx` 预设是 After Effects 的效果预设，不是工程；用「效果」菜单里的同名效果代替。").weak());
+            ui.label(
+                egui::RichText::new(".ffx 只应用效果名，参数用默认值")
+                    .size(12.0)
+                    .color(t.text_faint),
+            );
         });
-    let _ = t;
     ctx.data_mut(|d| d.insert_temp(open_id, open));
 }
 '''
@@ -189,7 +471,7 @@ def main() -> None:
     src = src.replace(anchor, CALL + anchor, 1)
     src += WINDOW
     path.write_text(src, encoding="utf-8")
-    print("import window (plug-ins + formats) installed")
+    print("import window (projects + media, real .ffx) installed")
 
 
 if __name__ == "__main__":

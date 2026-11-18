@@ -84,6 +84,16 @@ def strip_literals(text: str) -> str:
     n = len(text)
     while i < n:
         c = text[i]
+        # 先跳过注释：注释里的引号（例如 `key="` 这种说明）会破坏下面的字符串状态机，
+        # 表现为「括号明明平衡却报 491 != 492」。
+        if c == "/" and i + 1 < n and text[i + 1] == "/":
+            while i < n and text[i] != "\n":
+                i += 1
+            continue
+        if c == "/" and i + 1 < n and text[i + 1] == "*":
+            end = text.find("*/", i + 2)
+            i = n if end < 0 else end + 2
+            continue
         if c == '"':
             i += 1
             while i < n:
