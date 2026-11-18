@@ -337,15 +337,18 @@ fn dispatch_import(app: &mut EffectcraftApp, ctx: &egui::Context) {
     }
 }
 
-/// 分组小标题：13px、灰、加一点字距。
+/// 分组小标题：12px、灰 60%、字距 +0.5，上方留 14px。
 fn import_section(ui: &mut egui::Ui, t: &Tokens, title: &str) {
-    ui.add_space(6.0);
+    ui.add_space(14.0);
     let spaced: String = title.chars().flat_map(|c| [c, '\u{2009}']).collect();
-    ui.label(egui::RichText::new(spaced.trim_end()).size(13.0).color(t.text_dim).strong());
-    ui.add_space(2.0);
+    ui.label(egui::RichText::new(spaced.trim_end()).size(12.0).color(t.text_dim));
 }
 
-/// 一行可点的条目：40 高、左图标 20、主副两行、整行 hover。
+fn import_tint(color: Color32, alpha: u8) -> Color32 {
+    Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), alpha)
+}
+
+/// 一行「像按钮」的条目：高 52、圆角 10、surface 底；hover 主题色 8%、按下 14%。
 #[allow(clippy::too_many_arguments)]
 fn import_row(
     ui: &mut egui::Ui,
@@ -357,27 +360,34 @@ fn import_row(
     sub: &str,
 ) {
     let width = ui.available_width();
-    let (rect, resp) = ui.allocate_exact_size(vec2(width, 40.0), Sense::click());
+    let (rect, resp) = ui.allocate_exact_size(vec2(width, 52.0), Sense::click());
+    let accent = t.accent;
+    let fill = if resp.is_pointer_button_down_on() {
+        import_tint(accent, 36)
+    } else if resp.hovered() {
+        import_tint(accent, 20)
+    } else {
+        t.field_bg
+    };
+    let p = ui.painter();
+    p.rect_filled(rect, 10.0, fill);
     if resp.hovered() {
-        // hover 用 8% 主题色，够了但不会抢眼
-        let accent = t.accent;
-        let tint = Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 20);
-        ui.painter().rect_filled(rect, 8.0, tint);
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }
-    let icon_rect = Rect::from_center_size(pos2(rect.min.x + 22.0, rect.center().y), vec2(20.0, 20.0));
-    ui.painter().rect_filled(icon_rect, 6.0, t.switch_well);
-    ui.painter().text(icon_rect.center(), Align2::CENTER_CENTER, icon, Tokens::ui(11.0), t.text);
-    ui.painter().text(
-        pos2(rect.min.x + 42.0, rect.center().y - 8.0),
-        Align2::LEFT_CENTER,
+    // 32×32 图标方块，主题色 12% 底
+    let icon_rect = egui::Rect::from_center_size(egui::pos2(rect.min.x + 32.0, rect.center().y), vec2(32.0, 32.0));
+    p.rect_filled(icon_rect, 8.0, import_tint(accent, 31));
+    p.text(icon_rect.center(), egui::Align2::CENTER_CENTER, icon, Tokens::ui(13.0), t.text);
+    p.text(
+        egui::pos2(icon_rect.max.x + 12.0, rect.center().y - 9.0),
+        egui::Align2::LEFT_CENTER,
         title,
         Tokens::ui(15.0),
         t.text,
     );
-    ui.painter().text(
-        pos2(rect.min.x + 42.0, rect.center().y + 8.0),
-        Align2::LEFT_CENTER,
+    p.text(
+        egui::pos2(icon_rect.max.x + 12.0, rect.center().y + 10.0),
+        egui::Align2::LEFT_CENTER,
         sub,
         Tokens::ui(12.0),
         t.text_dim,
@@ -387,23 +397,25 @@ fn import_row(
     }
 }
 
-/// 不支持的条目：40% 灰、不可点、右侧「暂不支持」小标签。
+/// 不支持的条目：同样的行样式，整体 40% 透明，右侧「暂不支持」。
 fn import_disabled_row(ui: &mut egui::Ui, t: &Tokens, title: &str) {
     let width = ui.available_width();
-    let (rect, _) = ui.allocate_exact_size(vec2(width, 40.0), Sense::hover());
-    let faint = Color32::from_rgba_unmultiplied(t.text.r(), t.text.g(), t.text.b(), 102);
-    let icon_rect = Rect::from_center_size(pos2(rect.min.x + 22.0, rect.center().y), vec2(20.0, 20.0));
-    ui.painter().rect_filled(icon_rect, 6.0, t.switch_well);
-    ui.painter().text(
-        pos2(rect.min.x + 42.0, rect.center().y),
-        Align2::LEFT_CENTER,
+    let (rect, _) = ui.allocate_exact_size(vec2(width, 52.0), Sense::hover());
+    let p = ui.painter();
+    p.rect_filled(rect, 10.0, import_tint(t.field_bg, 92));
+    let icon_rect = egui::Rect::from_center_size(egui::pos2(rect.min.x + 32.0, rect.center().y), vec2(32.0, 32.0));
+    p.rect_filled(icon_rect, 8.0, import_tint(t.field_bg, 150));
+    let faint = import_tint(t.text, 102);
+    p.text(
+        egui::pos2(icon_rect.max.x + 12.0, rect.center().y),
+        egui::Align2::LEFT_CENTER,
         title,
         Tokens::ui(15.0),
         faint,
     );
-    ui.painter().text(
-        pos2(rect.max.x - 8.0, rect.center().y),
-        Align2::RIGHT_CENTER,
+    p.text(
+        egui::pos2(rect.max.x - 14.0, rect.center().y),
+        egui::Align2::RIGHT_CENTER,
         "暂不支持",
         Tokens::ui(11.0),
         t.text_faint,
@@ -420,9 +432,23 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
     dispatch_import(app, ctx);
     let t = app.tokens;
     let style = ctx.style_of(ctx.theme());
+    let dark = style.visuals.dark_mode;
+    // 和「快捷」同材质：暗色 rgba(20,22,26,0.86) / 亮色 rgba(250,250,252,0.9)，1px 发丝边。
+    let bg = if dark {
+        Color32::from_rgba_unmultiplied(20, 22, 26, 219)
+    } else {
+        Color32::from_rgba_unmultiplied(250, 250, 252, 230)
+    };
+    let border = if dark {
+        Color32::from_rgba_unmultiplied(255, 255, 255, 26)
+    } else {
+        Color32::from_rgba_unmultiplied(0, 0, 0, 26)
+    };
     let frame = egui::Frame::window(&style)
+        .fill(bg)
         .corner_radius(16.0)
-        .inner_margin(egui::Margin::same(18));
+        .inner_margin(egui::Margin::same(18))
+        .stroke(egui::Stroke::new(1.0, border));
     egui::Window::new(egui::RichText::new("导入").size(16.0).strong())
         .open(&mut open)
         .frame(frame)
@@ -430,7 +456,7 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
         .resizable(false)
         .default_width(420.0)
         .show(ctx, |ui| {
-            ui.spacing_mut().item_spacing.y = 4.0;
+            ui.spacing_mut().item_spacing.y = 6.0;
             import_section(ui, &t, "工程");
             import_row(ui, app, &t, ImportKind::Aep, "A", "After Effects 工程", ".aep / .aepx · 合成、图层、关键帧可还原，效果缺失会先提示");
             import_row(ui, app, &t, ImportKind::Ecproj, "E", "EffectCraft 工程", ".ecproj / .ecprojx · 整个工程原样打开");
@@ -440,8 +466,8 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
             import_row(ui, app, &t, ImportKind::Ffx, "F", "AE 效果预设", ".ffx · 效果套到选中图层，参数用默认值");
             import_disabled_row(ui, &t, "剪映 / CapCut 工程");
             import_disabled_row(ui, &t, "NodeVideo 工程");
-            ui.add_space(10.0);
-            // 底部唯一的主按钮：打开文件选择，按扩展名分发
+            ui.add_space(14.0);
+            // 主按钮：固定 44 高，居中的胶囊（宽度 = 文字 + 48），圆角 12
             let accent = t.accent;
             let button = egui::Button::new(
                 egui::RichText::new("导入文件…")
@@ -449,12 +475,16 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
                     .color(Color32::from_rgb(8, 10, 12)),
             )
             .fill(accent)
-            .corner_radius(10.0)
-            .min_size(vec2(ui.available_width(), 40.0));
-            if ui.add(button).clicked() {
+            .corner_radius(12.0);
+            let row = ui.available_width();
+            // 「导入文件…」5 个字 @14px ≈ 70px，再 +48 的内边距 = 118；上限不超过行宽。
+            let mask = 118.0_f32;
+            let (slot, _) = ui.allocate_exact_size(vec2(row, 44.0), Sense::hover());
+            let target = egui::Rect::from_center_size(slot.center(), vec2(mask.min(row), 44.0));
+            if ui.put(target, button).clicked() {
                 pick_any(app);
             }
-            ui.add_space(6.0);
+            ui.add_space(4.0);
             ui.label(
                 egui::RichText::new(".ffx 只应用效果名，参数用默认值")
                     .size(12.0)
