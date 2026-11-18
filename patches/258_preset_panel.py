@@ -162,17 +162,33 @@ fn preset_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: egui::Rect) {
     let mut notice: Option<String> = ui.ctx().data(|d| d.get_temp::<String>(notice_id));
     // 滚轮：只在指针落在面板内时响应，避免抢时间线的滚动。
     let mut scroll = ui.ctx().data(|d| d.get_temp::<f32>(scroll_id)).unwrap_or(0.0);
-    if body.hovered() {
-        let delta = ui.input(|i| i.smooth_scroll_delta.y);
-        if delta.abs() > 0.0 {
-            scroll = (scroll - delta).clamp(0.0, (list.len() as f32 * 50.0 - (size.y - 110.0)).max(0.0));
-            ui.ctx().data_mut(|d| d.insert_temp(scroll_id, scroll));
-        }
-    }
+    // 列表视口：标题、搜索框、芯片都不在滚动区里
     let view = egui::Rect::from_min_max(
         egui::pos2(r.min.x + 8.0, chip_y + 32.0),
         egui::pos2(r.max.x - 8.0, r.max.y - 34.0),
     );
+    let view_h = view.height();
+    let content_h = list.len() as f32 * (crate::panel_style::ROW_H + 6.0);
+    let max_scroll = (content_h - view_h).max(0.0);
+    // 指针落在列表区就算滚动，不用 body.hovered()（它被后面的行 interact 盖掉了）
+    let over_list = ui
+        .ctx()
+        .pointer_hover_pos()
+        .map(|p| view.contains(p))
+        .unwrap_or(false);
+    if over_list && max_scroll > 0.0 {
+        let delta = ui.input(|i| i.smooth_scroll_delta.y);
+        if delta.abs() > 0.0 {
+            scroll = (scroll - delta).clamp(0.0, max_scroll);
+            ui.ctx().data_mut(|d| d.insert_temp(scroll_id, scroll));
+        }
+    }
+    // 拖动列表区也是滚动（拖动面板只在标题栏那块生效）
+    let drag_in_list = ui.interact(view, egui::Id::unique("ours-preset-list-scroll"), egui::Sense::drag());
+    if drag_in_list.dragged() && max_scroll > 0.0 {
+        scroll = (scroll - drag_in_list.drag_delta().y).clamp(0.0, max_scroll);
+        ui.ctx().data_mut(|d| d.insert_temp(scroll_id, scroll));
+    }
     let mut y = view.min.y - scroll;
     for item in list.iter() {
         let name = item.get("name").and_then(|v| v.as_str()).unwrap_or("");

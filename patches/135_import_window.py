@@ -339,7 +339,7 @@ fn dispatch_import(app: &mut EffectcraftApp, ctx: &egui::Context) {
 
 /// 分组小标题：12px、灰 60%、字距 +0.5，上方留 14px。
 fn import_section(ui: &mut egui::Ui, t: &Tokens, title: &str) {
-    ui.add_space(6.0);
+    ui.add_space(8.0);
     let spaced: String = title.chars().flat_map(|c| [c, '\u{2009}']).collect();
     ui.label(egui::RichText::new(spaced.trim_end()).size(8.0).color(t.text_dim));
 }
@@ -466,11 +466,17 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
             // 「导入文件…」5 个字 @14px ≈ 70px，再 +48 的内边距 = 118；上限不超过行宽。
             let mask = 110.0_f32;
             let (slot, _) = ui.allocate_exact_size(vec2(row, crate::panel_style::BUTTON_H), egui::Sense::hover());
-            let target = egui::Rect::from_center_size(slot.center(), vec2(mask.min(row), crate::panel_style::BUTTON_H));
+            let target = egui::Rect::from_center_size(slot.center(), vec2(row, 36.0));
             if ui.put(target, button).clicked() {
                 pick_any(app);
             }
             ui.add_space(4.0);
+            // 只列「导入文件…」的 pick_any 真的会列出来的扩展名（.nv 不在其中，见回复）
+            ui.label(
+                egui::RichText::new("支持 .aep .aepx .ecproj .ecprojx .xml .fcpxml .otio .edl .aaf .omf .ffx .gp 与常见媒体")
+                    .size(8.0)
+                    .color(t.text_faint),
+            );
             ui.label(
                 egui::RichText::new(".ffx 只应用效果名，参数用默认值")
                     .size(8.0)
