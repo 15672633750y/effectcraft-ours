@@ -163,8 +163,12 @@ fn paint_texture(ui: &egui::Ui, texture: &egui::TextureHandle, rect: Rect) {
 fn paint_avatar(ui: &egui::Ui, r: Rect, t: &Tokens, profile: &Profile) -> (Pos2, f32) {
     let center = r.center();
     let radius = r.width().min(r.height()) * 0.5;
-    ui.painter().circle_filled(center, radius, t.accent);
-    match avatar_texture(ui) {
+    // 有头像图就不要再铺主题色圆底：椭圆边缘会透出一圈蓝/青，用户看到的就是「头像上有一层蓝」。
+    let texture = avatar_texture(ui);
+    if texture.is_none() {
+        ui.painter().circle_filled(center, radius, t.accent);
+    }
+    match texture {
         Some(texture) => paint_circle_texture(ui, &texture, center, radius),
         None => {
             ui.painter().text(

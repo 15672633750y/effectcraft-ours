@@ -462,7 +462,7 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
         .frame(frame)
         .collapsible(false)
         .resizable(false)
-        .default_width(350.0)
+        .default_width(196.0)
         .show(ctx, |ui| {
             ui.spacing_mut().item_spacing.y = 4.0;
             import_section(ui, &t, "工程");
