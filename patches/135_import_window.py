@@ -70,6 +70,10 @@ enum ImportKind {
     Timeline,
     Media,
     Ffx,
+    /// Sapphire .gp 预设（237 的 apply_gp 解析它）
+    Gp,
+    /// NodeVideo 工程包：.nv 或 zip
+    Nv,
 }
 
 impl ImportKind {
@@ -79,6 +83,8 @@ impl ImportKind {
             ImportKind::Ecproj => vec!["ecproj", "ecprojx"],
             ImportKind::Timeline => vec!["xml", "fcpxml", "otio", "edl", "aaf", "omf"],
             ImportKind::Ffx => vec!["ffx"],
+            ImportKind::Gp => vec!["gp"],
+            ImportKind::Nv => vec!["nv", "zip"],
             ImportKind::Media => vec![
                 "mp4", "mov", "mxf", "mkv", "webm", "png", "jpg", "jpeg", "webp", "tif", "tiff", "wav", "mp3", "flac",
             ],
@@ -91,6 +97,8 @@ impl ImportKind {
             ImportKind::Ecproj => "file.importProject",
             ImportKind::Timeline => "file.importTimeline",
             ImportKind::Ffx => "",
+            ImportKind::Gp => "",
+            ImportKind::Nv => "file.import",
             ImportKind::Media => "file.import",
         }
     }
@@ -107,6 +115,10 @@ fn kind_for_ext(ext: &str) -> ImportKind {
         ImportKind::Timeline
     } else if lower == "ffx" {
         ImportKind::Ffx
+    } else if lower == "gp" {
+        ImportKind::Gp
+    } else if lower == "nv" || lower == "zip" {
+        ImportKind::Nv
     } else {
         ImportKind::Media
     }
@@ -152,6 +164,8 @@ fn pick_any(app: &mut EffectcraftApp) {
         ImportKind::Timeline,
         ImportKind::Media,
         ImportKind::Ffx,
+        ImportKind::Gp,
+        ImportKind::Nv,
     ];
     let mut exts: Vec<String> = Vec::new();
     for kind in all {
@@ -327,7 +341,15 @@ fn dispatch_import(app: &mut EffectcraftApp, ctx: &egui::Context) {
         apply_ffx(app, ctx, &path);
         return;
     }
-    let params = if kind == ImportKind::Media {
+    // .gp 走 237 的 apply_gp（参数名/数值都能还原）
+    if kind == ImportKind::Gp {
+        match crate::menus::invoke(app, ctx, "ours.applyPreset", serde_json::json!({ "path": path })) {
+            Ok(_) => app.ui.status = "已套用 .gp 预设".to_string(),
+            Err(e) => app.ui.status = format!("套用失败：{e}"),
+        }
+        return;
+    }
+    let params = if matches!(kind, ImportKind::Media | ImportKind::Nv) {
         serde_json::json!({ "paths": [path] })
     } else {
         serde_json::json!({ "path": path })
@@ -473,7 +495,7 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
             ui.add_space(4.0);
             // 只列「导入文件…」的 pick_any 真的会列出来的扩展名（.nv 不在其中，见回复）
             ui.label(
-                egui::RichText::new("支持 .aep .aepx .ecproj .ecprojx .xml .fcpxml .otio .edl .aaf .omf .ffx .gp 与常见媒体")
+                egui::RichText::new("支持 .aep .aepx .ecproj .ecprojx .xml .fcpxml .otio .edl .aaf .omf .ffx .gp .nv .zip 与常见媒体")
                     .size(8.0)
                     .color(t.text_faint),
             );
