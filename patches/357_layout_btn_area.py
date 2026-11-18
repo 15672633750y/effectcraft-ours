@@ -18,7 +18,6 @@ FRAME_INSERT = """        crate::account_ui::panel(self, ui, full);
         // EFFECTCRAFT_OURS_LAYOUT_BTN_AREA_V1 — 「布局」放在 Middle 层、贴预览面板右下角：
         // Foreground 的预设库/导入/云端面板会盖住它（以前它最后绘制，永远最上层）。
         let preview_rect = self
-            .ui
             .dock_rects
             .iter()
             .rev()
