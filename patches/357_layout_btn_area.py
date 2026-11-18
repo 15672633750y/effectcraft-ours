@@ -21,7 +21,7 @@ FRAME_INSERT = """        crate::account_ui::panel(self, ui, full);
         // 预览面板右下角是下一轮的优化项。
         let screen = ui.ctx().screen_rect();
         {
-            let pos = egui::pos2(screen.max.x - 44.0 - 8.0, screen.max.y - 26.0 - 40.0);
+            let pos = egui::pos2(screen.max.x - 70.0, screen.min.y + 220.0);
             egui::Area::new(egui::Id::unique("ours-layout-btn"))
                 .order(egui::Order::Middle)
                 .fixed_pos(pos)
