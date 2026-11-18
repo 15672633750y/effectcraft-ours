@@ -78,6 +78,19 @@ const CROP_TEX: &str = "ours-account-crop-tex";
 const CROP_POS: &str = "ours-account-crop-pos";
 const CROP_RATIO: &str = "ours-account-crop-ratio";
 const BANNED: &str = "ours-account-banned";
+const PROJECTS: &str = "ours-cloud-projects";
+const UPLOADING: &str = "ours-cloud-uploading";
+const CONFIRM_DELETE: &str = "ours-cloud-confirm-delete";
+
+/// 「另存为」对话框的回调（任意线程）→ 下一帧再拿路径去保存并上传。
+fn pending_save() -> &'static std::sync::Mutex<Option<String>> {
+    static SAVE: std::sync::OnceLock<std::sync::Mutex<Option<String>>> = std::sync::OnceLock::new();
+    SAVE.get_or_init(|| std::sync::Mutex::new(None))
+}
+
+fn take_pending_save() -> Option<String> {
+    pending_save().lock().ok().and_then(|mut slot| slot.take())
+}
 
 /// 文件对话框是异步的，回调可能从任意线程来：只把路径丢进这里，UI 线程下一帧再处理。
 fn pending_avatar() -> &'static std::sync::Mutex<Option<String>> {
@@ -397,6 +410,32 @@ fn panel_inner(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
                 ui.data_mut(|d| d.remove::<egui::TextureHandle>(Id::new("ours-account-avatar-tex")));
                 app.ui.status = "账号异常，请重新登录".to_string();
             }
+            Event::Projects(list) => set(ui, PROJECTS, list),
+            Event::Uploading(busy) => set(ui, UPLOADING, busy),
+            Event::Uploaded(name) => {
+                app.ui.status = format!("已上传「{name}」");
+                set(ui, MESSAGE, String::new());
+                let token = token(ui);
+                if !token.is_empty() {
+                    cloud::list_projects(token);
+                }
+            }
+            Event::Downloaded(path) => {
+                app.ui.status = "已下载，正在打开…".to_string();
+                if let Err(err) = app.session.execute("file.open", serde_json::json!({ "path": path })) {
+                    app.ui.status = format!("打开失败: {err}");
+                }
+            }
+            Event::Deleted(id) => {
+                let mut list = get::<Vec<cloud::RemoteProject>>(ui, PROJECTS).unwrap_or_default();
+                list.retain(|item| item.id != id);
+                set(ui, PROJECTS, list);
+                app.ui.status = "已删除".to_string();
+            }
+            Event::CloudFailed(message) => {
+                set(ui, MESSAGE, message.clone());
+                app.ui.status = message;
+            }
             Event::SessionExpired => {
                 set(ui, TOKEN, String::new());
                 set(ui, USERNAME, String::new());
@@ -438,6 +477,7 @@ fn panel_inner(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
         1 => auth_panel(app, ui, full),
         2 => profile_panel(app, ui, full),
         3 => crop_panel(app, ui, full),
+        4 => cloud_panel(app, ui, full),
         _ => {}
     }
 }
@@ -619,6 +659,193 @@ fn picture_texture(ui: &egui::Ui, path: &str, key: &str) -> Option<egui::Texture
     let handle = ui.ctx().load_texture(key, color, egui::TextureOptions::LINEAR);
     set(ui, key, handle.clone());
     Some(handle)
+}
+
+/// `updated_at`（毫秒）→ `2026-11-18 20:31`。
+fn fmt_cloud_time(ms: u64) -> String {
+    chrono::DateTime::from_timestamp_millis(ms as i64)
+        .map(|dt| dt.format("%Y-%m-%d %H:%M").to_string())
+        .unwrap_or_else(|| "—".to_string())
+}
+
+/// 上传当前工程：先 `file.save` 确保磁盘是最新的，再读字节上传；没有路径就先「另存为」。
+fn start_upload(app: &mut EffectcraftApp, ui: &mut egui::Ui) {
+    let token = token(ui);
+    if token.is_empty() {
+        set(ui, PANEL, 1_u8);
+        return;
+    }
+    let Some(path) = app.session.path.clone().filter(|p| !p.is_empty()) else {
+        // 新工程还没落盘：先让用户选个保存位置，回调下一帧再上传。
+        if let Some(spawn) = app.hooks.file_dialog_async.as_ref() {
+            let dialog = crate::FileDialog::Save { default: "我的工程.ecproj".to_string(), ext: "ecproj".to_string(), project: true };
+            let done: crate::DialogDone = Box::new(|paths| {
+                if let Some(path) = paths.into_iter().next() {
+                    if let Ok(mut slot) = pending_save().lock() {
+                        *slot = Some(path);
+                    }
+                }
+            });
+            spawn(dialog, done);
+            ui.ctx().request_repaint();
+        } else {
+            set(ui, MESSAGE, "先把工程保存一次再上传".to_string());
+        }
+        return;
+    };
+    // 存盘，保证上传的是最新的编辑。
+    if let Err(err) = app.session.execute("file.save", serde_json::json!({ "path": path })) {
+        set(ui, MESSAGE, format!("保存失败: {err}"));
+        return;
+    }
+    match std::fs::read(&path) {
+        Ok(bytes) => {
+            let name = std::path::Path::new(&path)
+                .file_stem()
+                .map(|s| s.to_string_lossy().to_string())
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| "我的工程".to_string());
+            set(ui, UPLOADING, true);
+            cloud::upload_project(token, name, bytes);
+        }
+        Err(err) => set(ui, MESSAGE, format!("读工程文件失败: {err}")),
+    }
+}
+
+/// 云端工程面板：未登录显示「登录后可用」，登录后是列表 + 上传/刷新。
+fn cloud_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
+    let t = app.tokens;
+    scrim(ui, full);
+    let card = card(&t, ui, full, 380.0, 480.0, "云端工程");
+    let left = card.min.x + 16.0;
+    let width = card.width() - 32.0;
+    let token = token(ui);
+
+    if token.is_empty() {
+        ui.painter().text(
+            Pos2::new(card.center().x, card.min.y + 150.0),
+            Align2::CENTER_CENTER,
+            "登录后可用",
+            Tokens::ui(14.0),
+            t.text_dim,
+        );
+        let btn = Rect::from_min_size(Pos2::new(left, card.min.y + 190.0), Vec2::new(width, 32.0));
+        if button(ui, &t, btn, "去登录", true) {
+            set(ui, PANEL, 1_u8);
+        }
+    } else {
+        let busy = get::<bool>(ui, UPLOADING).unwrap_or(false);
+        let list = get::<Vec<cloud::RemoteProject>>(ui, PROJECTS).unwrap_or_default();
+        // 顶部：上传 + 刷新
+        let half = (width - 8.0) / 2.0;
+        if busy {
+            let r = Rect::from_min_size(Pos2::new(left, card.min.y + 48.0), Vec2::new(width, 30.0));
+            ui.painter().rect_filled(r, 6.0, t.switch_well);
+            ui.put(r.shrink(12.0), egui::Spinner::new());
+            ui.painter().text(r.center() + Vec2::new(0.0, 0.0), Align2::CENTER_CENTER, "上传中…", Tokens::ui(12.0), t.text_dim);
+        } else if button(ui, &t, Rect::from_min_size(Pos2::new(left, card.min.y + 48.0), Vec2::new(half, 30.0)), "上传当前工程", true) {
+            start_upload(app, ui);
+        }
+        if !busy
+            && button(ui, &t, Rect::from_min_size(Pos2::new(left + half + 8.0, card.min.y + 48.0), Vec2::new(half, 30.0)), "刷新", false)
+        {
+            set(ui, MESSAGE, String::new());
+            cloud::list_projects(token.clone());
+        }
+
+        // 列表
+        let list_top = card.min.y + 88.0;
+        let row_h = 46.0;
+        let visible = ((card.max.y - 96.0 - list_top) / row_h).max(1.0) as usize;
+        if list.is_empty() {
+            ui.painter().text(
+                Pos2::new(card.center().x, list_top + 40.0),
+                Align2::CENTER_CENTER,
+                "还没有云端工程，点「上传当前工程」试试",
+                Tokens::ui(11.5),
+                t.text_dim,
+            );
+        }
+        let mut confirm = temp::<String>(ui, CONFIRM_DELETE);
+        for (i, item) in list.iter().take(visible).enumerate() {
+            let y = list_top + i as f32 * row_h;
+            let r = Rect::from_min_size(Pos2::new(left, y), Vec2::new(width, row_h - 4.0));
+            ui.painter().rect_filled(r, 6.0, t.field_bg);
+            ui.painter().text(
+                Pos2::new(r.min.x + 8.0, r.min.y + 15.0),
+                Align2::LEFT_CENTER,
+                item.name.clone(),
+                Tokens::ui(12.5),
+                t.text,
+            );
+            let meta = format!(
+                "{}  ·  {}",
+                crate::panels::project::fmt_size(item.size_bytes),
+                fmt_cloud_time(item.updated_at)
+            );
+            ui.painter().text(Pos2::new(r.min.x + 8.0, r.min.y + 32.0), Align2::LEFT_CENTER, meta, Tokens::ui(10.5), t.text_faint);
+            // 下载 / 删除
+            let bw = 62.0;
+            let dl = Rect::from_min_size(Pos2::new(r.max.x - bw * 2.0 - 12.0, r.min.y + 8.0), Vec2::new(bw, 24.0));
+            let del = Rect::from_min_size(Pos2::new(r.max.x - bw - 6.0, r.min.y + 8.0), Vec2::new(bw, 24.0));
+            if button(ui, &t, dl, "下载", false) {
+                cloud::download_project(token.clone(), item.id.clone(), item.name.clone());
+                set(ui, MESSAGE, "正在下载…".to_string());
+            }
+            let asking = confirm == item.id;
+            let label = if asking { "确认删除" } else { "删除" };
+            if button(ui, &t, del, label, asking) {
+                if asking {
+                    cloud::delete_project(token.clone(), item.id.clone());
+                    confirm.clear();
+                } else {
+                    confirm = item.id.clone();
+                }
+            }
+        }
+        set(ui, CONFIRM_DELETE, confirm);
+
+        // 「另存为」选好了位置：保存后立刻上传
+        if let Some(target) = take_pending_save() {
+            if let Err(err) = app.session.execute("file.saveAs", serde_json::json!({ "path": target.clone() })) {
+                set(ui, MESSAGE, format!("保存失败: {err}"));
+            } else {
+                match std::fs::read(&target) {
+                    Ok(bytes) => {
+                        let name = std::path::Path::new(&target)
+                            .file_stem()
+                            .map(|s| s.to_string_lossy().to_string())
+                            .unwrap_or_else(|| "我的工程".to_string());
+                        set(ui, UPLOADING, true);
+                        cloud::upload_project(token.clone(), name, bytes);
+                    }
+                    Err(err) => set(ui, MESSAGE, format!("读工程文件失败: {err}")),
+                }
+            }
+        }
+    }
+
+    // 底部：关闭
+    let close = Rect::from_min_size(Pos2::new(left, card.max.y - 44.0), Vec2::new(width, 30.0));
+    if button(ui, &t, close, "关闭", false) {
+        set(ui, PANEL, 0_u8);
+        set(ui, MESSAGE, String::new());
+        set(ui, CONFIRM_DELETE, String::new());
+    }
+    let message = temp::<String>(ui, MESSAGE);
+    if !message.is_empty() {
+        ui.painter().text(
+            Pos2::new(card.center().x, card.max.y - 58.0),
+            Align2::CENTER_CENTER,
+            message,
+            Tokens::ui(11.0),
+            t.warning,
+        );
+    }
+    if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+        set(ui, PANEL, 0_u8);
+        set(ui, MESSAGE, String::new());
+    }
 }
 
 /// 裁剪页：显示原图，用户可以拖方框、改大小，确认后按方框逐像素裁切再缩到 256×256。

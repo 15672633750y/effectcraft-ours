@@ -45,6 +45,26 @@ use std::sync::{Mutex, OnceLock};
 /// 后端地址（Cloudflare Workers）。
 pub const BASE_URL: &str = "https://shimoveaex-api.3264003615.workers.dev";
 
+/// 云端工程的一条记录。
+#[derive(Clone, Debug, Default)]
+pub struct RemoteProject {
+    pub id: String,
+    pub name: String,
+    pub size_bytes: u64,
+    pub updated_at: u64,
+}
+
+impl RemoteProject {
+    fn from_value(value: &serde_json::Value) -> Self {
+        Self {
+            id: value["id"].as_str().unwrap_or_default().to_string(),
+            name: value["name"].as_str().unwrap_or("未命名").to_string(),
+            size_bytes: value["size_bytes"].as_u64().unwrap_or(0),
+            updated_at: value["updated_at"].as_u64().unwrap_or(0),
+        }
+    }
+}
+
 /// 资料卡里的字段。昵称走后端原生 `display_name`，其余放进 `prefs.profile`。
 #[derive(Clone, Default, Debug, PartialEq, Eq)]
 pub struct Profile {
@@ -93,6 +113,16 @@ pub enum Event {
     SessionExpired,
     /// 账号被封禁：token 已清掉，带上后端给的原因原文。
     Banned(String),
+    /// 云端工程列表（名称/大小/更新时间）。
+    Projects(Vec<RemoteProject>),
+    /// 正在上传（true）/ 上传结束（false）。
+    Uploading(bool),
+    Uploaded(String),
+    /// 下载完成，路径可直接交给 `file.open`。
+    Downloaded(String),
+    Deleted(String),
+    /// 云端操作的失败（配额/未登录/网络各有中文提示）。
+    CloudFailed(String),
 }
 
 fn events() -> &'static Mutex<Vec<Event>> {
@@ -261,6 +291,56 @@ fn describe(err: &ureq::Error) -> String {
 
 #[cfg(target_arch = "wasm32")]
 fn request(_method: &str, _path: &str, _token: Option<&str>, _body: Option<&str>) -> Result<(u16, String), String> {
+    Err("web build has no network".to_string())
+}
+
+/// 上传工程包：裸二进制（`application/octet-stream`），不 base64、不 multipart。
+#[cfg(not(target_arch = "wasm32"))]
+fn request_bytes(method: &str, path: &str, token: Option<&str>, body: &[u8]) -> Result<(u16, Vec<u8>), String> {
+    let url = format!("{BASE_URL}{path}");
+    let agent = agent();
+    let req = if method == "PUT" { agent.put(&url) } else { agent.post(&url) };
+    let req = match token {
+        Some(t) => req.header("Authorization", format!("Bearer {t}")),
+        None => req,
+    };
+    match req
+        .header("Accept", "application/json")
+        .header("Content-Type", "application/octet-stream")
+        .send(body)
+    {
+        Ok(mut resp) => {
+            let code = resp.status().as_u16();
+            let mut buf = Vec::new();
+            resp.body_mut().read_to_vec().map(|v| buf = v).ok();
+            Ok((code, buf))
+        }
+        Err(ureq::Error::StatusCode(code)) => Ok((code, Vec::new())),
+        Err(err) => Err(describe(&err)),
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn request_bytes(_method: &str, _path: &str, _token: Option<&str>, _body: &[u8]) -> Result<(u16, Vec<u8>), String> {
+    Err("web build has no network".to_string())
+}
+
+/// 下载工程包：拿原始字节。
+#[cfg(not(target_arch = "wasm32"))]
+fn download_bytes(path: &str, token: &str) -> Result<Vec<u8>, String> {
+    let url = format!("{BASE_URL}{path}");
+    match agent().get(&url).header("Authorization", format!("Bearer {token}")).call() {
+        Ok(resp) => {
+            let mut resp = resp;
+            resp.body_mut().read_to_vec().map_err(|e| format!("读取失败: {e}"))
+        }
+        Err(ureq::Error::StatusCode(code)) => Err(cloud_hint(code, &serde_json::Value::Null)),
+        Err(err) => Err(describe(&err)),
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn download_bytes(_path: &str, _token: &str) -> Result<Vec<u8>, String> {
     Err("web build has no network".to_string())
 }
 
@@ -466,6 +546,146 @@ pub fn save_profile(token: String, profile: Profile) {
 /// 退出登录：只清本地 token，本地工程一点不动。
 pub fn logout() {
     clear_token();
+}
+
+// ---------------------------------------------------------------- 云端工程
+
+/// 云端操作的失败提示：配额/未登录/存储关闭各有自己的话。
+fn cloud_hint(code: u16, value: &serde_json::Value) -> String {
+    let api = value["code"]
+        .as_str()
+        .or_else(|| value["error"]["code"].as_str())
+        .unwrap_or_default();
+    let server = value["message"]
+        .as_str()
+        .or_else(|| value["error"]["message"].as_str())
+        .unwrap_or_default();
+    match api {
+        "UNAUTHENTICATED" | "TOKEN_EXPIRED" | "TOKEN_INVALID" | "SESSION_REVOKED" => {
+            "登录已失效，请重新登录".to_string()
+        }
+        "QUOTA_EXCEEDED" | "STORAGE_FULL" => "云空间不足，请先删掉一些云端工程".to_string(),
+        "STORAGE_DISABLED" => "云端存储暂未开放".to_string(),
+        "PROJECT_NOT_FOUND" => "这个云端工程已经不存在了".to_string(),
+        "NAME_REQUIRED" | "PROJECT_NAME_INVALID" => "工程名不能为空".to_string(),
+        _ if code == 401 => "登录已失效，请重新登录".to_string(),
+        _ if !server.is_empty() => server.to_string(),
+        _ if code == 0 => "网络不可用，请检查网络后重试".to_string(),
+        _ => format!("云端请求失败（HTTP {code}）"),
+    }
+}
+
+/// `GET /projects`：拉云端工程列表。
+pub fn list_projects(token: String) {
+    spawn(move || match request("GET", "/projects", Some(&token), None) {
+        Ok((code, text)) => {
+            let value = json_or_null(&text);
+            if code == 401 {
+                clear_token();
+                push(Event::SessionExpired);
+                return;
+            }
+            if !(200..300).contains(&code) {
+                push(Event::CloudFailed(cloud_hint(code, &value)));
+                return;
+            }
+            let list = value["projects"]
+                .as_array()
+                .map(|items| items.iter().map(RemoteProject::from_value).collect())
+                .unwrap_or_default();
+            push(Event::Projects(list));
+        }
+        Err(err) => push(Event::CloudFailed(err)),
+    });
+}
+
+/// 上传：`POST /projects` 拿 id，再 `PUT /projects/:id/content` 发原始字节。
+pub fn upload_project(token: String, name: String, bytes: Vec<u8>) {
+    spawn(move || {
+        push(Event::Uploading(true));
+        let body = serde_json::json!({ "name": name }).to_string();
+        let created = match request("POST", "/projects", Some(&token), Some(&body)) {
+            Ok((code, text)) => (code, json_or_null(&text)),
+            Err(err) => {
+                push(Event::Uploading(false));
+                push(Event::CloudFailed(err));
+                return;
+            }
+        };
+        let (code, value) = created;
+        if !(200..300).contains(&code) {
+            push(Event::Uploading(false));
+            push(Event::CloudFailed(cloud_hint(code, &value)));
+            return;
+        }
+        let Some(id) = value["project"]["id"].as_str().filter(|s| !s.is_empty()) else {
+            push(Event::Uploading(false));
+            push(Event::CloudFailed("后端没有返回工程 id".to_string()));
+            return;
+        };
+        let path = format!("/projects/{id}/content");
+        match request_bytes("PUT", &path, Some(&token), &bytes) {
+            Ok((code, body)) => {
+                push(Event::Uploading(false));
+                if (200..300).contains(&code) {
+                    push(Event::Uploaded(name));
+                } else {
+                    push(Event::CloudFailed(cloud_hint(code, &json_or_null(&String::from_utf8_lossy(&body)))));
+                }
+            }
+            Err(err) => {
+                push(Event::Uploading(false));
+                push(Event::CloudFailed(err));
+            }
+        }
+    });
+}
+
+/// 下载到 `<config>/cloud/<name>.ecproj`，路径交给 `file.open`。
+pub fn download_project(token: String, id: String, name: String) {
+    spawn(move || {
+        match download_bytes(&format!("/projects/{id}/content"), &token) {
+            Ok(bytes) if !bytes.is_empty() => {
+                let dir = cloud_dir();
+                if std::fs::create_dir_all(&dir).is_err() {
+                    push(Event::CloudFailed("写不了下载目录".to_string()));
+                    return;
+                }
+                let safe: String = name
+                    .chars()
+                    .map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.' { c } else { '_' })
+                    .collect();
+                let file = dir.join(format!("{}.ecproj", if safe.is_empty() { "cloud" } else { &safe }));
+                match std::fs::write(&file, &bytes) {
+                    Ok(()) => push(Event::Downloaded(file.to_string_lossy().to_string())),
+                    Err(err) => push(Event::CloudFailed(format!("写文件失败: {err}"))),
+                }
+            }
+            Ok(_) => push(Event::CloudFailed("云端工程是空的".to_string())),
+            Err(err) => push(Event::CloudFailed(err)),
+        }
+    });
+}
+
+pub fn delete_project(token: String, id: String) {
+    spawn(move || {
+        let path = format!("/projects/{id}");
+        match request("DELETE", &path, Some(&token), Some("{}")) {
+            Ok((code, text)) => {
+                if (200..300).contains(&code) {
+                    push(Event::Deleted(id));
+                } else {
+                    push(Event::CloudFailed(cloud_hint(code, &json_or_null(&text))));
+                }
+            }
+            Err(err) => push(Event::CloudFailed(err)),
+        }
+    });
+}
+
+/// 下载工程的落盘目录。
+pub fn cloud_dir() -> std::path::PathBuf {
+    config_dir().join("cloud")
 }
 
 #[cfg(test)]
