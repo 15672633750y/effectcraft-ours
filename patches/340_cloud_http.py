@@ -82,7 +82,7 @@ impl Profile {
 /// 后台线程推给 UI 的结果。
 #[derive(Clone, Debug)]
 pub enum Event {
-    LoggedIn { token: String, profile: Profile },
+    LoggedIn { token: String, username: String, profile: Profile },
     LoginFailed(String),
     Profile(Profile),
     SaveOk,
@@ -137,16 +137,38 @@ fn account_path() -> std::path::PathBuf {
 
 /// 读本地 token；没有、读不到、JSON 坏了都当未登录。
 pub fn load_token() -> Option<String> {
-    let text = std::fs::read_to_string(account_path()).ok()?;
-    let value: serde_json::Value = serde_json::from_str(&text).ok()?;
-    value["token"].as_str().filter(|t| !t.is_empty()).map(str::to_string)
+    load_account().map(|(token, _)| token)
 }
 
-pub fn save_token(token: &str) {
+/// 本地存的 (token, username)：头像按 username 命名，所以两个都要。
+pub fn load_account() -> Option<(String, String)> {
+    let text = std::fs::read_to_string(account_path()).ok()?;
+    let value: serde_json::Value = serde_json::from_str(&text).ok()?;
+    let token = value["token"].as_str().filter(|t| !t.is_empty())?.to_string();
+    let username = value["username"].as_str().unwrap_or_default().to_string();
+    Some((token, username))
+}
+
+pub fn save_token(token: &str, username: &str) {
     let _ = std::fs::create_dir_all(config_dir());
-    let body = serde_json::json!({ "token": token }).to_string();
+    let body = serde_json::json!({ "token": token, "username": username }).to_string();
     // TODO(keystore): 换 Android Keystore；先落在应用私有外部目录，别的应用读不到。
     let _ = std::fs::write(account_path(), body);
+}
+
+/// 头像目录：`<config>/avatar/`，每个账号一张 `<username>.png`（256×256 正方形）。
+pub fn avatar_dir() -> std::path::PathBuf {
+    config_dir().join("avatar")
+}
+
+/// 某个账号的头像文件。
+pub fn avatar_file(username: &str) -> std::path::PathBuf {
+    avatar_dir().join(format!("{}.png", sanitize(username)))
+}
+
+/// 用户名只允许字母数字下划线，落到文件名前再洗一遍，避免路径穿越。
+fn sanitize(name: &str) -> String {
+    name.chars().map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' }).collect()
 }
 
 pub fn clear_token() {
@@ -331,8 +353,9 @@ pub fn login(username: String, password: String) {
                 let token = value["token"].as_str().unwrap_or_default().to_string();
                 // 实测：登录回 200，注册回 **201** —— 只认 200 的话注册会永远提示失败。
                 if (200..300).contains(&code) && !token.is_empty() {
-                    save_token(&token);
-                    push(Event::LoggedIn { token, profile: Profile::from_user(&value["user"]) });
+                    let username = value["user"]["username"].as_str().unwrap_or_default().to_string();
+                    save_token(&token, &username);
+                    push(Event::LoggedIn { token, username, profile: Profile::from_user(&value["user"]) });
                 } else {
                     push(Event::LoginFailed(login_hint(code, &value)));
                 }
@@ -351,8 +374,9 @@ pub fn register(username: String, password: String) {
                 let token = value["token"].as_str().unwrap_or_default().to_string();
                 // 实测：登录回 200，注册回 **201** —— 只认 200 的话注册会永远提示失败。
                 if (200..300).contains(&code) && !token.is_empty() {
-                    save_token(&token);
-                    push(Event::LoggedIn { token, profile: Profile::from_user(&value["user"]) });
+                    let username = value["user"]["username"].as_str().unwrap_or_default().to_string();
+                    save_token(&token, &username);
+                    push(Event::LoggedIn { token, username, profile: Profile::from_user(&value["user"]) });
                 } else {
                     push(Event::LoginFailed(login_hint(code, &value)));
                 }

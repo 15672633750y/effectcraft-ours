@@ -71,6 +71,18 @@ const GENDER: &str = "ours-account-gender";
 const BIRTH: &str = "ours-account-birth";
 const SIGN: &str = "ours-account-sign";
 const FETCHED: &str = "ours-account-fetched";
+const USERNAME: &str = "ours-account-username";
+const AVATAR_QUEUED: &str = "ours-account-avatar-queued";
+
+/// 文件对话框是异步的，回调可能从任意线程来：只把路径丢进这里，UI 线程下一帧再处理。
+fn pending_avatar() -> &'static std::sync::Mutex<Option<String>> {
+    static PENDING: std::sync::OnceLock<std::sync::Mutex<Option<String>>> = std::sync::OnceLock::new();
+    PENDING.get_or_init(|| std::sync::Mutex::new(None))
+}
+
+fn take_pending_avatar() -> Option<String> {
+    pending_avatar().lock().ok().and_then(|mut slot| slot.take())
+}
 
 fn get<T: 'static + Clone>(ui: &egui::Ui, key: &str) -> Option<T> {
     ui.data(|d| d.get_temp::<T>(Id::new(key)))
@@ -100,7 +112,10 @@ fn avatar_texture(ui: &egui::Ui) -> Option<egui::TextureHandle> {
     if let Some(handle) = get::<egui::TextureHandle>(ui, "ours-account-avatar-tex") {
         return Some(handle);
     }
-    let bytes = std::fs::read(cloud::avatar_path()).ok()?;
+    // 按当前登录用户名取头像；换账号会清缓存，所以不会串图。
+    let username = temp::<String>(ui, USERNAME);
+    let path = if username.is_empty() { cloud::avatar_path() } else { cloud::avatar_file(&username) };
+    let bytes = std::fs::read(path).ok()?;
     let image = image::load_from_memory(&bytes).ok()?.to_rgba8();
     let (w, h) = image.dimensions();
     if w == 0 || h == 0 {
@@ -118,18 +133,17 @@ fn paint_texture(ui: &egui::Ui, texture: &egui::TextureHandle, rect: Rect) {
     ui.painter().image(texture.id(), rect, uv, Color32::WHITE);
 }
 
-/// 圆形头像：有本地图就贴图，否则昵称首字 + 主题色底。
-fn paint_avatar(ui: &egui::Ui, r: Rect, t: &Tokens, profile: &Profile) {
+/// 圆形头像：有本地图就用圆形 mesh 贴图（真圆形裁切），否则昵称首字 + 主题色底。
+/// 两种情况都画一圈 1px 主题色描边；返回圆心和半径，供调用方判断「点在圆内」。
+fn paint_avatar(ui: &egui::Ui, r: Rect, t: &Tokens, profile: &Profile) -> (Pos2, f32) {
+    let center = r.center();
     let radius = r.width().min(r.height()) * 0.5;
-    ui.painter().circle_filled(r.center(), radius, t.accent);
+    ui.painter().circle_filled(center, radius, t.accent);
     match avatar_texture(ui) {
-        Some(texture) => {
-            let side = radius * std::f32::consts::SQRT_2;
-            paint_texture(ui, &texture, Rect::from_center_size(r.center(), Vec2::splat(side)));
-        }
+        Some(texture) => paint_circle_texture(ui, &texture, center, radius),
         None => {
             ui.painter().text(
-                r.center(),
+                center,
                 Align2::CENTER_CENTER,
                 initial(profile),
                 Tokens::ui((radius * 0.95).max(10.0)),
@@ -137,6 +151,66 @@ fn paint_avatar(ui: &egui::Ui, r: Rect, t: &Tokens, profile: &Profile) {
             );
         }
     }
+    ui.painter().circle_stroke(center, radius - 0.5, Stroke::new(1.0, t.accent));
+    (center, radius)
+}
+
+/// 用三角扇把 texture 圆形裁切地贴到圆里（uv 也跟着走圆），这是「真圆形头像」的做法。
+fn paint_circle_texture(ui: &egui::Ui, texture: &egui::TextureHandle, center: Pos2, radius: f32) {
+    const SEGMENTS: usize = 48;
+    let mut mesh = egui::epaint::Mesh::default();
+    mesh.texture_id = texture.id();
+    mesh.vertices.push(egui::epaint::Vertex {
+        pos: center,
+        uv: Pos2::new(0.5, 0.5),
+        color: Color32::WHITE,
+    });
+    for i in 0..=SEGMENTS {
+        let angle = i as f32 / SEGMENTS as f32 * std::f32::consts::TAU;
+        let (sin, cos) = angle.sin_cos();
+        mesh.vertices.push(egui::epaint::Vertex {
+            pos: center + Vec2::new(cos, sin) * radius,
+            uv: Pos2::new(0.5 + 0.5 * cos, 0.5 + 0.5 * sin),
+            color: Color32::WHITE,
+        });
+    }
+    for i in 0..SEGMENTS as u32 {
+        mesh.add_triangle(0, i + 1, i + 2);
+    }
+    ui.painter().add(egui::Shape::mesh(mesh));
+}
+
+/// 选好的图 → 中心裁正方形（不拉伸）→ 缩到 256×256 → 存成 `<config>/avatar/<username>.png`。
+fn save_avatar(source: &str, username: &str) -> bool {
+    let Ok(image) = image::open(source) else {
+        return false;
+    };
+    // resize_to_fill 就是「中心裁正方形再缩放」，不会拉伸变形。
+    let square = image.resize_to_fill(256, 256, image::imageops::FilterType::Lanczos3);
+    if std::fs::create_dir_all(cloud::avatar_dir()).is_err() {
+        return false;
+    }
+    square.save(cloud::avatar_file(username)).is_ok()
+}
+
+/// 打开系统的图片选择（走 App 现成的非阻塞文件对话框钩子，不会卡住 UI 帧）。
+fn pick_avatar(app: &EffectcraftApp, ui: &egui::Ui) {
+    let Some(spawn) = app.hooks.file_dialog_async.as_ref() else {
+        return;
+    };
+    let dialog = crate::FileDialog::Open {
+        exts: vec!["png".to_string(), "jpg".to_string(), "jpeg".to_string(), "webp".to_string()],
+        many: false,
+    };
+    let done: crate::DialogDone = Box::new(|paths| {
+        if let Some(path) = paths.into_iter().next() {
+            if let Ok(mut slot) = pending_avatar().lock() {
+                *slot = Some(path);
+            }
+        }
+    });
+    spawn(dialog, done);
+    ui.ctx().request_repaint();
 }
 
 /// "1990-01-02" → (1990, 1, 2)；坏数据给一个安全默认值。
@@ -197,24 +271,29 @@ pub fn slot(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Painter, x: f
 
 fn slot_inner(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Painter, x: f32, cy: f32) -> f32 {
     let t = app.tokens;
-    let resp = if logged_in(ui) {
+    let (resp, inside_circle) = if logged_in(ui) {
         let profile = temp::<Profile>(ui, PROFILE);
         let r = Rect::from_center_size(Pos2::new(x + 13.0, cy), Vec2::splat(26.0));
         let resp = ui.interact(r, Id::unique("ours-account-slot"), Sense::click());
-        // 有 `<config>/avatar.png` 就贴图，否则昵称首字 + 主题色底。
-        paint_avatar(ui, r, &t, &profile);
+        // 有本账号头像就圆形贴图，否则昵称首字 + 主题色底。
+        let (center, radius) = paint_avatar(ui, r, &t, &profile);
         app.auto.add("account.slot", r, "账号");
-        resp
+        // 点击区域是**圆**，不是方形外接框：只有点在圆内才算点中。
+        let inside = ui
+            .input(|i| i.pointer.interact_pos())
+            .map(|p| p.distance(center) <= radius)
+            .unwrap_or(false);
+        (resp, inside)
     } else {
         let r = Rect::from_min_size(Pos2::new(x, cy - 13.0), Vec2::new(44.0, 26.0));
         let resp = ui.interact(r, Id::unique("ours-account-slot"), Sense::click());
         p.rect_filled(r, 4.0, if resp.hovered() { t.hover } else { t.switch_well });
         p.text(r.center(), Align2::CENTER_CENTER, "登录", Tokens::ui(12.0), t.text);
         app.auto.add("account.slot", r, "登录");
-        resp
+        (resp, true)
     };
     let width = if logged_in(ui) { 28.0 } else { 48.0 };
-    if resp.clicked() {
+    if resp.clicked() && inside_circle {
         set(ui, PANEL, if logged_in(ui) { 2_u8 } else { 1 });
         // 打开资料卡时先把输入框填成当前资料。
         if logged_in(ui) {
@@ -266,12 +345,15 @@ fn panel_inner(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
     // 后台结果只在 UI 线程落地。
     for event in cloud::poll() {
         match event {
-            Event::LoggedIn { token: fresh, profile } => {
+            Event::LoggedIn { token: fresh, username, profile } => {
                 set(ui, TOKEN, fresh);
+                set(ui, USERNAME, username);
                 set(ui, PROFILE, profile.clone());
                 fill_fields(ui, &profile);
                 set(ui, PANEL, 0_u8);
                 set(ui, MESSAGE, String::new());
+                // 换了账号，头像缓存必须清掉，否则会显示上一个账号的图。
+                ui.data_mut(|d| d.remove::<egui::TextureHandle>(Id::new("ours-account-avatar-tex")));
                 app.ui.status = "已登录".to_string();
             }
             Event::LoginFailed(message) => set(ui, MESSAGE, message),
@@ -286,7 +368,9 @@ fn panel_inner(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
             Event::SaveFailed(message) | Event::Failed(message) => set(ui, MESSAGE, message),
             Event::SessionExpired => {
                 set(ui, TOKEN, String::new());
+                set(ui, USERNAME, String::new());
                 set(ui, PROFILE, Profile::default());
+                ui.data_mut(|d| d.remove::<egui::TextureHandle>(Id::new("ours-account-avatar-tex")));
                 set(ui, PANEL, 0_u8);
                 set(ui, MESSAGE, String::new());
                 app.ui.status = "登录已过期，请重新登录".to_string();
@@ -296,10 +380,22 @@ fn panel_inner(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
     // 启动后第一次：有 token 就静默拉一次资料（失败也只是回到未登录）。
     if !get::<bool>(ui, FETCHED).unwrap_or(false) {
         set(ui, FETCHED, true);
-        let stored = cloud::load_token().unwrap_or_default();
-        if !stored.is_empty() {
+        if let Some((stored, username)) = cloud::load_account() {
             set(ui, TOKEN, stored.clone());
+            set(ui, USERNAME, username);
+            // 启动就用 token 验一次；401 会走 SessionExpired 静默登出。
             cloud::fetch_me(stored);
+        }
+    }
+    // 上一帧文件对话框选好了图：裁成 256×256 存到 <config>/avatar/<username>.png，
+    // 再清掉 texture 缓存让界面立刻换图（不用重启）。
+    if let Some(path) = take_pending_avatar() {
+        let username = temp::<String>(ui, USERNAME);
+        if !username.is_empty() && save_avatar(&path, &username) {
+            ui.data_mut(|d| d.remove::<egui::TextureHandle>(Id::new("ours-account-avatar-tex")));
+            set(ui, MESSAGE, "头像已更新".to_string());
+        } else {
+            set(ui, MESSAGE, "这个图片读不了，换一张试试".to_string());
         }
     }
     match temp::<u8>(ui, PANEL) {
@@ -461,13 +557,26 @@ fn profile_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
     let width = card.width() - 36.0;
     let row = |y: f32| Rect::from_min_size(Pos2::new(left, card.min.y + y), Vec2::new(width, 30.0));
 
-    // 头像：有本地 avatar.png 就贴图，否则昵称首字。
+    // 头像：点圆形区域 → 换图（点击判定在圆内，不是方形外接框）。
     let profile = temp::<Profile>(ui, PROFILE);
-    paint_avatar(ui, Rect::from_center_size(Pos2::new(card.center().x, card.min.y + 72.0), Vec2::splat(48.0)), &t, &profile);
+    let avatar_rect = Rect::from_center_size(Pos2::new(card.center().x, card.min.y + 72.0), Vec2::splat(48.0));
+    let (avatar_center, avatar_radius) = paint_avatar(ui, avatar_rect, &t, &profile);
+    let avatar_resp = ui.interact(avatar_rect, Id::unique("ours-account-avatar-hit"), Sense::click());
+    let hits_circle = |ui: &egui::Ui| {
+        ui.input(|i| i.pointer.interact_pos())
+            .map(|p| p.distance(avatar_center) <= avatar_radius)
+            .unwrap_or(false)
+    };
+    if avatar_resp.hovered() && hits_circle(ui) {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+    if avatar_resp.clicked() && hits_circle(ui) {
+        pick_avatar(app, ui);
+    }
     ui.painter().text(
         Pos2::new(card.center().x, card.min.y + 104.0),
         Align2::CENTER_CENTER,
-        if avatar_texture(ui).is_some() { "头像：本地 avatar.png" } else { "头像：昵称首字（放 avatar.png 可换图）" },
+        "点头像更换（256×256 本地保存）",
         Tokens::ui(10.5),
         t.text_faint,
     );
@@ -540,7 +649,9 @@ fn profile_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
     if button(ui, &t, Rect::from_min_size(Pos2::new(left + (bw + gap) * 2.0, btn_y), Vec2::new(bw, 30.0)), "退出登录", false) {
         cloud::logout();
         set(ui, TOKEN, String::new());
+        set(ui, USERNAME, String::new());
         set(ui, PROFILE, Profile::default());
+        ui.data_mut(|d| d.remove::<egui::TextureHandle>(Id::new("ours-account-avatar-tex")));
         set(ui, PANEL, 0_u8);
         app.ui.status = "已退出登录".to_string();
     }
