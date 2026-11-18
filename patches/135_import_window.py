@@ -44,6 +44,71 @@ CALL = '''    import_window(app, ui.ctx());
 
 WINDOW = r'''
 
+/// 文件对话框选好的路径（回调可能来自任意线程）→ 下一帧再分发。
+fn pending_import() -> &'static std::sync::Mutex<Option<String>> {
+    static PENDING: std::sync::OnceLock<std::sync::Mutex<Option<String>>> = std::sync::OnceLock::new();
+    PENDING.get_or_init(|| std::sync::Mutex::new(None))
+}
+
+/// 「导入文件…」能选的扩展名（按类别分发的依据）。
+const IMPORT_EXTS: [&str; 24] = [
+    "aep", "aepx", "ecproj", "ecprojx", "xml", "fcpxml", "otio", "edl", "aaf", "omf",
+    "mp4", "mov", "mxf", "mkv", "webm", "png", "jpg", "jpeg", "webp", "tif", "tiff", "wav", "mp3", "flac",
+];
+
+fn pick_for_import(app: &mut EffectcraftApp) {
+    let Some(spawn) = app.hooks.file_dialog_async.as_ref() else {
+        app.ui.status = "这个平台没有文件选择器".to_string();
+        return;
+    };
+    let dialog = crate::FileDialog::Open {
+        exts: IMPORT_EXTS.iter().map(|e| e.to_string()).collect(),
+        many: false,
+    };
+    let done: crate::DialogDone = Box::new(|paths| {
+        if let Some(path) = paths.into_iter().next() {
+            if let Ok(mut slot) = pending_import().lock() {
+                *slot = Some(path);
+            }
+        }
+    });
+    spawn(dialog, done);
+}
+
+/// 按扩展名分发：这才是「选 .aep 却按素材导入」的修法——不再一律 `file.import`。
+fn dispatch_import(app: &mut EffectcraftApp, ctx: &egui::Context) {
+    let Some(path) = pending_import().lock().ok().and_then(|mut slot| slot.take()) else {
+        return;
+    };
+    let ext = std::path::Path::new(&path)
+        .extension()
+        .map(|e| e.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default();
+    let id = match ext.as_str() {
+        "aep" | "aepx" => "file.importAep",
+        "ecproj" | "ecprojx" => "file.importProject",
+        "xml" | "fcpxml" | "otio" | "edl" | "aaf" | "omf" => "file.importTimeline",
+        // 这两类上游确实没有实现（anim_presets.rs 明确说 ffx 不支持），不要假装能导。
+        "ffx" => {
+            app.ui.status = "暂不支持 .ffx 效果预设".to_string();
+            return;
+        }
+        "zip" | "nv" => {
+            app.ui.status = "暂不支持剪映 / NodeVideo 工程包".to_string();
+            return;
+        }
+        _ => "file.import",
+    };
+    let params = if id == "file.import" {
+        serde_json::json!({ "paths": [path] })
+    } else {
+        serde_json::json!({ "path": path })
+    };
+    if let Err(e) = crate::menus::invoke(app, ctx, id, params) {
+        app.ui.status = format!("导入失败：{e}");
+    }
+}
+
 /// 导入：插件与工程格式，各带一句说明。
 fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
     let open_id = egui::Id::new("ours-import-open");
@@ -51,6 +116,8 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
     if !open {
         return;
     }
+    // 上一帧选好的文件：按扩展名走对应命令。
+    dispatch_import(app, ctx);
     let t = app.tokens;
     let rows: [(&str, &str); 8] = [
         ("After Effects 工程", "`.aep` / `.aepx` → 合成、图层、关键帧、效果、音频（多数可还原）"),
@@ -94,9 +161,7 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
             }
             ui.add_space(6.0);
             if ui.button("导入文件…").clicked() {
-                if let Err(e) = crate::menus::invoke(app, ctx, "file.import", serde_json::json!({})) {
-                    app.ui.status = e;
-                }
+                pick_for_import(app);
             }
             ui.label(egui::RichText::new("提示：`.ffx` 预设是 After Effects 的效果预设，不是工程；用「效果」菜单里的同名效果代替。").weak());
         });
