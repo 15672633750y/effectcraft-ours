@@ -370,11 +370,24 @@ pub fn panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
 }
 
 /// 账号类的错误统一走这里：标题 + 正文，居中玻璃弹窗（不再是按钮下面那行橙色小字）。
-fn show_notice(ui: &egui::Ui, title: &str, body: &str) {
+/// `pub`：`.ffx` 预设导入的汇总弹窗也复用它。
+pub fn show_notice(ui: &egui::Ui, title: &str, body: &str) {
     set(ui, NOTICE_TITLE, title.to_string());
     set(ui, NOTICE_BODY, body.to_string());
     set(ui, NOTICE_AT, ui.input(|i| i.time));
     ui.ctx().request_repaint();
+}
+
+/// 只拿得到 `Context` 的地方（比如导入面板里的 `.ffx` 汇总）用这个。
+pub fn show_notice_ctx(ctx: &egui::Context, title: &str, body: &str) {
+    let (title, body) = (title.to_string(), body.to_string());
+    ctx.data_mut(|d| {
+        d.insert_temp(Id::new(NOTICE_TITLE), title);
+        d.insert_temp(Id::new(NOTICE_BODY), body);
+    });
+    let now = ctx.input(|i| i.time);
+    ctx.data_mut(|d| d.insert_temp(Id::new(NOTICE_AT), now));
+    ctx.request_repaint();
 }
 
 fn close_notice(ui: &egui::Ui) {

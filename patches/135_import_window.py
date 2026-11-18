@@ -211,45 +211,63 @@ fn parse_ffx_effects(xml: &str) -> Vec<(String, String)> {
     out
 }
 
-/// 按名字找效果：`lookup` 覆盖 id、显示名（大小写不敏感）、别名表；再补 AE matchName 的
-/// 常见写法（`ADBE Glo2` → 去掉前缀 → 去掉尾部数字 → `Glow`）。
-fn lookup_effect(name: &str, match_name: &str) -> Option<&'static effectcraft_effects::EffectSpec> {
+/// 由效果名 / matchName 生成候选名：原名 → matchName → 去掉 `ADBE ` 前缀 → 去掉尾部数字。
+fn effect_candidates(name: &str, match_name: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    fn push(out: &mut Vec<String>, value: &str) {
+        let trimmed = value.trim();
+        if !trimmed.is_empty() && !out.iter().any(|x| x == trimmed) {
+            out.push(trimmed.to_string());
+        }
+    }
+    push(&mut out, name);
+    push(&mut out, match_name);
     for candidate in [name, match_name] {
         if candidate.is_empty() {
             continue;
-        }
-        if let Some(spec) = effectcraft_effects::lookup(candidate) {
-            return Some(spec);
         }
         let tail = candidate
             .strip_prefix("ADBE ")
             .or_else(|| candidate.strip_prefix("ADBE"))
             .map(str::trim)
             .unwrap_or(candidate);
-        if tail != candidate
-            && let Some(spec) = effectcraft_effects::lookup(tail)
-        {
-            return Some(spec);
+        if tail != candidate {
+            push(&mut out, tail);
         }
-        // "Glo2" 去掉尾部数字 → "Glo"（长度够才有意义）
         let letters: String = tail.chars().take_while(|c| !c.is_ascii_digit()).collect();
-        if letters.len() >= 4
-            && letters.len() < tail.len()
-            && let Some(spec) = effectcraft_effects::lookup(&letters)
-        {
-            return Some(spec);
+        if letters.len() >= 4 && letters.len() < tail.len() {
+            push(&mut out, &letters);
         }
-        // 把尾部数字换成常见词尾再试一次（Glo2 → Glow）
-        if letters.len() >= 3 {
-            for suffix in ["w", "e", "ow"] {
-                let guess = format!("{letters}{suffix}");
-                if let Some(spec) = effectcraft_effects::lookup(&guess) {
-                    return Some(spec);
+    }
+    out
+}
+
+/// 依次拿候选名调 `effect.apply`。
+/// 返回 `Ok(())` 表示套上了；`Err(true)` 表示这些名字都不是已知效果；`Err(false)` 是别的错
+/// （多半是没选中图层）—— 后者要如实告诉用户，不能算成「缺少效果」。
+fn try_apply_effect(
+    app: &mut EffectcraftApp,
+    ctx: &egui::Context,
+    name: &str,
+    match_name: &str,
+) -> Result<(), bool> {
+    let candidates = effect_candidates(name, match_name);
+    let mut unknown = true;
+    for candidate in candidates {
+        let params = serde_json::json!({ "effect": candidate });
+        match crate::menus::invoke(app, ctx, "effect.apply", params) {
+            Ok(_) => return Ok(()),
+            Err(e) => {
+                // engine 对不认识的名字报 `unknown effect`；其它错误（没有图层）不是缺效果。
+                if !e.contains("unknown effect") {
+                    app.ui.status = format!("应用效果失败：{e}");
+                    unknown = false;
+                    break;
                 }
             }
         }
     }
-    None
+    Err(unknown)
 }
 
 fn apply_ffx(app: &mut EffectcraftApp, ctx: &egui::Context, path: &str) {
@@ -269,16 +287,11 @@ fn apply_ffx(app: &mut EffectcraftApp, ctx: &egui::Context, path: &str) {
     let mut applied = 0usize;
     let mut missing: Vec<String> = Vec::new();
     for (name, match_name) in &effects {
-        match lookup_effect(name, match_name) {
-            Some(spec) => {
-                let params = serde_json::json!({ "effect": spec.id });
-                if crate::menus::invoke(app, ctx, "effect.apply", params).is_ok() {
-                    applied += 1;
-                } else {
-                    missing.push(if name.is_empty() { match_name.clone() } else { name.clone() });
-                }
-            }
-            None => missing.push(if name.is_empty() { match_name.clone() } else { name.clone() }),
+        match try_apply_effect(app, ctx, name, match_name) {
+            Ok(()) => applied += 1,
+            Err(true) => missing.push(if name.is_empty() { match_name.clone() } else { name.clone() }),
+            // Err(false)：已经写过状态行（比如没选中图层），不重复计数。
+            Err(false) => {}
         }
     }
     let body = if applied == 0 && !missing.is_empty() {
