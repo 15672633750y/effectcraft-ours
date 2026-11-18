@@ -88,12 +88,26 @@ jobs:
           new = ('    "effectcraft": ["ecproj", "ecprojx", "ectemplate", "aep", "aepx",\n'
                  '                    "ffx", "gp", "xml", "nv"],')
           if old in s:
-              p.write_text(s.replace(old, new, 1), encoding='utf-8')
+              s = s.replace(old, new, 1)
               print('effectcraft now advertises .aep/.aepx/.ffx/.gp/.xml/.nv')
           elif '"aep"' in s:
               print('associations already extended')
           else:
               raise SystemExit('file_associations anchor missing')
+          # pathPattern is a regex and reaches the manifest as .*\\\.<ext> (two backslashes),
+          # i.e. it demands a literal backslash in the file name - no real file ever matches, which
+          # is why the app never showed up in "Open with". One backslash matches the dot whether or
+          # not aapt2 unescapes it.
+          doubled = '    return manifest_pattern.replace("\\\\", "\\\\\\\\")'
+          single = '    return manifest_pattern'
+          if doubled in s:
+              s = s.replace(doubled, single, 1)
+              print('pathPattern backslash un-doubled (regex now matches .ext)')
+          elif single in s:
+              print('pathPattern already single')
+          else:
+              raise SystemExit('path pattern anchor missing')
+          p.write_text(s, encoding='utf-8')
           PY
 
       - name: Add the ImportShim trampoline
