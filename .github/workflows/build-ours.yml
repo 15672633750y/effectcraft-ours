@@ -250,6 +250,24 @@ jobs:
             -appicon="$GITHUB_WORKSPACE/app-icon.png" \
             -packagename="${{ inputs.package || 'com.shimoveaex.effects' }}" 2>&1 | tee logs/effectcraft-build.log
 
+      # 诊断：文件关联是否真的进了打包的 manifest（构建后才存在）
+      - name: Dump the intent filters really packaged
+        if: always()
+        run: |
+          echo "== merged AndroidManifest.xml (text) =="
+          find . -name AndroidManifest.xml 2>/dev/null | head -8 | while read -r f; do
+            if grep -q 'intent-filter' "$f" 2>/dev/null; then
+              echo "--- $f"
+              grep -n 'intent-filter\|<data\|<activity\|<action' "$f" | head -40
+            fi
+          done
+          echo "== aapt2 badging (what the launcher sees) =="
+          APK=$(find . -name '*.apk' -newer /proc/self/exe 2>/dev/null | head -1)
+          echo "apk=$APK"
+          if [ -n "$APK" ] && command -v aapt2 >/dev/null 2>&1; then
+            aapt2 dump badging "$APK" 2>/dev/null | grep -i 'launchable\|intent\|activity' | head -20
+          fi
+
       # 诊断：缓存到底省了多少。没有这行，只能凭构建时长猜。
       - name: Report the build cache size
         if: always()
