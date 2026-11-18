@@ -81,15 +81,26 @@ fn ffx_effect_names(text: &str) -> Vec<String> {
 /// 而 matchName 在字节流里就是以这两种编码出现的。
 fn rifx_effect_names(data: &[u8]) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
-    // 这些是 AE 的结构标记，不是效果：扫到了也不能当效果名报给用户。
-    const NOT_EFFECTS: [&str; 8] = [
+    // AE 的「结构名」：它们以 ADBE 开头但不是效果，扫到必须丢弃，否则会污染缺失列表
+    // （典型："ADBE Effect Parade"、"ADBE Text Document"）。用前缀匹配，
+    // 这样 "ADBE Text Path Options" / "ADBE Text Path …" 都被 "ADBE Text Path" 覆盖。
+    const STRUCTURAL: [&str; 17] = [
         "ADBE Effect Parade",
-        "ADBE Brightness",
-        "ADBE Opacity",
-        "ADBE Position",
-        "ADBE Scale",
-        "ADBE Rotate",
-        "ADBE Anchor Point",
+        "ADBE Effect Mask Parade",
+        "ADBE Effect Mask Opacity",
+        "ADBE Effect Built In Params",
+        "ADBE Effect Built In Para",
+        "ADBE End of path sentinel",
+        "ADBE Force CPU GPU",
+        "ADBE Group End",
+        "ADBE Text Properties",
+        "ADBE Text Document",
+        "ADBE Text Path",
+        "ADBE Text More Options",
+        "ADBE Text Animators",
+        "ADBE Text Animator",
+        "ADBE Text Group",
+        "ADBE Text Anchor Point",
         "ADBE Transform",
     ];
     fn push(out: &mut Vec<String>, text: &str) {
@@ -97,7 +108,8 @@ fn rifx_effect_names(data: &[u8]) -> Vec<String> {
         if name.len() <= 3 || out.contains(&name) {
             return;
         }
-        if NOT_EFFECTS.iter().any(|n| n.eq_ignore_ascii_case(&name)) {
+        let lower = name.to_ascii_lowercase();
+        if STRUCTURAL.iter().any(|n| lower.starts_with(&n.to_ascii_lowercase())) {
             return;
         }
         out.push(name);
