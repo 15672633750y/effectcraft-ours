@@ -83,6 +83,8 @@ const UPLOADING: &str = "ours-cloud-uploading";
 const CONFIRM_DELETE: &str = "ours-cloud-confirm-delete";
 const LAST_STATE: &str = "ours-account-last-state";
 const WAS_FOCUSED: &str = "ours-account-was-focused";
+const CLOUD_LOADING: &str = "ours-cloud-loading";
+const LAST_PANEL: &str = "ours-account-last-panel";
 
 /// 「另存为」对话框的回调（任意线程）→ 下一帧再拿路径去保存并上传。
 fn pending_save() -> &'static std::sync::Mutex<Option<String>> {
@@ -365,6 +367,22 @@ pub fn panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
 }
 
 fn panel_inner(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
+    // 每次**重新打开**云端面板都拉一次列表（切进来就算），不依赖上一次的缓存：
+    // 否则杀后台重进后列表是空的，用户得手动点「刷新」。
+    {
+        let now_panel = temp::<u8>(ui, PANEL);
+        let prev_panel = get::<u8>(ui, LAST_PANEL).unwrap_or(0);
+        if now_panel != prev_panel {
+            set(ui, LAST_PANEL, now_panel);
+            if now_panel == 4 {
+                let token_now = token(ui);
+                if !token_now.is_empty() {
+                    set(ui, CLOUD_LOADING, true);
+                    cloud::list_projects(token_now);
+                }
+            }
+        }
+    }
     // 有面板打开时，先铺一层全屏交互：它在这帧里最后注册，所以吃掉下面所有面板的点击，
     // 再配合下面清掉滚轮，做到「整屏不可穿透」。
     let open = temp::<u8>(ui, PANEL) != 0;
@@ -386,6 +404,9 @@ fn panel_inner(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
                 fill_fields(ui, &profile);
                 set(ui, PANEL, 0_u8);
                 set(ui, MESSAGE, String::new());
+                // 能登录进来就不再是封禁状态
+                set(ui, BANNED, String::new());
+                cloud::clear_banned();
                 // 换了账号，头像缓存必须清掉，否则会显示上一个账号的图。
                 ui.data_mut(|d| d.remove::<egui::TextureHandle>(Id::new("ours-account-avatar-tex")));
                 app.ui.status = "已登录".to_string();
@@ -401,7 +422,8 @@ fn panel_inner(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
             }
             Event::SaveFailed(message) | Event::Failed(message) => set(ui, MESSAGE, message),
             Event::Banned(reason) => {
-                // 清掉本地 token 与资料，并把「封禁原因」记下来给登录面板显示。
+                // 403 ACCOUNT_BANNED：清 token，把原因存起来（内存 + 文件），
+                // 底部提示直接用 reason 原文，不再弹通用的那句。
                 set(ui, TOKEN, String::new());
                 set(ui, USERNAME, String::new());
                 set(ui, PROFILE, Profile::default());
@@ -409,10 +431,14 @@ fn panel_inner(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
                 set(ui, PANEL, 0_u8);
                 set(ui, MESSAGE, String::new());
                 set(ui, EDITING, false);
+                cloud::save_banned(&reason);
                 ui.data_mut(|d| d.remove::<egui::TextureHandle>(Id::new("ours-account-avatar-tex")));
-                app.ui.status = "账号异常，请重新登录".to_string();
+                app.ui.status = reason;
             }
-            Event::Projects(list) => set(ui, PROJECTS, list),
+            Event::Projects(list) => {
+                set(ui, PROJECTS, list);
+                set(ui, CLOUD_LOADING, false);
+            }
             Event::Uploading(busy) => set(ui, UPLOADING, busy),
             Event::Uploaded(name) => {
                 app.ui.status = format!("已上传「{name}」");
@@ -435,6 +461,8 @@ fn panel_inner(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
                 app.ui.status = "已删除".to_string();
             }
             Event::CloudFailed(message) => {
+                set(ui, CLOUD_LOADING, false);
+                set(ui, UPLOADING, false);
                 set(ui, MESSAGE, message.clone());
                 app.ui.status = message;
             }
@@ -457,6 +485,10 @@ fn panel_inner(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
             set(ui, USERNAME, username);
             // 启动就用 token 验一次；401 会走 SessionExpired 静默登出。
             cloud::fetch_me(stored);
+        }
+        // 上次被停用的原因也读回来：token 已经被清掉了，但登录页要能说明为什么。
+        if let Some(reason) = cloud::load_banned() {
+            set(ui, BANNED, reason);
         }
     }
     // 封禁要实时生效：登录状态下每 60 秒、以及每次切回前台，都拉一次 GET /me。
@@ -779,14 +811,23 @@ fn cloud_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
         let list_top = card.min.y + 88.0;
         let row_h = 46.0;
         let visible = ((card.max.y - 96.0 - list_top) / row_h).max(1.0) as usize;
+        let loading = get::<bool>(ui, CLOUD_LOADING).unwrap_or(false);
         if list.is_empty() {
+            let (text, color) = if loading {
+                ("加载中…", t.text_dim)
+            } else {
+                ("还没有云端工程，点「上传当前工程」试试", t.text_dim)
+            };
             ui.painter().text(
                 Pos2::new(card.center().x, list_top + 40.0),
                 Align2::CENTER_CENTER,
-                "还没有云端工程，点「上传当前工程」试试",
+                text,
                 Tokens::ui(11.5),
-                t.text_dim,
+                color,
             );
+        }
+        if loading {
+            ui.put(Rect::from_center_size(Pos2::new(card.center().x, list_top + 74.0), Vec2::splat(18.0)), egui::Spinner::new());
         }
         let mut confirm = temp::<String>(ui, CONFIRM_DELETE);
         for (i, item) in list.iter().take(visible).enumerate() {

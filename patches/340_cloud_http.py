@@ -479,6 +479,8 @@ pub fn login(username: String, password: String) {
                 if (200..300).contains(&code) && !token.is_empty() {
                     let username = value["user"]["username"].as_str().unwrap_or_default().to_string();
                     save_token(&token, &username);
+                    // 能登录成功说明不再被封：把上次的原因清掉。
+                    clear_banned();
                     push(Event::LoggedIn { token, username, profile: Profile::from_user(&value["user"]) });
                 } else {
                     push(Event::LoginFailed(login_hint(code, &value)));
@@ -506,6 +508,8 @@ pub fn register(username: String, password: String) {
                 if (200..300).contains(&code) && !token.is_empty() {
                     let username = value["user"]["username"].as_str().unwrap_or_default().to_string();
                     save_token(&token, &username);
+                    // 能登录成功说明不再被封：把上次的原因清掉。
+                    clear_banned();
                     push(Event::LoggedIn { token, username, profile: Profile::from_user(&value["user"]) });
                 } else {
                     push(Event::LoginFailed(login_hint(code, &value)));
@@ -730,6 +734,31 @@ pub fn check_state(token: String) {
         }
         // 2xx：状态正常，什么都不用做。
     });
+}
+
+/// 封禁原因单独存一个文件：`clear_token()` 会把 `account.json` 整个删掉，
+/// 但「为什么被踢下线」不该跟着 token 一起消失，重开 App 也要能说明白。
+fn banned_path() -> std::path::PathBuf {
+    config_dir().join("banned.txt")
+}
+
+pub fn save_banned(reason: &str) {
+    let _ = std::fs::create_dir_all(config_dir());
+    let _ = std::fs::write(banned_path(), reason);
+}
+
+pub fn load_banned() -> Option<String> {
+    let text = std::fs::read_to_string(banned_path()).ok()?;
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+pub fn clear_banned() {
+    let _ = std::fs::remove_file(banned_path());
 }
 
 /// 下载工程的落盘目录。
