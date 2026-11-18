@@ -361,7 +361,7 @@ fn dispatch_import(app: &mut EffectcraftApp, ctx: &egui::Context) {
 
 /// 分组小标题：12px、灰 60%、字距 +0.5，上方留 14px。
 fn import_section(ui: &mut egui::Ui, t: &Tokens, title: &str) {
-    ui.add_space(6.0);
+    ui.add_space(4.0);
     let spaced: String = title.chars().flat_map(|c| [c, '\u{2009}']).collect();
     ui.label(egui::RichText::new(spaced.trim_end()).size(10.0).color(t.text_dim));
     ui.add_space(6.0);
@@ -461,9 +461,10 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
     // 统一走「快捷键」面板的基准（panel_style.rs），不在各处写死。
     let frame = crate::panel_style::frame(&style);
     egui::Window::new("导入")
-        // 不要 egui 自带的标题栏：它的高度由 style 决定、压不下去，用户圈出来的那条空白就是它。
+        // 不要 egui 自带的标题栏：它的高度由 style 决定、压不下去。
+        // 也**不能**链 .open()：它会在 show 之后把局部 open 写回 ctx.data，
+        // 把自绘 ✕ 刚写进去的 false 覆盖掉，导致面板关不掉。
         .title_bar(false)
-        .open(&mut open)
         .frame(frame)
         .collapsible(false)
         .resizable(false)
@@ -475,7 +476,7 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
             ui.spacing_mut().item_spacing.y = 4.0;
             // 自绘紧凑标题栏：高 28，标题居中，右侧 ✕ 关闭。
             let (bar, _) = ui.allocate_exact_size(
-                egui::vec2(ui.available_width(), 28.0),
+                egui::vec2(ui.available_width(), 26.0),
                 egui::Sense::hover(),
             );
             ui.painter().text(
@@ -497,8 +498,9 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
                 Tokens::ui(14.0),
                 t.text_dim,
             );
-            if close_resp.clicked() {
+            if close_resp.clicked() || ui.input(|i| i.key_pressed(egui::Key::Escape)) {
                 ui.ctx().data_mut(|d| d.insert_temp(open_id, false));
+                ui.ctx().request_repaint();
             }
             import_section(ui, &t, "工程");
             import_row(ui, app, &t, ImportKind::Aep, "A", "After Effects 工程", ".aep / .aepx · 合成、图层、关键帧可还原，效果缺失会先提示");
