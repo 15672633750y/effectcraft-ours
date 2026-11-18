@@ -48,13 +48,30 @@ SCAN_INSERT = """        // EFFECTCRAFT_OURS_IMPORT_SHIM_SCAN_V1 — ImportShim 
                 .unwrap_or(0.0);
             if now - last > 1.0 {
                 ui.data_mut(|d| d.insert_temp(egui::Id::new("ours-import-shim-at"), now));
+                // 已经派发过的文件：等导入命令读完（约 30 秒）再删，期间不重复派发。
+                let mut done: Vec<(String, f64)> = ui
+                    .data(|d| d.get_temp::<Vec<(String, f64)>>(egui::Id::new("ours-import-done")))
+                    .unwrap_or_default();
+                done.retain(|(path, at)| {
+                    if now - *at > 30.0 {
+                        let _ = std::fs::remove_file(path);
+                        false
+                    } else {
+                        true
+                    }
+                });
                 let dir = std::path::Path::new("/storage/emulated/0/DCIM/EffectCraft/Import");
                 // 目录不存在就建出来：这样 ImportShim 写失败时，用户也能一眼看出目录在不在。
                 let _ = std::fs::create_dir_all(dir);
                 if let Ok(entries) = std::fs::read_dir(dir) {
+                    let _ = &done;
                     for entry in entries.flatten() {
                         let path = entry.path();
                         if !path.is_file() {
+                            continue;
+                        }
+                        let p_now = path.to_string_lossy().to_string();
+                        if done.iter().any(|(q, _)| *q == p_now) {
                             continue;
                         }
                         let ext = path
@@ -82,7 +99,9 @@ SCAN_INSERT = """        // EFFECTCRAFT_OURS_IMPORT_SHIM_SCAN_V1 — ImportShim 
                         match crate::menus::invoke(self, ui.ctx(), cmd, params) {
                             Ok(_) => {
                                 self.ui.status = format!("已导入 {name}");
-                                let _ = std::fs::remove_file(&path);
+                                // 不能立刻删：导入命令是异步读文件的，删早了会报
+                                // "cannot read ...: No such file or directory"。
+                                done.push((p_now.clone(), now));
                             }
                             Err(e) => {
                                 self.ui.status = format!("导入失败 {name}：{e}");
@@ -90,6 +109,9 @@ SCAN_INSERT = """        // EFFECTCRAFT_OURS_IMPORT_SHIM_SCAN_V1 — ImportShim 
                             }
                         }
                     }
+                    ui.data_mut(|d| {
+                        d.insert_temp(egui::Id::new("ours-import-done"), done.clone())
+                    });
                 }
             }
         }
