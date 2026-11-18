@@ -382,6 +382,31 @@ https://github.com/15672633750y/effectcraft-ours/releases/tag/ours-890
 而且它们**从未被任何一次 CI 编译过**（本地 preflight 只查括号/文档注释，不编译 Rust）。
 下次推它们时必须盯着构建结果，别当成"已经用过很多次的老补丁"。
 
+### builder 补丁的锚点依赖表（2026-11-18 在纯净 v0.5.0 上逐个实测）
+25 个 builder 补丁里，**11 个自足**（167 / 210 / 302 / 310 / 313 / 315 / 319 / 95 / 98 / 99 / zzzz…splash），
+下面 **14 个**的锚点是更早的补丁插入的：
+
+| 补丁 | 依赖的前置补丁 |
+|---|---|
+| 223_share_stale.py | 210_share_bridge.py |
+| 227_share_on_ui_thread.py | 210_share_bridge.py |
+| 303_signature_record.py | 302_settings_backup.py |
+| 304_signature_verify.py | 302 + 303 |
+| 312_settings_save_early.py | 302 |
+| 314_debug_files.py | 302 |
+| 316_debug_deeper.py | 302 + 314 |
+| 317_settings_external.py | 302 + 312 + 313 |
+| 318_cleanup_scripts.py | 302 |
+| 321_crash_rotate.py | 302 + 318 |
+| zz_gallery_publish.py | 99_crash_log.py |
+| zzz_log_export.py | 99_crash_log.py |
+| zzzz_crash_forensics.py | 99_crash_log.py |
+| zzzzzzzz_install_scripts.py | 99_crash_log.py |
+
+**结论：每个依赖都指向字典序更小的补丁，所以全链顺序天然正确，不需要改任何文件名。**
+以后新增 builder 补丁时，先确认自己的锚点是「v0.5.0 原生存在」还是「某个更早补丁插入」——
+如果是后者，文件名必须排在那个补丁之后。
+
 ### 铁律补充：builder 锚点必须在纯净树上验证（用户 2026-11-18 定）
 1. **本地 `builder/` 必须先用 `tmp/artcraft-0.5.0.tar.gz` 还原，再跑 preflight。**
    否则锚点会在「脏树」里假通过 —— `223_share_stale.py` 就是活例子：它的锚点
@@ -390,7 +415,10 @@ https://github.com/15672633750y/effectcraft-ours/releases/tag/ours-890
 2. **任何补丁的锚点，必须在「纯净 builder」上验证通过，否则 preflight 直接失败。**
    `tools/preflight.py` 已照此改造：builder 部分每次从 tarball 还原，tarball 缺失时
    直接 `exit 2`（不再退回本地 builder），避免继续产生假通过。
-3. 推论：**锚点只能依赖「链上排在它前面的补丁」**。223 之所以在完整链上仍然成立，
+3. egui 的 `IdTypeMap::insert_temp` 要求 `T: 'static + Clone + Send + Sync`。
+   自己封装 `set<T>` 时漏掉 `Send`/`Sync` 就是 **E0277**（900 构建失败的真正原因）；
+   反过来 `get_temp` 只要 `T: 'static + Clone`，不要照抄。
+4. 推论：**锚点只能依赖「链上排在它前面的补丁」**。223 之所以在完整链上仍然成立，
    是因为 `210`（插入锚点）排在 `223` 前面；以后再加 builder 补丁，先确认自己的锚点
    是 v0.5.0 原生就有的，还是某个更早补丁插入的。
 

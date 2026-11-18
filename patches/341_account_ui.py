@@ -70,7 +70,9 @@ fn temp<T: 'static + Clone + Default>(ui: &egui::Ui, key: &str) -> T {
     get(ui, key).unwrap_or_default()
 }
 
-fn set<T: 'static + Clone>(ui: &egui::Ui, key: &str, value: T) {
+/// `IdTypeMap::insert_temp` 要求 `T: Send + Sync`（它存在 egui 的全局内存里），
+/// 少了这两个 bound 就是 E0277 —— 这是 900 构建失败的原因。
+fn set<T: 'static + Clone + Send + Sync>(ui: &egui::Ui, key: &str, value: T) {
     ui.data_mut(|d| d.insert_temp(Id::new(key), value));
 }
 
