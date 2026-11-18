@@ -229,6 +229,11 @@ fn agent() -> ureq::Agent {
         .get_or_init(|| {
             ureq::Agent::config_builder()
                 .timeout_global(Some(std::time::Duration::from_secs(10)))
+                // 关键：非 2xx 也当正常响应返回。ureq 默认把 4xx/5xx 变成
+                // Error::StatusCode，那个错误里**没有响应体**，于是 429 的
+                // {code:"LOGIN_RATE_LIMITED", message} 根本读不到，界面上只能
+                // 显示一句通用兜底。
+                .http_status_as_error(false)
                 .build()
                 .into()
         })
@@ -435,12 +440,22 @@ fn login_hint(code: u16, value: &serde_json::Value) -> String {
     if api == "CAPTCHA_INVALID" || api == "CAPTCHA_REQUIRED" {
         return "人机校验没通过，请再试一次".to_string();
     }
+    // 限流必须排在「透传后端 message」**之前**：后端对 429 给的原文是
+    // 「登录尝试过于频繁，请稍后再试」，直接透传就永远看不到具体要等几分钟。
+    if api == "LOGIN_RATE_LIMITED" || api == "REGISTER_RATE_LIMITED" || code == 429 {
+        let seconds = value["retry_after"]
+            .as_u64()
+            .or_else(|| value["retryAfter"].as_u64())
+            .or_else(|| value["data"]["retry_after"].as_u64())
+            .unwrap_or(60);
+        let minutes = seconds.div_ceil(60).max(1);
+        let what = if api == "REGISTER_RATE_LIMITED" { "注册" } else { "登录" };
+        return format!("{what}尝试过于频繁，请 {minutes} 分钟后重试");
+    }
     if !server_message.is_empty() {
         return server_message.to_string();
     }
     match api {
-        "LOGIN_RATE_LIMITED" => "登录太频繁，请稍后再试",
-        "REGISTER_RATE_LIMITED" => "注册太频繁，请稍后再试",
         "USERNAME_TAKEN" => "用户名已被占用",
         "USERNAME_INVALID" => "用户名只能用 3~20 位字母、数字、下划线",
         "WEAK_PASSWORD" => "密码至少 8 位，别用常见密码",
