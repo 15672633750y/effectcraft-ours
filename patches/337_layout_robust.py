@@ -19,18 +19,9 @@ ANCHOR = "    fn draw_toast(&mut self, ui: &mut egui::Ui, full: egui::Rect, lift
 
 # 330 已经在 draw_inner 里插好这一句；这里把它包进 catch_unwind。
 SAFE_OLD = "        curves_editor(self, ui, full);\n        self.draw_layout_switcher(ui, full);\n"
+# 337 之后由 357 用 Middle 层的独立 Area 重画「布局」，所以这里只保留曲线编辑器。
 SAFE_NEW = (
     "        curves_editor(self, ui, full);\n"
-    "        // EFFECTCRAFT_OURS_LAYOUT_SAFE_CALL_V1 — 布局面板的 panic 绝不冒泡到主循环：\n"
-    "        // 捕获一次就永久关掉这个面板（其它功能一个不少），并写 layout-error.txt。\n"
-    "        let layout_crashed = ui.data(|d| d.get_temp::<bool>(egui::Id::new(\"ours-layout-crashed\")).unwrap_or(false));\n"
-    "        if !layout_crashed\n"
-    "            && std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.draw_layout_switcher(ui, full))).is_err()\n"
-    "        {\n"
-    "            ui.data_mut(|d| d.insert_temp(egui::Id::new(\"ours-layout-crashed\"), true));\n"
-    "            ui.data_mut(|d| d.remove::<f64>(egui::Id::new(\"layout-open-at\")));\n"
-    "            self.ours_layout_error(\"switcher\", \"panic inside draw_layout_switcher\");\n"
-    "        }\n"
 )
 
 METHODS = r'''    // EFFECTCRAFT_OURS_LAYOUT_ROBUST_V1 — 「布局」只摆放面板；失败保持原布局，异常不冒泡。

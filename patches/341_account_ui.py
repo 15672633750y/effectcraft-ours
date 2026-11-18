@@ -38,14 +38,12 @@ HEADER_NEW = (
 
 # 必须画在布局面板**之后**：egui 同一个 layer 里后画的在上层，而「布局」入口是
 # 每帧都画的，账号面板要是先画就会被它压住（用户实测：登录面板上还能点到「布局」）。
-FRAME_ANCHOR = (
-    "            self.ours_layout_error(\"switcher\", \"panic inside draw_layout_switcher\");\n"
-    "        }\n"
-)
+# 337 现在只留 `curves_editor(self, ui, full);`（布局按钮搬到 357 的 Middle 层 Area 里），
+# 所以账号面板改为紧跟曲线编辑器插入。
+FRAME_ANCHOR = "        curves_editor(self, ui, full);\n"
 FRAME_INSERT = (
-    "            self.ours_layout_error(\"switcher\", \"panic inside draw_layout_switcher\");\n"
-    "        }\n"
-    "        // EFFECTCRAFT_OURS_ACCOUNT_TOP_V1 — 账号面板永远最后画，保证在布局面板之上\n"
+    "        curves_editor(self, ui, full);\n"
+    "        // EFFECTCRAFT_OURS_ACCOUNT_TOP_V1 — 账号面板在所有浮层之后画\n"
     "        crate::account_ui::panel(self, ui, full);\n"
 )
 
