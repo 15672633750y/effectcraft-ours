@@ -29,7 +29,7 @@ FN = r'''
 
 /// EFFECTCRAFT_OURS_SELECT_ALL_EFFECTS_V1 — 选中当前图层（们）上的所有效果。
 fn select_all_effects(s: &mut Session, _p: &Value) -> Result<Value> {
-    let comp = s.active_comp().ok_or(EngineError::NoComp)?;
+    let comp = s.active_comp().ok_or(crate::EngineError::NoComp)?;
     let mut picked: Vec<(effectcraft_project::LayerId, effectcraft_project::Uid)> = Vec::new();
     for lid in s.state.selected_layers.clone() {
         let Some(layer) = comp.layer(lid) else { continue };
