@@ -81,6 +81,8 @@ const BANNED: &str = "ours-account-banned";
 const PROJECTS: &str = "ours-cloud-projects";
 const UPLOADING: &str = "ours-cloud-uploading";
 const CONFIRM_DELETE: &str = "ours-cloud-confirm-delete";
+const LAST_STATE: &str = "ours-account-last-state";
+const WAS_FOCUSED: &str = "ours-account-was-focused";
 
 /// 「另存为」对话框的回调（任意线程）→ 下一帧再拿路径去保存并上传。
 fn pending_save() -> &'static std::sync::Mutex<Option<String>> {
@@ -443,7 +445,7 @@ fn panel_inner(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
                 ui.data_mut(|d| d.remove::<egui::TextureHandle>(Id::new("ours-account-avatar-tex")));
                 set(ui, PANEL, 0_u8);
                 set(ui, MESSAGE, String::new());
-                app.ui.status = "登录已过期，请重新登录".to_string();
+                app.ui.status = "账号异常，请重新登录".to_string();
             }
         }
     }
@@ -455,6 +457,26 @@ fn panel_inner(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
             set(ui, USERNAME, username);
             // 启动就用 token 验一次；401 会走 SessionExpired 静默登出。
             cloud::fetch_me(stored);
+        }
+    }
+    // 封禁要实时生效：登录状态下每 60 秒、以及每次切回前台，都拉一次 GET /me。
+    // 被封（403 ACCOUNT_BANNED）或 token 失效（401）会清掉本地 token，
+    // 界面立刻落回「登录」，不用杀 App 重进。
+    {
+        let token_now = token(ui);
+        if !token_now.is_empty() {
+            let now = ui.input(|i| i.time);
+            let focused = ui.input(|i| i.viewport().focused.unwrap_or(false));
+            let last = get::<f64>(ui, LAST_STATE).unwrap_or(0.0);
+            let was = get::<bool>(ui, WAS_FOCUSED).unwrap_or(false);
+            let due = now - last > 60.0 || (focused && !was) || last <= 0.0;
+            if due {
+                set(ui, LAST_STATE, now);
+                cloud::check_state(token_now);
+            }
+            set(ui, WAS_FOCUSED, focused);
+        } else {
+            set(ui, WAS_FOCUSED, false);
         }
     }
     // 上一帧文件对话框选好了图：裁成 256×256 存到 <config>/avatar/<username>.png，

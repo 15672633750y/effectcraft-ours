@@ -405,6 +405,7 @@ fn post_auth(path: &str, username: &str, password: &str) -> Result<(u16, String)
 fn banned_text(value: &serde_json::Value) -> String {
     let reason = value["reason"]
         .as_str()
+        .or_else(|| value["data"]["reason"].as_str())
         .or_else(|| value["error"]["reason"].as_str())
         .or_else(|| value["message"].as_str())
         .or_else(|| value["error"]["message"].as_str())
@@ -680,6 +681,38 @@ pub fn delete_project(token: String, id: String) {
             }
             Err(err) => push(Event::CloudFailed(err)),
         }
+    });
+}
+
+/// 轮询账号状态（60 秒一次 / 切回前台一次）：用 `GET /me` 就够，后端没有 `/me/state`。
+/// 被封返回 403 ACCOUNT_BANNED（message 里带原因），token 失效返回 401。
+/// 网络错误静默——轮询不该打扰正在编辑的人。
+pub fn check_state(token: String) {
+    spawn(move || match request("GET", "/me", Some(&token), None) {
+        Ok((403, text)) => {
+            let value = json_or_null(&text);
+            clear_token();
+            push(Event::Banned(banned_text(&value)));
+        }
+        Ok((401, text)) => {
+            let value = json_or_null(&text);
+            clear_token();
+            let api = value["code"].as_str().unwrap_or_default();
+            if api == "ACCOUNT_BANNED" {
+                push(Event::Banned(banned_text(&value)));
+            } else {
+                push(Event::SessionExpired);
+            }
+        }
+        Ok((code, text)) if (200..300).contains(&code) => {
+            let value = json_or_null(&text);
+            if value["user"]["status"].as_str() == Some("banned") {
+                clear_token();
+                push(Event::Banned(banned_text(&value)));
+            }
+        }
+        // 网络抖动、超时：什么都不做，下一轮再试。
+        _ => {}
     });
 }
 
