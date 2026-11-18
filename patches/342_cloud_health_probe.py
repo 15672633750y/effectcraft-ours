@@ -27,6 +27,17 @@ pub fn take_status() -> Option<String> {
     status_slot().lock().ok().and_then(|mut slot| slot.take())
 }
 
+/// 最近一次 health 结果（不清空）：About 页把它显示在版本号下面，
+/// 否则结果只落在窗口最底部的状态行，被对话框挡住，看起来像「没反应」。
+fn last_slot() -> &'static Mutex<Option<String>> {
+    static LAST: OnceLock<Mutex<Option<String>>> = OnceLock::new();
+    LAST.get_or_init(|| Mutex::new(None))
+}
+
+pub fn last_health() -> Option<String> {
+    last_slot().lock().ok().and_then(|slot| slot.clone())
+}
+
 /// GET /health：只用来验证网络与 TLS 通不通，不做任何业务。
 pub fn health() {
     spawn(move || {
@@ -51,6 +62,9 @@ pub fn health() {
             Err(err) => format!("云服务连接失败: {err}"),
         };
         if let Ok(mut slot) = status_slot().lock() {
+            *slot = Some(message.clone());
+        }
+        if let Ok(mut slot) = last_slot().lock() {
             *slot = Some(message);
         }
     });
@@ -67,35 +81,50 @@ DIALOG_OLD = '''        Tokens::ui(12.0),
 DIALOG_NEW = '''        Tokens::ui(12.0),
         t.text_dim,
     );
-    // EFFECTCRAFT_OURS_CLOUD_HEALTH_PROBE_V1 — 长按版本号 0.8 秒：调一次 GET /health，
-    // 把结果打成一行状态，用来亲眼确认网络层通了（不弹窗、不改布局）。
+    // EFFECTCRAFT_OURS_CLOUD_HEALTH_PROBE_V1 — 版本号那一行：**单击 / 双击 / 长按 0.8 秒**
+    // 都能触发 GET /health。结果直接画在版本号下面（对话框内部），因为底部状态行会被
+    // 这个对话框挡住，用户看到的就是「长按没反应」。
     {
-        let version_rect = Rect::from_min_size(r.min + vec2(90.0, 50.0), vec2(300.0, 22.0));
+        let version_rect = Rect::from_min_size(r.min + vec2(90.0, 50.0), vec2(340.0, 24.0));
         let resp = ui.interact(version_rect, egui::Id::new("ours-about-version"), Sense::click());
+        if resp.hovered() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+        }
         let hold = egui::Id::new("ours-about-version-hold");
         let now = ui.input(|i| i.time);
+        let mut fire = resp.clicked() || resp.double_clicked();
         if resp.is_pointer_button_down_on() {
-            // 长按时指针不动，egui 不会自己重绘 —— 不主动 request_repaint 的话，
-            // 记录起点之后就再也没有下一帧去判断「超过 0.8 秒」，长按永远不触发。
+            // 长按时指针不动，egui 不会自己重绘：不主动 request_repaint 的话，
+            // 记下起点之后再也没有下一帧去判断「是否超过 0.8 秒」。
             ui.ctx().request_repaint();
             match ui.data(|d| d.get_temp::<f64>(hold)) {
-                // 注意：`insert_temp` 返回 RawKey，这里必须用块丢掉它，
-                // 否则这个 match 的 arm 类型不一致（E0308: expected RawKey, found ()）。
                 None => {
                     ui.data_mut(|d| d.insert_temp(hold, now));
                 }
                 Some(start) if now - start > 0.8 => {
                     ui.data_mut(|d| d.remove::<f64>(hold));
-                    crate::cloud::health();
-                    app.ui.status = "正在连接云服务…".to_string();
+                    fire = true;
                 }
                 Some(_) => {}
             }
         } else {
             ui.data_mut(|d| d.remove::<f64>(hold));
         }
+        if fire {
+            crate::cloud::health();
+            app.ui.status = "正在连接云服务…".to_string();
+        }
+        let line = crate::cloud::last_health().unwrap_or_else(|| "点一下版本号即可测试云服务".to_string());
+        let color = if line.contains("成功") { t.text } else { t.warning };
+        ui.painter().text(
+            r.min + vec2(90.0, 84.0),
+            Align2::LEFT_CENTER,
+            line,
+            Tokens::ui(11.5),
+            color,
+        );
     }
-    ui.add_space(12.0);
+    ui.add_space(20.0);
 '''
 
 FRAME_OLD = "        curves_editor(self, ui, full);\n"

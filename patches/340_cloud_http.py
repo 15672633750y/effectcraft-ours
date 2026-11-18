@@ -204,7 +204,28 @@ fn request(method: &str, path: &str, token: Option<&str>, body: Option<&str>) ->
             Ok((code, text))
         }
         Err(ureq::Error::StatusCode(code)) => Ok((code, String::new())),
-        Err(err) => Err(err.to_string()),
+        Err(err) => Err(describe(&err)),
+    }
+}
+
+/// `io: unexpected end of file` 这种错误信息没法定位，按 ureq 的错误类型翻成人话，
+/// 方便用户直接告诉我们卡在 DNS、连接、TLS 还是收发上。
+fn describe(err: &ureq::Error) -> String {
+    match err {
+        ureq::Error::StatusCode(code) => format!("服务端返回 HTTP {code}"),
+        ureq::Error::BadUri(_) => "请求地址不合法".to_string(),
+        ureq::Error::Protocol(_) => "服务端响应格式异常（可能被网络中间设备改写）".to_string(),
+        ureq::Error::Io(io) => match io.kind() {
+            std::io::ErrorKind::UnexpectedEof => {
+                "连接被中途关闭（TLS 握手或响应被中断，常见于网络干扰/代理）".to_string()
+            }
+            std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock => "连接超时".to_string(),
+            std::io::ErrorKind::ConnectionRefused => "连接被拒绝".to_string(),
+            std::io::ErrorKind::ConnectionReset => "连接被重置（网络干扰）".to_string(),
+            std::io::ErrorKind::AddrNotAvailable | std::io::ErrorKind::NotFound => "域名解析失败".to_string(),
+            _ => format!("网络错误: {io}"),
+        },
+        other => format!("请求失败: {other}"),
     }
 }
 

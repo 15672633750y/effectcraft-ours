@@ -402,7 +402,8 @@ fn profile_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
     field(ui, &t, row(198.0), BIRTH, "生日（1990-01-02）", false);
     field(ui, &t, row(236.0), SIGN, "个性签名", false);
 
-    if button(ui, &t, Rect::from_min_size(Pos2::new(left, card.min.y + 278.0), Vec2::new(132.0, 30.0)), "保存", true) {
+    // 之前只能靠 Esc 或「退出登录」离开资料卡，用户反映「取消不了」——补一个关闭按钮。
+    if button(ui, &t, Rect::from_min_size(Pos2::new(left, card.min.y + 278.0), Vec2::new(88.0, 30.0)), "保存", true) {
         let edited = Profile {
             nickname: temp::<String>(ui, NICK).trim().to_string(),
             gender: temp::<String>(ui, GENDER).trim().to_string(),
@@ -418,7 +419,11 @@ fn profile_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
             cloud::save_profile(token, edited);
         }
     }
-    if button(ui, &t, Rect::from_min_size(Pos2::new(left + 140.0, card.min.y + 278.0), Vec2::new(132.0, 30.0)), "退出登录", false) {
+    if button(ui, &t, Rect::from_min_size(Pos2::new(left + 96.0, card.min.y + 278.0), Vec2::new(88.0, 30.0)), "关闭", false) {
+        set(ui, PANEL, 0_u8);
+        set(ui, MESSAGE, String::new());
+    }
+    if button(ui, &t, Rect::from_min_size(Pos2::new(left + 192.0, card.min.y + 278.0), Vec2::new(88.0, 30.0)), "退出登录", false) {
         cloud::logout();
         set(ui, TOKEN, String::new());
         set(ui, PROFILE, Profile::default());
