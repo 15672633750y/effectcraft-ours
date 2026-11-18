@@ -360,12 +360,12 @@ fn import_row(
     sub: &str,
 ) {
     let width = ui.available_width();
-    let (rect, resp) = ui.allocate_exact_size(vec2(width, 46.0), Sense::click());
+    let (rect, resp) = ui.allocate_exact_size(vec2(width, 40.0), Sense::click());
     let accent = t.accent;
     let fill = if resp.is_pointer_button_down_on() {
-        import_tint(accent, 36)
+        import_tint(accent, 52)
     } else if resp.hovered() {
-        import_tint(accent, 20)
+        import_tint(accent, 34)
     } else {
         t.field_bg
     };
@@ -375,18 +375,18 @@ fn import_row(
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }
     // 32×32 图标方块，主题色 12% 底
-    let icon_rect = egui::Rect::from_center_size(egui::pos2(rect.min.x + 32.0, rect.center().y), vec2(32.0, 32.0));
-    p.rect_filled(icon_rect, 8.0, import_tint(accent, 31));
+    let icon_rect = egui::Rect::from_center_size(egui::pos2(rect.min.x + 26.0, rect.center().y), vec2(28.0, 28.0));
+    p.rect_filled(icon_rect, 8.0, import_tint(accent, 64));
     p.text(icon_rect.center(), egui::Align2::CENTER_CENTER, icon, Tokens::ui(13.0), t.text);
     p.text(
-        egui::pos2(icon_rect.max.x + 12.0, rect.center().y - 9.0),
+        egui::pos2(icon_rect.max.x + 10.0, rect.center().y - 8.0),
         egui::Align2::LEFT_CENTER,
         title,
-        Tokens::ui(15.0),
+        Tokens::ui(14.0),
         t.text,
     );
     p.text(
-        egui::pos2(icon_rect.max.x + 12.0, rect.center().y + 10.0),
+        egui::pos2(icon_rect.max.x + 10.0, rect.center().y + 9.0),
         egui::Align2::LEFT_CENTER,
         sub,
         Tokens::ui(12.0),
@@ -400,10 +400,10 @@ fn import_row(
 /// 不支持的条目：同样的行样式，整体 40% 透明，右侧「敬请期待」。
 fn import_disabled_row(ui: &mut egui::Ui, t: &Tokens, title: &str) {
     let width = ui.available_width();
-    let (rect, _) = ui.allocate_exact_size(vec2(width, 46.0), Sense::hover());
+    let (rect, _) = ui.allocate_exact_size(vec2(width, 40.0), Sense::hover());
     let p = ui.painter();
     p.rect_filled(rect, 10.0, import_tint(t.field_bg, 92));
-    let icon_rect = egui::Rect::from_center_size(egui::pos2(rect.min.x + 32.0, rect.center().y), vec2(32.0, 32.0));
+    let icon_rect = egui::Rect::from_center_size(egui::pos2(rect.min.x + 26.0, rect.center().y), vec2(28.0, 28.0));
     p.rect_filled(icon_rect, 8.0, import_tint(t.field_bg, 150));
     let faint = import_tint(t.text, 102);
     p.text(
@@ -435,12 +435,12 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
     // 和「快捷键」面板**完全相同**的材质：rgba(12,12,14,130) 半透明底 + 白色 90 细边 + 圆角 14。
     // 统一走「快捷键」面板的基准（panel_style.rs），不在各处写死。
     let frame = crate::panel_style::frame(&style);
-    egui::Window::new(egui::RichText::new("导入").size(16.0).strong())
+    egui::Window::new(egui::RichText::new("导入").size(crate::panel_style::TITLE_SIZE).strong())
         .open(&mut open)
         .frame(frame)
         .collapsible(false)
         .resizable(false)
-        .default_width(360.0)
+        .default_width(320.0)
         .show(ctx, |ui| {
             ui.spacing_mut().item_spacing.y = 6.0;
             import_section(ui, &t, "工程");

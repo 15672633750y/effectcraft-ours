@@ -28,7 +28,16 @@ NEW_SAVE = '''    // EFFECTCRAFT_OURS_PRESET_SAVE_DIALOG_V1 - save preset opens 
                     .first()
                     .and_then(|lid| c.layer(*lid))
             })
-            .map(|l| l.name.clone())
+            .map(|l| {
+                // 图层名常带扩展名（___.png）：预设名不该是 ___.png.ffx
+                let mut name = l.name.clone();
+                if let Some(dot) = name.rfind('.') {
+                    if dot > 0 && name.len() - dot <= 5 {
+                        name.truncate(dot);
+                    }
+                }
+                name
+            })
             .unwrap_or_else(|| "Preset".to_string());
         ctx.data_mut(|d| {
             d.insert_temp(egui::Id::unique("ours-preset-save-name"), default);
@@ -99,7 +108,15 @@ fn preset_save_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: egui::Re
                 .text_color(t.text)
                 .font(Tokens::ui(13.0))
                 .margin(egui::Margin::symmetric(8, 7));
-            if ui.put(field, edit).changed() {
+            // 名字后面固定跟着 .ffx（后缀由程序拼，用户不用也不该改）
+            ui.painter().text(
+                egui::pos2(field.max.x - 8.0, field.center().y),
+                egui::Align2::RIGHT_CENTER,
+                ".ffx",
+                Tokens::ui(11.0),
+                t.text_faint,
+            );
+            if ui.put(field.shrink2(egui::vec2(34.0, 0.0)), edit).changed() {
                 ui.ctx().data_mut(|d| d.insert_temp(name_id, name.clone()));
                 ui.ctx().data_mut(|d| d.insert_temp(err_id, String::new()));
                 error.clear();

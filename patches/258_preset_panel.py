@@ -51,9 +51,15 @@ fn preset_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: egui::Rect) {
         egui::Color32::from_rgb(120, 124, 132),
     );
 
+    // 保存预设后置了 ours-presets-dirty：立刻重拉，不用关掉再打开。
+    let dirty = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("ours-presets-dirty")).unwrap_or(false));
+    if dirty {
+        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("ours-presets-dirty"), false));
+        ui.ctx().request_repaint();
+    }
     let list = app
         .session
-        .execute("ours.presets", serde_json::json!({}))
+        .execute("ours.presets", serde_json::json!({ "refresh": dirty }))
         .ok()
         .and_then(|v| v.get("items").cloned())
         .and_then(|v| v.as_array().cloned())
