@@ -66,8 +66,96 @@ fn preset_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: egui::Rect) {
         .and_then(|v| v.as_array().cloned())
         .unwrap_or_default();
 
+    // —— 搜索框 + 后缀筛选芯片（与列表是「与」关系）——
+    let search_id = egui::Id::unique("ours-preset-search");
+    let filter_id = egui::Id::unique("ours-preset-filter");
+    let mut query: String = ui.ctx().data(|d| d.get_temp::<String>(search_id).unwrap_or_default());
+    let mut filter: u8 = ui.ctx().data(|d| d.get_temp::<u8>(filter_id).unwrap_or(0));
+    let field = egui::Rect::from_min_size(egui::pos2(r.min.x + 12.0, r.min.y + 48.0), egui::vec2(size.x - 24.0, 34.0));
+    p.rect_filled(field, 8.0, t.field_bg);
+    p.text(
+        egui::pos2(field.min.x + 14.0, field.center().y),
+        egui::Align2::CENTER_CENTER,
+        "\u{2315}",
+        Tokens::ui(14.0),
+        egui::Color32::from_rgb(150, 154, 162),
+    );
+    let text_rect = egui::Rect::from_min_max(
+        egui::pos2(field.min.x + 26.0, field.min.y),
+        egui::pos2(field.max.x - if query.is_empty() { 8.0 } else { 30.0 }, field.max.y),
+    );
+    let edit = egui::TextEdit::singleline(&mut query)
+        .hint_text("搜索预设…")
+        .text_color(egui::Color32::from_rgb(238, 240, 245))
+        .font(Tokens::ui(11.0))
+        .frame(false)
+        .margin(egui::Margin::symmetric(2, 9));
+    if ui.put(text_rect, edit).changed() {
+        ui.ctx().data_mut(|d| d.insert_temp(search_id, query.clone()));
+        // 过滤后回到顶部
+        ui.ctx().data_mut(|d| d.insert_temp(scroll_id, 0.0));
+    }
+    if !query.is_empty() {
+        let clear = egui::Rect::from_min_size(
+            egui::pos2(field.max.x - 24.0, field.center().y - 9.0),
+            egui::vec2(18.0, 18.0),
+        );
+        let cresp = ui.interact(clear, egui::Id::unique("ours-preset-search-clear"), egui::Sense::click());
+        p.text(clear.center(), egui::Align2::CENTER_CENTER, "\u{00d7}", Tokens::ui(13.0), egui::Color32::from_rgb(200, 204, 212));
+        if cresp.clicked() {
+            query.clear();
+            ui.ctx().data_mut(|d| d.insert_temp(search_id, String::new()));
+            ui.ctx().data_mut(|d| d.insert_temp(scroll_id, 0.0));
+        }
+    }
+
+    // 芯片：全部 / .ffx / .gp / .json（单选，记住上次选择）
+    let chips: [(&str, u8); 4] = [("全部", 0), (".ffx", 1), (".gp", 2), (".json", 3)];
+    let mut chip_x = r.min.x + 12.0;
+    let chip_y = field.max.y + 6.0;
+    for (label, value) in chips {
+        let w = 14.0 + label.chars().count() as f32 * 7.0;
+        let chip = egui::Rect::from_min_size(egui::pos2(chip_x, chip_y), egui::vec2(w, 26.0));
+        let selected = filter == value;
+        if selected {
+            p.rect_filled(chip, 13.0, crate::panel_style::tint(t.accent, 41));
+        } else {
+            p.rect_stroke(chip, 13.0, egui::Stroke::new(1.0, crate::panel_style::border()), egui::StrokeKind::Inside);
+        }
+        p.text(chip.center(), egui::Align2::CENTER_CENTER, label, Tokens::ui(9.5), if selected { t.text } else { t.text_dim });
+        let cresp = ui.interact(chip, egui::Id::unique(("ours-preset-chip", value)), egui::Sense::click());
+        if cresp.clicked() && !selected {
+            filter = value;
+            ui.ctx().data_mut(|d| d.insert_temp(filter_id, value));
+            ui.ctx().data_mut(|d| d.insert_temp(scroll_id, 0.0));
+        }
+        chip_x += w + 4.0;
+    }
+
+    // 过滤（大小写不敏感，先名字再后缀）
+    let needle = query.trim().to_lowercase();
+    let list: Vec<serde_json::Value> = list
+        .into_iter()
+        .filter(|item| {
+            let name = item.get("name").and_then(|v| v.as_str()).unwrap_or("").to_lowercase();
+            let kind = item.get("kind").and_then(|v| v.as_str()).unwrap_or("");
+            let kind_ok = match filter {
+                1 => matches!(kind, "local" | "rifx" | "xml"),
+                2 => kind == "gp",
+                3 => kind == "json",
+                _ => true,
+            };
+            kind_ok && (needle.is_empty() || name.contains(&needle))
+        })
+        .collect();
+
     if list.is_empty() {
-        p.text(r.center(), egui::Align2::CENTER_CENTER, "把 .ffx 放到\nDCIM/EffectCraft/Presets/", Tokens::ui(11.0), egui::Color32::from_rgb(160, 163, 172));
+        let text = if needle.is_empty() && filter == 0 {
+            "把 .ffx 放到\nDCIM/EffectCraft/Presets/"
+        } else {
+            "没有匹配的预设"
+        };
+        p.text(r.center(), egui::Align2::CENTER_CENTER, text, Tokens::ui(11.0), egui::Color32::from_rgb(160, 163, 172));
     }
 
     let mut notice: Option<String> = ui.ctx().data(|d| d.get_temp::<String>(notice_id));
@@ -81,7 +169,7 @@ fn preset_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: egui::Rect) {
         }
     }
     let view = egui::Rect::from_min_max(
-        egui::pos2(r.min.x + 8.0, r.min.y + 50.0),
+        egui::pos2(r.min.x + 8.0, chip_y + 32.0),
         egui::pos2(r.max.x - 8.0, r.max.y - 34.0),
     );
     let mut y = view.min.y - scroll;
