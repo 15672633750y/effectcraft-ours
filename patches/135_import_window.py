@@ -361,10 +361,10 @@ fn dispatch_import(app: &mut EffectcraftApp, ctx: &egui::Context) {
 
 /// 分组小标题：12px、灰 60%、字距 +0.5，上方留 14px。
 fn import_section(ui: &mut egui::Ui, t: &Tokens, title: &str) {
-    ui.add_space(4.0);
+    ui.add_space(1.0);
     let spaced: String = title.chars().flat_map(|c| [c, '\u{2009}']).collect();
     ui.label(egui::RichText::new(spaced.trim_end()).size(10.0).color(t.text_dim));
-    ui.add_space(6.0);
+    ui.add_space(1.0);
 }
 
 fn import_tint(color: Color32, alpha: u8) -> Color32 {
@@ -465,7 +465,13 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
         // 也**不能**链 .open()：它会在 show 之后把局部 open 写回 ctx.data，
         // 把自绘 ✕ 刚写进去的 false 覆盖掉，导致面板关不掉。
         .title_bar(false)
-        .frame(frame)
+        // panel_style 的内边距是 16，顶部那 16px 正是用户圈出来的空白；这里只把顶部压到 2。
+        .frame(frame.inner_margin(egui::Margin {
+            left: 10,
+            right: 10,
+            top: 2,
+            bottom: 10,
+        }))
         .collapsible(false)
         .resizable(false)
         .default_width(340.0)
@@ -476,14 +482,14 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
             ui.spacing_mut().item_spacing.y = 4.0;
             // 自绘紧凑标题栏：高 28，标题居中，右侧 ✕ 关闭。
             let (bar, _) = ui.allocate_exact_size(
-                egui::vec2(ui.available_width(), 26.0),
+                egui::vec2(ui.available_width(), 12.0),
                 egui::Sense::hover(),
             );
             ui.painter().text(
                 bar.center(),
                 egui::Align2::CENTER_CENTER,
                 "导入",
-                Tokens::ui(12.5),
+                Tokens::ui(11.0),
                 t.text,
             );
             let close = egui::Rect::from_center_size(
