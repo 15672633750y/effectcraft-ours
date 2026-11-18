@@ -210,8 +210,8 @@ fn preset_save_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: egui::Re
                 .file_name()
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_default();
-            ui.painter().text(egui::pos2(left, card.min.y + 56.0), egui::Align2::LEFT_CENTER, file, Tokens::ui(13.0), t.text);
-            ui.painter().text(egui::pos2(left, card.min.y + 78.0), egui::Align2::LEFT_CENTER, path, Tokens::ui(10.5), t.text_faint);
+            ui.painter().text(egui::pos2(left, card.min.y + 56.0), egui::Align2::LEFT_CENTER, file.as_str(), Tokens::ui(13.0), t.text);
+            ui.painter().text(egui::pos2(left, card.min.y + 78.0), egui::Align2::LEFT_CENTER, path.as_str(), Tokens::ui(10.5), t.text_faint);
             let copy_rect = egui::Rect::from_min_size(egui::pos2(left, card.min.y + 68.0), egui::vec2(inner_w, 22.0));
             let copy = ui.interact(copy_rect, egui::Id::unique("ours-preset-save-copy"), egui::Sense::click());
             if copy.hovered() {
