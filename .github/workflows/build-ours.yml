@@ -78,6 +78,24 @@ jobs:
           find artcraft/source/effectcraft -path '*/.git' -prune -o -type f -exec touch -t 202001010000.00 {} +
           echo "source mtimes normalized to 2020-01-01"
 
+      - name: Register the project/preset file associations
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('artcraft/lib/file_associations.py')
+          s = p.read_text(encoding='utf-8')
+          old = '    "effectcraft": ["ecproj", "ecprojx", "ectemplate"],'
+          new = ('    "effectcraft": ["ecproj", "ecprojx", "ectemplate", "aep", "aepx",\n'
+                 '                    "ffx", "gp", "xml", "nv"],')
+          if old in s:
+              p.write_text(s.replace(old, new, 1), encoding='utf-8')
+              print('effectcraft now advertises .aep/.aepx/.ffx/.gp/.xml/.nv')
+          elif '"aep"' in s:
+              print('associations already extended')
+          else:
+              raise SystemExit('file_associations anchor missing')
+          PY
+
       - name: Apply our patches (none yet)
         run: |
           set -euo pipefail
