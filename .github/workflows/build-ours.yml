@@ -299,10 +299,14 @@ jobs:
             fi
           done
           echo "== aapt2 badging (what the launcher sees) =="
-          APK=$(find . -name '*.apk' -newer /proc/self/exe 2>/dev/null | head -1)
+          APK=$(find . -name '*.apk' -size +10M 2>/dev/null | head -1)
           echo "apk=$APK"
           if [ -n "$APK" ] && command -v aapt2 >/dev/null 2>&1; then
-            aapt2 dump badging "$APK" 2>/dev/null | grep -i 'launchable\|intent\|activity' | head -20
+            aapt2 dump badging "$APK" 2>/dev/null | head -12
+            echo "== intent filters as compiled into the APK =="
+            aapt2 dump xmltree --file AndroidManifest.xml "$APK" 2>/dev/null \
+              | grep -E 'E: (activity|intent-filter|action|data)|A: android:(name|scheme|host|pathPattern|mimeType)' \
+              | head -60
           fi
 
       # 诊断：缓存到底省了多少。没有这行，只能凭构建时长猜。

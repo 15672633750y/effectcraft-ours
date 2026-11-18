@@ -460,7 +460,9 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
     // 和「快捷键」面板**完全相同**的材质：rgba(12,12,14,130) 半透明底 + 白色 90 细边 + 圆角 14。
     // 统一走「快捷键」面板的基准（panel_style.rs），不在各处写死。
     let frame = crate::panel_style::frame(&style);
-    egui::Window::new(egui::RichText::new("导入").size(12.0).strong())
+    egui::Window::new("导入")
+        // 不要 egui 自带的标题栏：它的高度由 style 决定、压不下去，用户圈出来的那条空白就是它。
+        .title_bar(false)
         .open(&mut open)
         .frame(frame)
         .collapsible(false)
@@ -471,6 +473,33 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
         .min_width(340.0)
         .show(ctx, |ui| {
             ui.spacing_mut().item_spacing.y = 4.0;
+            // 自绘紧凑标题栏：高 28，标题居中，右侧 ✕ 关闭。
+            let (bar, _) = ui.allocate_exact_size(
+                egui::vec2(ui.available_width(), 28.0),
+                egui::Sense::hover(),
+            );
+            ui.painter().text(
+                bar.center(),
+                egui::Align2::CENTER_CENTER,
+                "导入",
+                Tokens::ui(12.5),
+                t.text,
+            );
+            let close = egui::Rect::from_center_size(
+                egui::pos2(bar.max.x - 18.0, bar.center().y),
+                egui::vec2(24.0, 24.0),
+            );
+            let close_resp = ui.interact(close, egui::Id::unique("ours-import-close"), egui::Sense::click());
+            ui.painter().text(
+                close.center(),
+                egui::Align2::CENTER_CENTER,
+                "\u{00d7}",
+                Tokens::ui(14.0),
+                t.text_dim,
+            );
+            if close_resp.clicked() {
+                ui.ctx().data_mut(|d| d.insert_temp(open_id, false));
+            }
             import_section(ui, &t, "工程");
             import_row(ui, app, &t, ImportKind::Aep, "A", "After Effects 工程", ".aep / .aepx · 合成、图层、关键帧可还原，效果缺失会先提示");
             import_row(ui, app, &t, ImportKind::Ecproj, "E", "EffectCraft 工程", ".ecproj / .ecprojx · 整个工程原样打开");
