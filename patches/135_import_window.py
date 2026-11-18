@@ -493,10 +493,13 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
                 t.text,
             );
             let close = egui::Rect::from_center_size(
-                egui::pos2(bar.max.x - 18.0, bar.center().y),
-                egui::vec2(24.0, 24.0),
+                egui::pos2(bar.max.x - 16.0, bar.center().y),
+                egui::vec2(30.0, 26.0),
             );
             let close_resp = ui.interact(close, egui::Id::unique("ours-import-close"), egui::Sense::click());
+            if close_resp.hovered() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+            }
             ui.painter().text(
                 close.center(),
                 egui::Align2::CENTER_CENTER,
@@ -548,7 +551,8 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
                     .color(t.text_faint),
             );
         });
-    ctx.data_mut(|d| d.insert_temp(open_id, open));
+    // 这里**不能**把 open 写回：show() 之后局部 open 仍是 true，
+    // 会把自绘 ✕ 刚写进去的 false 覆盖掉（这正是叉叉按不掉的原因）。
 }
 '''
 
