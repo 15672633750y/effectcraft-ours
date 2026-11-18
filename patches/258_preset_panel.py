@@ -156,6 +156,27 @@ fn preset_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: egui::Rect) {
         y += crate::panel_style::ROW_H + 6.0;
     }
 
+    // 滚动条：内容超出视口时画一条，thumb 位置跟随 scroll（拖它不影响下面的时间线，
+    // 因为整块面板已经先注册了 click_and_drag）。
+    let content_h = list.len() as f32 * (crate::panel_style::ROW_H + 6.0);
+    if content_h > view.height() {
+        let track = egui::Rect::from_min_max(
+            egui::pos2(r.max.x - 7.0, view.min.y),
+            egui::pos2(r.max.x - 3.0, view.max.y),
+        );
+        p.rect_filled(track, 2.0, t.switch_well);
+        let view_h = view.height();
+        let thumb_h = (view_h * (view_h / content_h)).max(18.0).min(view_h);
+        let max_scroll = (content_h - view_h).max(1.0);
+        let off = (scroll / max_scroll).clamp(0.0, 1.0);
+        let thumb_y = view.min.y + (view_h - thumb_h) * off;
+        p.rect_filled(
+            egui::Rect::from_min_size(egui::pos2(track.min.x, thumb_y), egui::vec2(track.width(), thumb_h)),
+            2.0,
+            t.text_dim,
+        );
+    }
+
     // 结果提示：贴在面板底部
     if let Some(msg) = &notice {
         if !msg.is_empty() {
