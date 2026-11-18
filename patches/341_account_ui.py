@@ -155,7 +155,7 @@ fn paint_avatar(ui: &egui::Ui, r: Rect, t: &Tokens, profile: &Profile) -> (Pos2,
             );
         }
     }
-    ui.painter().circle_stroke(center, radius - 0.5, Stroke::new(1.0, t.accent));
+    // 用户要求去掉头像外面那圈蓝边：只画圆形贴图/首字，不再描边。
     (center, radius)
 }
 
@@ -246,12 +246,13 @@ fn stepper(ui: &mut egui::Ui, t: &Tokens, r: Rect, value: &mut i32, min: i32, ma
     let plus = Rect::from_min_size(Pos2::new(r.max.x - btn, r.min.y), Vec2::new(btn, r.height()));
     let mid = Rect::from_min_max(Pos2::new(r.min.x + btn, r.min.y), Pos2::new(r.max.x - btn, r.max.y));
     let mut changed = false;
+    // 循环：12 月往后是 1 月，1 月往前是 12 月；日也是 31 ↔ 1。
     if button(ui, t, minus, "-", false) {
-        *value = (*value - 1).max(min);
+        *value = if *value <= min { max } else { *value - 1 };
         changed = true;
     }
     if button(ui, t, plus, "+", false) {
-        *value = (*value + 1).min(max);
+        *value = if *value >= max { min } else { *value + 1 };
         changed = true;
     }
     ui.painter().rect_filled(mid, 4.0, t.field_bg);
@@ -429,14 +430,20 @@ fn panel_inner(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
 }
 
 fn scrim(ui: &egui::Ui, full: Rect) {
-    ui.painter().rect_filled(full, 0.0, Color32::from_black_alpha(170));
+    ui.painter().rect_filled(full, 0.0, Color32::from_black_alpha(95));
 }
 
 fn card(t: &Tokens, ui: &egui::Ui, full: Rect, width: f32, height: f32, title: &str) -> Rect {
     let w = width.min(full.width() - 24.0);
     let card = Rect::from_center_size(full.center(), Vec2::new(w, height));
-    ui.painter().rect_filled(card, 12.0, t.panel_bg);
-    ui.painter().rect_stroke(card, 12.0, Stroke::new(1.0, t.field_border), StrokeKind::Inside);
+    // 和「快捷」面板同一套材质：半透明深底 + 白色细边 + 14 圆角（不要不透明底板）。
+    ui.painter().rect_filled(card, 14.0, Color32::from_rgba_unmultiplied(12, 12, 14, 135));
+    ui.painter().rect_stroke(
+        card,
+        14.0,
+        Stroke::new(1.0, Color32::from_rgba_unmultiplied(255, 255, 255, 90)),
+        StrokeKind::Inside,
+    );
     ui.painter().text(
         Pos2::new(card.center().x, card.min.y + 24.0),
         Align2::CENTER_CENTER,
@@ -754,20 +761,22 @@ fn profile_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
                 set(ui, GENDER, label.to_string());
             }
         }
-        // 生日：年 / 月 / 日
+        // 生日：直接一个输入框，点了就能用键盘敲（2004-12-31）。下面一行仍给
+        // 年/月/日 步进器，且末尾会循环（12 → 1、31 → 1），两种方式都能用。
+        field(ui, &t, row(200.0), BIRTH, "生日 2004-12-31", false);
         let (mut year, mut month, mut day) = parse_birthday(&temp::<String>(ui, BIRTH));
-        let by = card.min.y + 200.0;
+        let by = card.min.y + 236.0;
         let unit_w = (width - gap * 2.0) / 3.0;
         let mut birth_changed = false;
-        birth_changed |= stepper(ui, &t, Rect::from_min_size(Pos2::new(left, by), Vec2::new(unit_w, 28.0)), &mut year, 1900, 2030);
-        birth_changed |= stepper(ui, &t, Rect::from_min_size(Pos2::new(left + unit_w + gap, by), Vec2::new(unit_w, 28.0)), &mut month, 1, 12);
-        birth_changed |= stepper(ui, &t, Rect::from_min_size(Pos2::new(left + (unit_w + gap) * 2.0, by), Vec2::new(unit_w, 28.0)), &mut day, 1, 31);
+        birth_changed |= stepper(ui, &t, Rect::from_min_size(Pos2::new(left, by), Vec2::new(unit_w, 26.0)), &mut year, 1900, 2030);
+        birth_changed |= stepper(ui, &t, Rect::from_min_size(Pos2::new(left + unit_w + gap, by), Vec2::new(unit_w, 26.0)), &mut month, 1, 12);
+        birth_changed |= stepper(ui, &t, Rect::from_min_size(Pos2::new(left + (unit_w + gap) * 2.0, by), Vec2::new(unit_w, 26.0)), &mut day, 1, 31);
         if birth_changed {
             set(ui, BIRTH, format!("{year:04}-{month:02}-{day:02}"));
         }
         // 个性签名：多行
         let mut sign = temp::<String>(ui, SIGN);
-        let rect = Rect::from_min_size(Pos2::new(left, card.min.y + 238.0), Vec2::new(width, 76.0));
+        let rect = Rect::from_min_size(Pos2::new(left, card.min.y + 274.0), Vec2::new(width, 62.0));
         let edit = egui::TextEdit::multiline(&mut sign)
             .hint_text("个性签名")
             .text_color(t.text)
@@ -790,7 +799,7 @@ fn profile_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
             ("签名", sign.as_str()),
         ];
         for (i, (label, value)) in rows.iter().enumerate() {
-            let y = card.min.y + 130.0 + i as f32 * 34.0;
+            let y = card.min.y + 130.0 + i as f32 * 38.0;
             ui.painter().rect_filled(
                 Rect::from_min_size(Pos2::new(left, y - 14.0), Vec2::new(width, 28.0)),
                 4.0,
@@ -802,7 +811,7 @@ fn profile_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
     }
 
     // 按钮：只读时「编辑 / 关闭 / 退出登录」，编辑时「保存 / 取消 / 退出登录」
-    let btn_y = card.min.y + 326.0;
+    let btn_y = card.min.y + 350.0;
     let bw = (width - gap * 2.0) / 3.0;
     if editing {
         if button(ui, &t, Rect::from_min_size(Pos2::new(left, btn_y), Vec2::new(bw, 30.0)), "保存", true) {
