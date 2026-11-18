@@ -67,7 +67,9 @@ fn preset_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: egui::Rect) {
         let name = item.get("name").and_then(|v| v.as_str()).unwrap_or("");
         let path = item.get("path").and_then(|v| v.as_str()).unwrap_or("");
         let kind = item.get("kind").and_then(|v| v.as_str()).unwrap_or("");
-        let supported = kind != "gp";
+        // .gp 不是「不支持」：237_gp_presets 会解析它的 JSON 参数并套用，238 补几何参数。
+        // 之前这里硬编码成 `kind != "gp"` 才导致点不了。
+        let supported = true;
         let row = egui::Rect::from_min_size(egui::pos2(r.min.x + 14.0, y), egui::vec2(size.x - 28.0, 30.0));
         p.rect_filled(row, 8.0, egui::Color32::from_rgba_unmultiplied(255, 255, 255, if supported { 18 } else { 8 }));
         let text_color = if supported {
@@ -76,15 +78,11 @@ fn preset_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: egui::Rect) {
             egui::Color32::from_rgba_unmultiplied(235, 237, 242, 110)
         };
         p.text(row.center() - egui::vec2(if supported { 0.0 } else { 22.0 }, 0.0), egui::Align2::CENTER_CENTER, name, Tokens::ui(11.0), text_color);
-        if !supported {
-            p.text(row.right_center() - egui::vec2(10.0, 0.0), egui::Align2::RIGHT_CENTER, "敬请期待", Tokens::ui(9.0), egui::Color32::from_rgb(150, 120, 120));
-        }
+        // 全部可点，不再画「敬请期待」标签。
         // 行在面板内后注册，所以行优先于整块面板
         let resp = ui.interact(row, egui::Id::new(("ours-preset", name)), egui::Sense::click());
         if resp.clicked() {
-            if !supported {
-                notice = Some(".gp 预设暂不支持，请改用 .ffx".to_string());
-            } else {
+            {
                 match app.session.execute("ours.applyPreset", serde_json::json!({ "path": path })) {
                     Ok(v) => {
                         let n = v.get("effects").and_then(|x| x.as_u64()).unwrap_or(0);
@@ -106,7 +104,14 @@ fn preset_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: egui::Rect) {
                             format!("此预设的效果本软件都没有：{}", head.join("、"))
                         });
                     }
-                    Err(e) => notice = Some(e.to_string()),
+                    Err(e) => {
+                        let text = e.to_string();
+                        notice = Some(if kind == "gp" {
+                            format!("无法解析该 .gp 预设：{text}")
+                        } else {
+                            text
+                        });
+                    }
                 }
             }
         }
