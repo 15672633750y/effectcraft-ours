@@ -23,7 +23,8 @@ fn preset_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: egui::Rect) {
     let notice_id = egui::Id::unique("ours-preset-notice");
     let scroll_id = egui::Id::unique("ours-preset-scroll");
     // 限高 60vh，内容超出就在面板内滚动（和「快捷键」面板同一套圆角/材质）。
-    let size = egui::vec2(280.0, (full.height() * 0.6).min(380.0));
+    // 最大高度对齐快捷键面板（196x320），超出内部滚动，标题栏固定。
+    let size = egui::vec2(280.0, (full.height() * 0.6).min(320.0));
     let mut top_left = ui
         .ctx()
         .data(|d| d.get_temp::<egui::Pos2>(pos_id))

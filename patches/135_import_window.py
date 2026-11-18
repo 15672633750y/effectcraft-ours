@@ -339,7 +339,7 @@ fn dispatch_import(app: &mut EffectcraftApp, ctx: &egui::Context) {
 
 /// 分组小标题：12px、灰 60%、字距 +0.5，上方留 14px。
 fn import_section(ui: &mut egui::Ui, t: &Tokens, title: &str) {
-    ui.add_space(14.0);
+    ui.add_space(6.0);
     let spaced: String = title.chars().flat_map(|c| [c, '\u{2009}']).collect();
     ui.label(egui::RichText::new(spaced.trim_end()).size(8.0).color(t.text_dim));
 }
@@ -440,9 +440,9 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
         .frame(frame)
         .collapsible(false)
         .resizable(false)
-        .default_width(196.0)
+        .default_width(350.0)
         .show(ctx, |ui| {
-            ui.spacing_mut().item_spacing.y = 6.0;
+            ui.spacing_mut().item_spacing.y = 4.0;
             import_section(ui, &t, "工程");
             import_row(ui, app, &t, ImportKind::Aep, "A", "After Effects 工程", ".aep / .aepx · 合成、图层、关键帧可还原，效果缺失会先提示");
             import_row(ui, app, &t, ImportKind::Ecproj, "E", "EffectCraft 工程", ".ecproj / .ecprojx · 整个工程原样打开");
@@ -452,7 +452,7 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
             import_row(ui, app, &t, ImportKind::Ffx, "F", "AE 效果预设", ".ffx · 效果套到选中图层，参数用默认值");
             import_disabled_row(ui, &t, "剪映 / CapCut 工程");
             import_disabled_row(ui, &t, "NodeVideo 工程");
-            ui.add_space(14.0);
+            ui.add_space(8.0);
             // 主按钮：固定 44 高，居中的胶囊（宽度 = 文字 + 48），圆角 12
             let accent = t.accent;
             let button = egui::Button::new(
