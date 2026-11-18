@@ -183,8 +183,13 @@ pub(crate) fn apply_preset_report(s: &mut Session, path: &str) -> Result<(usize,
     if !head.starts_with('<') && !head.starts_with('{') {
         return Err(EngineError::Other(format!("{path}: 无法识别的预设格式")));
     }
-    // ③ 交给现有 apply_ffx（XML / JSON / .gp / 文字动画器都在里面）
-    let applied = apply_ffx(s, path)?;
+    // ③ 交给现有 apply_ffx（XML / JSON / .gp / 文字动画器都在里面）。
+    //    「没有本机能识别的效果」不是故障：那就是 applied = 0，缺哪些由下面算出来。
+    let applied = match apply_ffx(s, path) {
+        Ok(n) => n,
+        Err(e) if e.to_string().contains("没有本机能识别的效果") => 0,
+        Err(e) => return Err(e),
+    };
     // ④ 预设里出现、但我们不认识的名字，作为「缺失」
     let known: Vec<String> = FFX_KNOWN.iter().map(|(name, _)| name.to_ascii_lowercase()).collect();
     let mut missing: Vec<String> = Vec::new();
@@ -212,7 +217,7 @@ FILE_NEW = '''    // EFFECTCRAFT_OURS_IMPORT_EXT_V1 — 剪映/CapCut 草稿与 
     paths = media_paths;
     for preset in ffx {
         match super::import_ext::apply_ffx(s, &preset) {
-            Ok((n, _missing)) => inserted_effects.push((preset, n)),
+            Ok(n) => inserted_effects.push((preset, n)),
             Err(e) => errors.push(e.to_string()),
         }
     }

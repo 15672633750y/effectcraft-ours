@@ -72,9 +72,7 @@ NEW = '''    let ids = ffx_effect_ids(&text);
         // EFFECTCRAFT_OURS_FFX_TEXT_V1 — 没有效果可套时，看看是不是文字动画器（如「蒸发」）
         let presets = ffx_text_presets(&text);
         if presets.is_empty() {
-            // 不是文字动画器：如实返回「一个都没套上 + 预设里出现的名字」，
-            // 让面板能列出缺哪些效果，而不是只报一句「没识别」。
-            return Ok((0, ffx_effect_names(&text)));
+            return Err(EngineError::Other(format!("{path}: 这个预设里没有本机能识别的效果")));
         }
         let mut applied = 0usize;
         let mut last: Option<String> = None;
@@ -88,7 +86,7 @@ NEW = '''    let ids = ffx_effect_ids(&text);
             let why = last.unwrap_or_else(|| "先选中一个文本图层".to_string());
             return Err(EngineError::Other(format!("{path}: 文字动画器无法应用（{why}）")));
         }
-        return Ok((applied, Vec::new()));
+        return Ok(applied);
     }
 '''
 
