@@ -341,7 +341,7 @@ fn dispatch_import(app: &mut EffectcraftApp, ctx: &egui::Context) {
 fn import_section(ui: &mut egui::Ui, t: &Tokens, title: &str) {
     ui.add_space(14.0);
     let spaced: String = title.chars().flat_map(|c| [c, '\u{2009}']).collect();
-    ui.label(egui::RichText::new(spaced.trim_end()).size(9.0).color(t.text_dim));
+    ui.label(egui::RichText::new(spaced.trim_end()).size(8.0).color(t.text_dim));
 }
 
 fn import_tint(color: Color32, alpha: u8) -> Color32 {
@@ -360,7 +360,7 @@ fn import_row(
     sub: &str,
 ) {
     let width = ui.available_width();
-    let (rect, resp) = ui.allocate_exact_size(vec2(width, 28.0), Sense::click());
+    let (rect, resp) = ui.allocate_exact_size(vec2(width, 24.0), Sense::click());
     let accent = t.accent;
     let fill = if resp.is_pointer_button_down_on() {
         import_tint(accent, 52)
@@ -375,21 +375,21 @@ fn import_row(
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }
     // 18×18 图标方块（随 196 宽等比缩小），主题色 25% 底
-    let icon_rect = egui::Rect::from_center_size(egui::pos2(rect.min.x + 16.0, rect.center().y), vec2(18.0, 18.0));
+    let icon_rect = egui::Rect::from_center_size(egui::pos2(rect.min.x + 13.0, rect.center().y), vec2(14.0, 14.0));
     p.rect_filled(icon_rect, 8.0, import_tint(accent, 64));
-    p.text(icon_rect.center(), egui::Align2::CENTER_CENTER, icon, Tokens::ui(13.0), t.text);
+    p.text(icon_rect.center(), egui::Align2::CENTER_CENTER, icon, Tokens::ui(7.0), t.text);
     p.text(
-        egui::pos2(icon_rect.max.x + 6.0, rect.center().y - 6.0),
+        egui::pos2(icon_rect.max.x + 6.0, rect.center().y - 5.0),
         egui::Align2::LEFT_CENTER,
         title,
-        Tokens::ui(10.0),
+        Tokens::ui(9.0),
         t.text,
     );
     p.text(
-        egui::pos2(icon_rect.max.x + 6.0, rect.center().y + 6.0),
+        egui::pos2(icon_rect.max.x + 6.0, rect.center().y + 5.0),
         egui::Align2::LEFT_CENTER,
         sub,
-        Tokens::ui(8.5),
+        Tokens::ui(7.0),
         t.text_dim,
     );
     if resp.clicked() {
@@ -400,10 +400,10 @@ fn import_row(
 /// 不支持的条目：同样的行样式，整体 40% 透明，右侧「敬请期待」。
 fn import_disabled_row(ui: &mut egui::Ui, t: &Tokens, title: &str) {
     let width = ui.available_width();
-    let (rect, _) = ui.allocate_exact_size(vec2(width, 28.0), Sense::hover());
+    let (rect, _) = ui.allocate_exact_size(vec2(width, 24.0), Sense::hover());
     let p = ui.painter();
     p.rect_filled(rect, 10.0, import_tint(t.field_bg, 92));
-    let icon_rect = egui::Rect::from_center_size(egui::pos2(rect.min.x + 16.0, rect.center().y), vec2(18.0, 18.0));
+    let icon_rect = egui::Rect::from_center_size(egui::pos2(rect.min.x + 13.0, rect.center().y), vec2(14.0, 14.0));
     p.rect_filled(icon_rect, 8.0, import_tint(t.field_bg, 150));
     let faint = import_tint(t.text, 102);
     p.text(
@@ -417,7 +417,7 @@ fn import_disabled_row(ui: &mut egui::Ui, t: &Tokens, title: &str) {
         egui::pos2(rect.max.x - 14.0, rect.center().y),
         egui::Align2::RIGHT_CENTER,
         "敬请期待",
-        Tokens::ui(8.0),
+        Tokens::ui(7.0),
         t.text_faint,
     );
 }
@@ -473,7 +473,7 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
             ui.add_space(4.0);
             ui.label(
                 egui::RichText::new(".ffx 只应用效果名，参数用默认值")
-                    .size(9.0)
+                    .size(8.0)
                     .color(t.text_faint),
             );
         });
