@@ -420,27 +420,28 @@ fn import_row(
     }
 }
 
-/// 不支持的条目：同样的行样式，整体 40% 透明，右侧「敬请期待」。
+/// 暂不支持的行：尺寸、底色、图标底**和上面的行完全一样**，
+/// 只有末尾的「敬请期待」用灰字（不再整行压成 40% 透明）。
 fn import_disabled_row(ui: &mut egui::Ui, t: &Tokens, title: &str) {
     let width = ui.available_width();
     let (rect, _) = ui.allocate_exact_size(vec2(width, 52.0), egui::Sense::hover());
     let p = ui.painter();
-    p.rect_filled(rect, 10.0, import_tint(t.field_bg, 92));
+    p.rect_filled(rect, 10.0, t.field_bg);
     let icon_rect = egui::Rect::from_center_size(egui::pos2(rect.min.x + 22.0, rect.center().y), vec2(24.0, 24.0));
-    p.rect_filled(icon_rect, 8.0, import_tint(t.field_bg, 150));
-    let faint = import_tint(t.text, 102);
+    p.rect_filled(icon_rect, 8.0, import_tint(t.accent, 64));
     p.text(
-        egui::pos2(icon_rect.max.x + 12.0, rect.center().y),
+        egui::pos2(icon_rect.max.x + 8.0, rect.center().y),
         egui::Align2::LEFT_CENTER,
         title,
-        Tokens::ui(15.0),
-        faint,
+        Tokens::ui(12.0),
+        t.text,
     );
+    // 只有末尾这三个字是灰的
     p.text(
         egui::pos2(rect.max.x - 14.0, rect.center().y),
         egui::Align2::RIGHT_CENTER,
         "敬请期待",
-        Tokens::ui(7.0),
+        Tokens::ui(9.5),
         t.text_faint,
     );
 }
