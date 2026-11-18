@@ -365,7 +365,7 @@ fn import_row(
         ui.painter().rect_filled(rect, 8.0, tint);
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }
-    let icon_rect = Rect::from_center_size(pos2(rect.min.x + 22.0, rect.center().y), Vec2::splat(20.0));
+    let icon_rect = Rect::from_center_size(pos2(rect.min.x + 22.0, rect.center().y), vec2(20.0, 20.0));
     ui.painter().rect_filled(icon_rect, 6.0, t.switch_well);
     ui.painter().text(icon_rect.center(), Align2::CENTER_CENTER, icon, Tokens::ui(11.0), t.text);
     ui.painter().text(
@@ -392,7 +392,7 @@ fn import_disabled_row(ui: &mut egui::Ui, t: &Tokens, title: &str) {
     let width = ui.available_width();
     let (rect, _) = ui.allocate_exact_size(vec2(width, 40.0), Sense::hover());
     let faint = Color32::from_rgba_unmultiplied(t.text.r(), t.text.g(), t.text.b(), 102);
-    let icon_rect = Rect::from_center_size(pos2(rect.min.x + 22.0, rect.center().y), Vec2::splat(20.0));
+    let icon_rect = Rect::from_center_size(pos2(rect.min.x + 22.0, rect.center().y), vec2(20.0, 20.0));
     ui.painter().rect_filled(icon_rect, 6.0, t.switch_well);
     ui.painter().text(
         pos2(rect.min.x + 42.0, rect.center().y),
