@@ -360,7 +360,7 @@ fn import_row(
     sub: &str,
 ) {
     let width = ui.available_width();
-    let (rect, resp) = ui.allocate_exact_size(vec2(width, 24.0), Sense::click());
+    let (rect, resp) = ui.allocate_exact_size(vec2(width, 24.0), egui::Sense::click());
     let accent = t.accent;
     let fill = if resp.is_pointer_button_down_on() {
         import_tint(accent, 52)
@@ -400,7 +400,7 @@ fn import_row(
 /// 不支持的条目：同样的行样式，整体 40% 透明，右侧「敬请期待」。
 fn import_disabled_row(ui: &mut egui::Ui, t: &Tokens, title: &str) {
     let width = ui.available_width();
-    let (rect, _) = ui.allocate_exact_size(vec2(width, 24.0), Sense::hover());
+    let (rect, _) = ui.allocate_exact_size(vec2(width, 24.0), egui::Sense::hover());
     let p = ui.painter();
     p.rect_filled(rect, 10.0, import_tint(t.field_bg, 92));
     let icon_rect = egui::Rect::from_center_size(egui::pos2(rect.min.x + 13.0, rect.center().y), vec2(14.0, 14.0));
@@ -465,7 +465,7 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
             let row = ui.available_width();
             // 「导入文件…」5 个字 @14px ≈ 70px，再 +48 的内边距 = 118；上限不超过行宽。
             let mask = 110.0_f32;
-            let (slot, _) = ui.allocate_exact_size(vec2(row, crate::panel_style::BUTTON_H), Sense::hover());
+            let (slot, _) = ui.allocate_exact_size(vec2(row, crate::panel_style::BUTTON_H), egui::Sense::hover());
             let target = egui::Rect::from_center_size(slot.center(), vec2(mask.min(row), crate::panel_style::BUTTON_H));
             if ui.put(target, button).clicked() {
                 pick_any(app);

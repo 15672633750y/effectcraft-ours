@@ -21,7 +21,7 @@ COLS_NEW = "    let name_w = (width - vis.fixed() + NAME_EXTRA.with(|c| c.get())
 EDGE_OLD = "    let cw = &g.cw;\n    let actions = &mut g.actions;\n    let ch = Rect::from_min_max(pos2(rect.min.x, top + header_h), pos2(rect.max.x, top + header_h + colhdr_h));\n"
 EDGE_NEW = EDGE_OLD + '''    // The name column edge drags: the track area below adapts to whatever is left.
     let edge = Rect::from_center_size(pos2(cw.name_end - 1.0, ch.center().y), vec2(14.0, ch.height()));
-    let edge_resp = ui.interact(edge, egui::Id::unique("tl-name-edge"), Sense::click_and_drag());
+    let edge_resp = ui.interact(edge, egui::Id::unique("tl-name-edge"), egui::Sense::click_and_drag());
     if edge_resp.hovered() || edge_resp.dragged() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeColumn);
     }

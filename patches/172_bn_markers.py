@@ -21,7 +21,7 @@ NEW = '''        x += 34.0;
     if let Some(cid) = app.session.active_comp_id() {
         for (label, tip, set) in [("B", "把工作区起点设到当前帧", "begin"), ("N", "把工作区终点设到当前帧", "end")] {
             let r = Rect::from_min_size(pos2(x, cy - 13.0), vec2(30.0, 26.0));
-            let resp = ui.interact(r, egui::Id::unique(("ours-bn", set)), Sense::click());
+            let resp = ui.interact(r, egui::Id::unique(("ours-bn", set)), egui::Sense::click());
             p.rect_filled(r, 5.0, t.switch_well);
             p.text(r.center(), Align2::CENTER_CENTER, label, Tokens::ui(12.0), t.text);
             if resp.on_hover_text(tip).clicked() {

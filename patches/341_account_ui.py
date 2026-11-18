@@ -313,7 +313,7 @@ fn slot_inner(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Painter, x:
     let (resp, inside_circle) = if logged_in(ui) {
         let profile = temp::<Profile>(ui, PROFILE);
         let r = Rect::from_center_size(Pos2::new(x + 13.0, cy), Vec2::splat(26.0));
-        let resp = ui.interact(r, Id::unique("ours-account-slot"), Sense::click());
+        let resp = ui.interact(r, Id::unique("ours-account-slot"), egui::Sense::click());
         // 有本账号头像就圆形贴图，否则昵称首字 + 主题色底。
         let (center, radius) = paint_avatar(ui, r, &t, &profile);
         app.auto.add("account.slot", r, "账号");
@@ -325,7 +325,7 @@ fn slot_inner(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Painter, x:
         (resp, inside)
     } else {
         let r = Rect::from_min_size(Pos2::new(x, cy - 13.0), Vec2::new(44.0, 26.0));
-        let resp = ui.interact(r, Id::unique("ours-account-slot"), Sense::click());
+        let resp = ui.interact(r, Id::unique("ours-account-slot"), egui::Sense::click());
         p.rect_filled(r, 4.0, if resp.hovered() { t.hover } else { t.switch_well });
         p.text(r.center(), Align2::CENTER_CENTER, "登录", Tokens::ui(12.0), t.text);
         app.auto.add("account.slot", r, "登录");
@@ -412,7 +412,7 @@ fn notice_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
     }
     // 遮罩（alpha 0.35）；点它关闭
     ui.painter().rect_filled(full, 0.0, Color32::from_black_alpha((89.0 * fade) as u8));
-    let backdrop = ui.interact(full, Id::unique("ours-notice-backdrop"), Sense::click());
+    let backdrop = ui.interact(full, Id::unique("ours-notice-backdrop"), egui::Sense::click());
     if backdrop.clicked() {
         close_notice(ui);
         return;
@@ -472,7 +472,7 @@ fn panel_inner(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
     // 再配合下面清掉滚轮，做到「整屏不可穿透」。
     let open = temp::<u8>(ui, PANEL) != 0;
     if open {
-        let screen = ui.interact(full, egui::Id::unique("ours-account-modal"), Sense::click_and_drag());
+        let screen = ui.interact(full, egui::Id::unique("ours-account-modal"), egui::Sense::click_and_drag());
         if screen.hovered() {
             ui.ctx().input_mut(|i| {
                 i.smooth_scroll_delta = egui::Vec2::ZERO;
@@ -695,7 +695,7 @@ fn button(ui: &mut egui::Ui, t: &Tokens, r: Rect, label: &str, primary: bool) ->
     // Id 里必须带上位置：三个生日 stepper 的 "-"/"+" 文字相同，只用 label 会撞成同一个
     // widget，表现就是「只有第一个能点，日期改不了」。
     let id = egui::Id::new(("ours-account-btn", label, r.min.x as i32, r.min.y as i32));
-    let resp = ui.interact(r, id, Sense::click());
+    let resp = ui.interact(r, id, egui::Sense::click());
     let fill = if primary {
         if resp.hovered() { t.accent_hover } else { t.accent }
     } else if resp.hovered() {
@@ -723,7 +723,7 @@ fn auth_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
     let field_rect = Rect::from_min_size(pass_row.min, Vec2::new(width - 36.0, 30.0));
     field(ui, &t, field_rect, PASS, "密码（至少 8 位）", !get::<bool>(ui, SHOW_PASS).unwrap_or(false));
     let eye = Rect::from_min_size(Pos2::new(pass_row.max.x - 32.0, pass_row.min.y), Vec2::new(32.0, 30.0));
-    let eye_resp = ui.interact(eye, Id::unique("ours-account-eye"), Sense::click());
+    let eye_resp = ui.interact(eye, Id::unique("ours-account-eye"), egui::Sense::click());
     let shown = get::<bool>(ui, SHOW_PASS).unwrap_or(false);
     // 眼睛图标自绘：外圈 + 瞳孔，闭眼时加一条斜线。不用 emoji（系统字体常常没有），
     // 也不用「显/隐」两个字（用户要的是眼睛）。
@@ -778,7 +778,7 @@ fn auth_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
     }
 
     let later = Rect::from_min_size(Pos2::new(left, card.min.y + 196.0), Vec2::new(width, 28.0));
-    let later_resp = ui.interact(later, Id::unique("ours-account-later"), Sense::click());
+    let later_resp = ui.interact(later, Id::unique("ours-account-later"), egui::Sense::click());
     ui.painter().text(
         later.center(),
         Align2::CENTER_CENTER,
@@ -1042,7 +1042,7 @@ fn crop_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
     let frame = Rect::from_center_size(centre, Vec2::splat(side));
 
     // 拖动方框
-    let drag = ui.interact(image_rect, Id::unique("ours-account-crop-drag"), Sense::drag());
+    let drag = ui.interact(image_rect, Id::unique("ours-account-crop-drag"), egui::Sense::drag());
     if drag.dragged() {
         let d = drag.drag_delta();
         pos.x = (pos.x + d.x / shown.x.max(1.0)).clamp(0.0, 1.0);
@@ -1135,7 +1135,7 @@ fn profile_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
     let profile = temp::<Profile>(ui, PROFILE);
     let avatar_rect = Rect::from_center_size(Pos2::new(card.center().x, card.min.y + 72.0), Vec2::splat(48.0));
     let (avatar_center, avatar_radius) = paint_avatar(ui, avatar_rect, &t, &profile);
-    let avatar_resp = ui.interact(avatar_rect, Id::unique("ours-account-avatar-hit"), Sense::click());
+    let avatar_resp = ui.interact(avatar_rect, Id::unique("ours-account-avatar-hit"), egui::Sense::click());
     let hits_circle = |ui: &egui::Ui| {
         ui.input(|i| i.pointer.interact_pos())
             .map(|p| p.distance(avatar_center) <= avatar_radius)

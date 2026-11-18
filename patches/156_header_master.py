@@ -32,7 +32,7 @@ ADD = '''
         for (name, x, all_on) in [("video", cw.av + 10.0, video_on), ("audio", cw.av + 28.0, audio_on)] {
             let r = Rect::from_center_size(pos2(x, ch.center().y), vec2(18.0, 18.0));
             let tip = if name == "video" { "全部图层：显示 / 隐藏" } else { "全部图层：音频开 / 关" };
-            let resp = ui.interact(r, egui::Id::unique(("tl-hdr-master", name)), Sense::click()).on_hover_text(tip);
+            let resp = ui.interact(r, egui::Id::unique(("tl-hdr-master", name)), egui::Sense::click()).on_hover_text(tip);
             app.auto.add(&format!("timeline.header.master.{name}"), r, name);
             if resp.clicked() && !targets.is_empty() {
                 actions.push(("layer.setSwitch".into(), json!({"layers": targets.clone(), "switch": name, "value": !all_on})));

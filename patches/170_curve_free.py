@@ -56,7 +56,7 @@ MIDDLE = '''            // EFFECTCRAFT_OURS_CURVE_FREE_V1 — 两个圆点随便
                 }
                 *slot = v.clamp(0.0, 1.0);
             }
-            let canvas_resp = ui.interact(canvas, egui::Id::unique("ours-curve-drag"), Sense::drag());
+            let canvas_resp = ui.interact(canvas, egui::Id::unique("ours-curve-drag"), egui::Sense::drag());
             let pick_id = egui::Id::new("ours-curve-picked");
             let mut stopped = false;
             // 拖哪个点在手按下的那一刻决定一次，之后不换，免得线中途跳到另一个点。

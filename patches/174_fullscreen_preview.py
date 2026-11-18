@@ -19,7 +19,7 @@ MARKER = "EFFECTCRAFT_OURS_FULLSCREEN_V1"
 BUTTON_ANCHOR = "    (tr.right() + 8.0 - bar.left()).max(bar.width())\n}"
 BUTTON_NEW = '''    // EFFECTCRAFT_OURS_FULLSCREEN_V1 — 全屏预览按钮
     let fs = Rect::from_min_size(pos2(tr.right() + 8.0, cy - 10.0), vec2(44.0, 20.0));
-    let fs_resp = ui.interact(fs, egui::Id::unique("ours-fullscreen-btn"), Sense::click()).on_hover_text("全屏预览");
+    let fs_resp = ui.interact(fs, egui::Id::unique("ours-fullscreen-btn"), egui::Sense::click()).on_hover_text("全屏预览");
     p.rect_filled(fs, 4.0, t.switch_well);
     p.text(fs.center(), Align2::CENTER_CENTER, "全屏", Tokens::ui(11.5), t.text);
     if fs_resp.clicked() {

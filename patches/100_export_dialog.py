@@ -15,7 +15,7 @@ CODE = r'''
 fn export_button(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Painter, x: f32, cy: f32) -> f32 {
     let t = app.tokens;
     let r = Rect::from_min_size(pos2(x, cy - 13.0), vec2(56.0, 26.0));
-    let resp = ui.interact(r, egui::Id::unique("ours-export-button"), Sense::click());
+    let resp = ui.interact(r, egui::Id::unique("ours-export-button"), egui::Sense::click());
     p.rect_filled(r, 4.0, t.switch_well);
     p.text(r.center(), Align2::CENTER_CENTER, "导出", Tokens::ui(12.0), t.text);
     if resp.clicked() {

@@ -86,7 +86,7 @@ DIALOG_NEW = '''        Tokens::ui(12.0),
     // 这个对话框挡住，用户看到的就是「长按没反应」。
     {
         let version_rect = Rect::from_min_size(r.min + vec2(90.0, 50.0), vec2(340.0, 24.0));
-        let resp = ui.interact(version_rect, egui::Id::new("ours-about-version"), Sense::click());
+        let resp = ui.interact(version_rect, egui::Id::new("ours-about-version"), egui::Sense::click());
         if resp.hovered() {
             ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
         }

@@ -162,7 +162,7 @@ fn curve_menu(app: &mut EffectcraftApp, ctx: &egui::Context, host: egui::Rect) {
                 }
                 *slot = v.clamp(0.0, 1.0);
             }
-            let canvas_resp = ui.interact(canvas, egui::Id::unique("ours-curve-drag"), Sense::drag());
+            let canvas_resp = ui.interact(canvas, egui::Id::unique("ours-curve-drag"), egui::Sense::drag());
             let pick_id = egui::Id::new("ours-curve-picked");
             let mut stopped = false;
             // Which handle a drag grabbed is decided once, when it starts: the summit sits close to

@@ -24,7 +24,7 @@ NEW_G = OLD_G + '''    // The handle lives in a foreground area: the rows undern
         .order(egui::Order::Foreground)
         .fixed_pos(pos2(graph_x0 - 6.0, rect.min.y))
         .show(ui.ctx(), |area_ui| {
-            let (handle, resp) = area_ui.allocate_exact_size(vec2(12.0, rect.height()), Sense::drag());
+            let (handle, resp) = area_ui.allocate_exact_size(vec2(12.0, rect.height()), egui::Sense::drag());
             if resp.hovered() || resp.dragged() {
                 area_ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeColumn);
             }

@@ -28,7 +28,7 @@ fn ours_av_overlay(app: &mut EffectcraftApp, ui: &mut egui::Ui, g: &mut Rw, rc: 
     for (i, (name, on)) in [("video", layer.switches.video), ("audio", layer.switches.audio)].iter().enumerate() {
         let br = Rect::from_center_size(pos2(cw.av + 9.0 + 17.0 * i as f32, cy), vec2(19.0, 23.0));
         let id = egui::Id::unique(("ours-av-hit", layer.id.0, i));
-        let resp = ui.interact(br, id, Sense::click());
+        let resp = ui.interact(br, id, egui::Sense::click());
         let resp = resp.on_hover_text(if *name == "video" { "显示 / 隐藏" } else { "音频开 / 关" });
         if resp.clicked() {
             // 和软件自己的开关走同一个命令；有多个图层被选中时一起切。

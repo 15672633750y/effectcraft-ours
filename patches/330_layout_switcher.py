@@ -124,7 +124,7 @@ METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的�
         };
         let r = Rect::from_min_size(egui::pos2(area.max.x - 8.0 - 44.0, area.min.y + 8.0), Vec2::new(44.0, 26.0));
         // 手机上 44×26 偏小：视觉不变，热区外扩 4px（52×34），更好点中。
-        let resp = ui.interact(r.expand(4.0), Id::unique("layout-entry-canvas"), Sense::click());
+        let resp = ui.interact(r.expand(4.0), Id::unique("layout-entry-canvas"), egui::Sense::click());
         let p = ui.painter().with_clip_rect(area);
         let base = if resp.hovered() { t.hover } else { t.switch_well };
         p.rect_filled(r, 4.0, Color32::from_rgba_unmultiplied(base.r(), base.g(), base.b(), (255.0 * fade) as u8));
@@ -285,7 +285,7 @@ METHOD = r'''    // EFFECTCRAFT_OURS_LAYOUT_SWITCHER_V1 — 画布右上角的�
                 let ti = ti.clamp(0.0, 1.0);
                 let ease = ti * ti * (3.0 - 2.0 * ti);
                 let r = Rect::from_min_size(Pos2::new(x0 - 8.0 * (1.0 - ease), y0 + i as f32 * (card_h + gap)), Vec2::new(card_w, card_h));
-                let resp = ui.interact(r, egui::Id::new(("layout-card", i)), Sense::click());
+                let resp = ui.interact(r, egui::Id::new(("layout-card", i)), egui::Sense::click());
                 hovered_any |= resp.hovered();
                 let alpha = (ease * 240.0) as u8;
                 let fill = if resp.hovered() {

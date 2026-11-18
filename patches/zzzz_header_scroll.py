@@ -13,7 +13,7 @@ NEW = """    // The tool row scrolls as one strip, brand and Home included.
     let scroll_id = egui::Id::new("ours-header-scroll");
     let mut scroll = ui.ctx().data(|d| d.get_temp::<f32>(scroll_id).unwrap_or(0.0));
     let pan = Rect::from_min_max(pos2(x + 60.0, rect.min.y), pos2(rect.max.x - 320.0, rect.max.y));
-    let pan_resp = ui.interact(pan, egui::Id::unique("ours-header-pan"), Sense::drag());
+    let pan_resp = ui.interact(pan, egui::Id::unique("ours-header-pan"), egui::Sense::drag());
     if pan_resp.dragged() {
         scroll = (scroll - pan_resp.drag_delta().x).clamp(-1600.0, 160.0);
         ui.ctx().data_mut(|d| d.insert_temp(scroll_id, scroll));

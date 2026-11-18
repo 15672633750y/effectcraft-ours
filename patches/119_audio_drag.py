@@ -35,7 +35,7 @@ NEW = '''        Some((name, [a, b])) => {
             for (i, ch) in [0usize, 1usize].into_iter().enumerate() {
                 let y = top + 12.0 + i as f32 * 20.0;
                 let row = Rect::from_min_size(pos2(lx - 4.0, y - 10.0), vec2(104.0, 20.0));
-                let resp = ui.interact(row, egui::Id::unique(("audio-level", i)), Sense::drag());
+                let resp = ui.interact(row, egui::Id::unique(("audio-level", i)), egui::Sense::drag());
                 if resp.hovered() {
                     ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
                 }
