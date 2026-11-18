@@ -101,14 +101,39 @@ fn apply_preset(s: &mut Session, p: &Value) -> Result<Value> {
     if path.is_empty() {
         return Err(bad("ours.applyPreset", "no path"));
     }
-    // 不能只回一个数字：面板要能把「缺哪些效果」说清楚。
+    // 统一结果：{applied, missing, skipped, failed, warnings}。
+    // 不做「整包拒绝」：格式认不出也只是 warnings 里的一条，界面照常报结果。
     match super::import_ext::apply_preset_report(s, &path) {
-        Ok((applied, missing)) => Ok(json!({ "effects": applied, "missing": missing, "unsupported": false })),
-        // 格式本身不认得（不是 RIFX 也不是 XML）：单独标出来，面板好说「格式不支持」。
-        Err(e) if e.to_string().contains("无法识别的预设格式") => {
-            Ok(json!({ "effects": 0, "missing": [], "unsupported": true, "why": e.to_string() }))
+        Ok((applied, missing)) => Ok(json!({
+            "applied": applied,
+            "effects": applied,
+            "missing": missing,
+            "skipped": [],
+            "failed": [],
+            "warnings": [],
+        })),
+        Err(e) => {
+            let text = e.to_string();
+            if text.contains("无法识别的预设格式") {
+                Ok(json!({
+                    "applied": 0,
+                    "effects": 0,
+                    "missing": [],
+                    "skipped": [],
+                    "failed": [],
+                    "warnings": ["这个文件里没有可识别的预设内容"],
+                }))
+            } else {
+                Ok(json!({
+                    "applied": 0,
+                    "effects": 0,
+                    "missing": [],
+                    "skipped": [],
+                    "failed": [text],
+                    "warnings": [],
+                }))
+            }
         }
-        Err(e) => Err(e),
     }
 }
 

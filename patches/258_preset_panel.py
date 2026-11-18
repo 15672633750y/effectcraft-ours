@@ -212,24 +212,34 @@ fn preset_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: egui::Rect) {
             {
                 match app.session.execute("ours.applyPreset", serde_json::json!({ "path": path })) {
                     Ok(v) => {
-                        let n = v.get("effects").and_then(|x| x.as_u64()).unwrap_or(0);
-                        let missing: Vec<String> = v
-                            .get("missing")
-                            .and_then(|x| x.as_array())
-                            .map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect())
-                            .unwrap_or_default();
-                        notice = Some(if n > 0 {
-                            if missing.is_empty() {
-                                format!("已应用 {n} 个效果")
-                            } else {
-                                format!("已应用 {n} 个效果（缺失 {} 个）", missing.len())
-                            }
-                        } else if missing.is_empty() {
-                            "此预设的效果本软件都没有".to_string()
-                        } else {
+                        let read_list = |key: &str| -> Vec<String> {
+                            v.get(key)
+                                .and_then(|x| x.as_array())
+                                .map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect())
+                                .unwrap_or_default()
+                        };
+                        let n = v.get("applied").and_then(|x| x.as_u64()).unwrap_or(0);
+                        let missing = read_list("missing");
+                        let skipped = read_list("skipped");
+                        let failed = read_list("failed");
+                        let warnings = read_list("warnings");
+                        // 界面只报三种：已导入 X / 跳过 Y（原因）/ 失败 Z（名单）
+                        let mut parts: Vec<String> = vec![format!("已导入 {n}")];
+                        if !missing.is_empty() {
                             let head: Vec<String> = missing.iter().take(5).cloned().collect();
-                            format!("此预设的效果本软件都没有：{}", head.join("、"))
-                        });
+                            parts.push(format!("缺 {} 个：{}", missing.len(), head.join("、")));
+                        }
+                        if !skipped.is_empty() {
+                            parts.push(format!("跳过 {}", skipped.len()));
+                        }
+                        if !failed.is_empty() {
+                            let head: Vec<String> = failed.iter().take(3).cloned().collect();
+                            parts.push(format!("失败：{}", head.join("、")));
+                        }
+                        if let Some(first) = warnings.first() {
+                            parts.push(first.clone());
+                        }
+                        notice = Some(parts.join("；"));
                     }
                     Err(e) => {
                         let text = e.to_string();
