@@ -81,11 +81,26 @@ fn ffx_effect_names(text: &str) -> Vec<String> {
 /// 而 matchName 在字节流里就是以这两种编码出现的。
 fn rifx_effect_names(data: &[u8]) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
+    // 这些是 AE 的结构标记，不是效果：扫到了也不能当效果名报给用户。
+    const NOT_EFFECTS: [&str; 8] = [
+        "ADBE Effect Parade",
+        "ADBE Brightness",
+        "ADBE Opacity",
+        "ADBE Position",
+        "ADBE Scale",
+        "ADBE Rotate",
+        "ADBE Anchor Point",
+        "ADBE Transform",
+    ];
     fn push(out: &mut Vec<String>, text: &str) {
         let name = text.trim().to_string();
-        if name.len() > 3 && !out.contains(&name) {
-            out.push(name);
+        if name.len() <= 3 || out.contains(&name) {
+            return;
         }
+        if NOT_EFFECTS.iter().any(|n| n.eq_ignore_ascii_case(&name)) {
+            return;
+        }
+        out.push(name);
     }
     let keep = |b: u8| b.is_ascii_alphanumeric() || b == b' ' || b == b'-' || b == b'.';
     // 预设里出现的效果名前缀：AE 内置用 ADBE，Corel/CC 用 CC，Sapphire 用 Sapphire/S_，
