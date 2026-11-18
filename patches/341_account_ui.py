@@ -36,8 +36,18 @@ HEADER_NEW = (
     "    // EFFECTCRAFT_OURS_NO_BRAND_LOGO_V1 — 去掉左边的品牌图标（关于仍在 帮助 ▸ 关于）\n"
 )
 
-FRAME_ANCHOR = "        curves_editor(self, ui, full);\n"
-FRAME_INSERT = "        curves_editor(self, ui, full);\n        crate::account_ui::panel(self, ui, full);\n"
+# 必须画在布局面板**之后**：egui 同一个 layer 里后画的在上层，而「布局」入口是
+# 每帧都画的，账号面板要是先画就会被它压住（用户实测：登录面板上还能点到「布局」）。
+FRAME_ANCHOR = (
+    "            self.ours_layout_error(\"switcher\", \"panic inside draw_layout_switcher\");\n"
+    "        }\n"
+)
+FRAME_INSERT = (
+    "            self.ours_layout_error(\"switcher\", \"panic inside draw_layout_switcher\");\n"
+    "        }\n"
+    "        // EFFECTCRAFT_OURS_ACCOUNT_TOP_V1 — 账号面板永远最后画，保证在布局面板之上\n"
+    "        crate::account_ui::panel(self, ui, full);\n"
+)
 
 ACCOUNT_UI = r'''//! EFFECTCRAFT_OURS_ACCOUNT_UI_V1 — 账号槽、登录/注册面板、资料卡。
 //!
@@ -165,6 +175,17 @@ pub fn panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
 }
 
 fn panel_inner(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
+    // 有面板打开时，先铺一层全屏交互：它在这帧里最后注册，所以吃掉下面所有面板的点击，
+    // 再配合下面清掉滚轮，做到「整屏不可穿透」。
+    let open = temp::<u8>(ui, PANEL) != 0;
+    if open {
+        let screen = ui.interact(full, egui::Id::unique("ours-account-modal"), Sense::click_and_drag());
+        if screen.hovered() {
+            ui.ctx().input_mut(|i| {
+                i.smooth_scroll_delta = egui::Vec2::ZERO;
+            });
+        }
+    }
     // 后台结果只在 UI 线程落地。
     for event in cloud::poll() {
         match event {
@@ -236,7 +257,9 @@ fn field(ui: &mut egui::Ui, t: &Tokens, r: Rect, key: &str, hint: &str, password
     let mut edit = egui::TextEdit::singleline(&mut value)
         .hint_text(hint)
         .text_color(t.text)
-        .font(Tokens::ui(12.5));
+        .font(Tokens::ui(12.5))
+        // 框高 30px，默认 margin 让文字偏上；给上下各 6px 就是垂直居中。
+        .margin(egui::Margin::symmetric(8, 6));
     if password {
         edit = edit.password(true);
     }
@@ -245,6 +268,20 @@ fn field(ui: &mut egui::Ui, t: &Tokens, r: Rect, key: &str, hint: &str, password
         set(ui, key, value);
     }
     changed
+}
+
+/// 密码框右边的小眼睛：睁眼 = 外圈 + 瞳孔，闭眼 = 再压一条斜线。
+fn paint_eye(p: &egui::Painter, center: Pos2, open: bool, color: Color32) {
+    p.circle_stroke(center, 6.5, Stroke::new(1.0, color));
+    if open {
+        p.circle_filled(center, 2.6, color);
+    } else {
+        // 闭眼：一条从左上到右下的斜线，盖住瞳孔
+        p.line_segment(
+            [center + Vec2::new(-7.0, 7.0), center + Vec2::new(7.0, -7.0)],
+            Stroke::new(1.3, color),
+        );
+    }
 }
 
 fn button(ui: &mut egui::Ui, t: &Tokens, r: Rect, label: &str, primary: bool) -> bool {
@@ -278,13 +315,10 @@ fn auth_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
     let eye = Rect::from_min_size(Pos2::new(pass_row.max.x - 32.0, pass_row.min.y), Vec2::new(32.0, 30.0));
     let eye_resp = ui.interact(eye, Id::unique("ours-account-eye"), Sense::click());
     let shown = get::<bool>(ui, SHOW_PASS).unwrap_or(false);
-    ui.painter().text(
-        eye.center(),
-        Align2::CENTER_CENTER,
-        if shown { "隐" } else { "显" },
-        Tokens::ui(12.0),
-        t.text_dim,
-    );
+    // 眼睛图标自绘：外圈 + 瞳孔，闭眼时加一条斜线。不用 emoji（系统字体常常没有），
+    // 也不用「显/隐」两个字（用户要的是眼睛）。
+    let eye_color = if eye_resp.hovered() { t.text } else { t.text_dim };
+    paint_eye(ui.painter(), eye.center(), shown, eye_color);
     if eye_resp.clicked() {
         set(ui, SHOW_PASS, !shown);
     }

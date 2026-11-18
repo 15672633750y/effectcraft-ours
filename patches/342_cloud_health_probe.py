@@ -75,6 +75,9 @@ DIALOG_NEW = '''        Tokens::ui(12.0),
         let hold = egui::Id::new("ours-about-version-hold");
         let now = ui.input(|i| i.time);
         if resp.is_pointer_button_down_on() {
+            // 长按时指针不动，egui 不会自己重绘 —— 不主动 request_repaint 的话，
+            // 记录起点之后就再也没有下一帧去判断「超过 0.8 秒」，长按永远不触发。
+            ui.ctx().request_repaint();
             match ui.data(|d| d.get_temp::<f64>(hold)) {
                 // 注意：`insert_temp` 返回 RawKey，这里必须用块丢掉它，
                 // 否则这个 match 的 arm 类型不一致（E0308: expected RawKey, found ()）。
