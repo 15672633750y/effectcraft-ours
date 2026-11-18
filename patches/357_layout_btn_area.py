@@ -19,7 +19,7 @@ FRAME_INSERT = """        crate::account_ui::panel(self, ui, full);
         // Foreground 的预设库/导入/云端面板会盖住它（以前它最后绘制，永远最上层）。
         // 先保证「不消失」：用屏幕右侧固定锚点，不依赖 dock_rects（那条路取不到就不画）。
         // 预览面板右下角是下一轮的优化项。
-        let screen = ui.ctx().screen_rect();
+        let screen = ui.ctx().content_rect();
         {
             let pos = egui::pos2(screen.max.x - 70.0, screen.min.y + 220.0);
             egui::Area::new(egui::Id::unique("ours-layout-btn"))
