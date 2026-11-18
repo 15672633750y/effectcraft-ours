@@ -22,6 +22,14 @@ SPEC_NEW = """    ), cmd!(
         always,
         list_presets
     ), cmd!(
+        "ours.exportPreset",
+        "导出预设",
+        ["path"],
+        None,
+        "{path: 保存到哪个文件}",
+        always,
+        export_preset
+    ), cmd!(
         "ours.applyPreset",
         "套用预设",
         ["path"],
@@ -50,10 +58,35 @@ fn list_presets(_s: &mut Session, _p: &Value) -> Result<Value> {
             let name = e.file_name().to_string_lossy().to_string();
             let low = name.to_ascii_lowercase();
             if low.ends_with(".ffx") || low.ends_with(".gp") || low.ends_with(".json") {
+                // 看文件头区分：`{` 开头是我们自己导出的 JSON 预设，`RIFX` 是 AE 二进制，
+                // `<` 是少见的 XML 版 .ffx。
+                let kind = if low.ends_with(".gp") {
+                    "gp"
+                } else {
+                    let head = std::fs::read(&path).map(|b| b[..b.len().min(8)].to_vec()).unwrap_or_default();
+                    let text = String::from_utf8_lossy(&head).to_string();
+                    if text.trim_start().starts_with('{') {
+                        "local"
+                    } else if head.starts_with(b"RIFX") {
+                        "rifx"
+                    } else if text.trim_start().starts_with('<') {
+                        "xml"
+                    } else {
+                        "unknown"
+                    }
+                };
+                let label = match kind {
+                    "gp" => "Sapphire .gp",
+                    "local" => "本机预设",
+                    "rifx" => "AE 二进制",
+                    "xml" => "AE 文本",
+                    _ => "未知格式",
+                };
                 items.push(json!({
                     "name": name.trim_end_matches(|c: char| c == '.' ).to_string(),
                     "path": path.to_string_lossy(),
-                    "kind": if low.ends_with(".gp") { "gp" } else if low.ends_with(".json") { "json" } else { "ffx" },
+                    "kind": kind,
+                    "label": label,
                 }));
             }
         }
@@ -77,6 +110,71 @@ fn apply_preset(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Err(e) => Err(e),
     }
+}
+
+/// 值 → JSON（只导标量/向量/颜色/布尔/枚举/字符串；路径、文本、图层引用跳过）。
+fn prop_value_json(value: &effectcraft_project::Value) -> Option<serde_json::Value> {
+    use effectcraft_project::Value as V;
+    Some(match value {
+        V::Scalar(f) => json!(f),
+        V::Vec2(a) => json!(a),
+        V::Vec3(a) => json!(a),
+        V::Color(c) => json!(c),
+        V::Bool(b) => json!(b),
+        V::Enum(i) => json!(i),
+        V::Str(s) => json!(s),
+        _ => return None,
+    })
+}
+
+/// EFFECTCRAFT_OURS_EXPORT_PRESET_V1 — 把选中图层的效果栈写成 JSON 预设。
+/// 上游没有导出预设的功能（保存出来是 0 字节），所以这条链路自己算参数值。
+pub(crate) fn export_preset(s: &mut Session, p: &Value) -> Result<Value> {
+    let path = str_p(p, "path").unwrap_or("").to_string();
+    if path.is_empty() {
+        return Err(bad("ours.exportPreset", "no path"));
+    }
+    let comp = s.active_comp().ok_or(EngineError::NoComp)?;
+    // selected_layers 是 Vec<LayerId>，参数里给的 layers 是数字：统一成 LayerId。
+    let lid: effectcraft_project::LayerId = if let Some(list) = p.get("layers").and_then(Value::as_array) {
+        list.first().and_then(Value::as_u64).map(effectcraft_project::LayerId)
+    } else {
+        s.state.selected_layers.first().copied()
+    }
+    .ok_or_else(|| bad("ours.exportPreset", "先选中一个图层"))?;
+    let layer = comp.layer(lid).ok_or_else(|| bad("ours.exportPreset", "no layer"))?;
+    let Some(effects) = layer.props.sub("effects") else {
+        return Err(bad("ours.exportPreset", "这个图层没有效果"));
+    };
+    let mut list: Vec<Value> = Vec::new();
+    for group in effects.groups() {
+        let mut params = serde_json::Map::new();
+        for prop in group.props() {
+            if let Some(v) = prop_value_json(&prop.value) {
+                params.insert(prop.name.clone(), v);
+            }
+        }
+        list.push(json!({
+            "id": group.match_id,
+            "name": group.name,
+            "params": params,
+        }));
+    }
+    if list.is_empty() {
+        return Err(bad("ours.exportPreset", "这个图层没有效果"));
+    }
+    let name = std::path::Path::new(&path)
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| "Preset".to_string());
+    let doc = json!({
+        "format": "effectcraft.preset.v1",
+        "name": name,
+        "effects": list,
+    });
+    let text = serde_json::to_string_pretty(&doc).map_err(|e| EngineError::Other(format!("序列化失败: {e}")))?;
+    std::fs::write(&path, text).map_err(|e| EngineError::Other(format!("写不进 {path}: {e}")))?;
+    Ok(json!({ "path": path, "effects": list.len() }))
 }
 '''
 

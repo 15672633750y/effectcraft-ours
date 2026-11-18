@@ -99,6 +99,17 @@ fn preset_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: egui::Rect) {
             egui::Color32::from_rgba_unmultiplied(235, 237, 242, 110)
         };
         p.text(row.center() - egui::vec2(if supported { 0.0 } else { 22.0 }, 0.0), egui::Align2::CENTER_CENTER, name, Tokens::ui(11.0), text_color);
+        // 右侧标格式：本机预设 / AE 二进制 / AE 文本 / Sapphire .gp（由 257 读文件头给出）
+        let kind_label = item.get("label").and_then(|x| x.as_str()).unwrap_or("");
+        if !kind_label.is_empty() {
+            p.text(
+                egui::pos2(row.max.x - 10.0, row.center().y),
+                egui::Align2::RIGHT_CENTER,
+                kind_label,
+                Tokens::ui(9.5),
+                egui::Color32::from_rgba_unmultiplied(180, 184, 192, 170),
+            );
+        }
         // 全部可点，不再画「敬请期待」标签。
         // 行在面板内后注册，所以行优先于整块面板
         let resp = ui.interact(row, egui::Id::new(("ours-preset", name)), egui::Sense::click());
