@@ -85,6 +85,9 @@ const LAST_STATE: &str = "ours-account-last-state";
 const WAS_FOCUSED: &str = "ours-account-was-focused";
 const CLOUD_LOADING: &str = "ours-cloud-loading";
 const LAST_PANEL: &str = "ours-account-last-panel";
+const NOTICE_TITLE: &str = "ours-notice-title";
+const NOTICE_BODY: &str = "ours-notice-body";
+const NOTICE_AT: &str = "ours-notice-at";
 
 /// 「另存为」对话框的回调（任意线程）→ 下一帧再拿路径去保存并上传。
 fn pending_save() -> &'static std::sync::Mutex<Option<String>> {
@@ -366,6 +369,75 @@ pub fn panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
     }
 }
 
+/// 账号类的错误统一走这里：标题 + 正文，居中玻璃弹窗（不再是按钮下面那行橙色小字）。
+fn show_notice(ui: &egui::Ui, title: &str, body: &str) {
+    set(ui, NOTICE_TITLE, title.to_string());
+    set(ui, NOTICE_BODY, body.to_string());
+    set(ui, NOTICE_AT, ui.input(|i| i.time));
+    ui.ctx().request_repaint();
+}
+
+fn close_notice(ui: &egui::Ui) {
+    set(ui, NOTICE_TITLE, String::new());
+    set(ui, NOTICE_BODY, String::new());
+}
+
+/// 居中玻璃弹窗：0.35 的遮罩 + rgba(20,22,26,0.82) 圆角 18 + 150ms 淡入。
+fn notice_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
+    let t = app.tokens;
+    let title = temp::<String>(ui, NOTICE_TITLE);
+    if title.is_empty() {
+        return;
+    }
+    let body = temp::<String>(ui, NOTICE_BODY);
+    let at = get::<f64>(ui, NOTICE_AT).unwrap_or(0.0);
+    let now = ui.input(|i| i.time);
+    // 150ms 淡入
+    let fade = if at <= 0.0 { 1.0 } else { ((now - at) / 0.15).clamp(0.0, 1.0) as f32 };
+    if fade < 1.0 {
+        ui.ctx().request_repaint();
+    }
+    // 遮罩（alpha 0.35）；点它关闭
+    ui.painter().rect_filled(full, 0.0, Color32::from_black_alpha((89.0 * fade) as u8));
+    let backdrop = ui.interact(full, Id::unique("ours-notice-backdrop"), Sense::click());
+    if backdrop.clicked() {
+        close_notice(ui);
+        return;
+    }
+    let width = 320.0_f32.min(full.width() - 32.0);
+    let card = Rect::from_center_size(full.center(), Vec2::new(width, 176.0));
+    // 背景 rgba(20,22,26,0.82) + 圆角 18 + 白色细边
+    ui.painter().rect_filled(card, 18.0, Color32::from_rgba_unmultiplied(20, 22, 26, (209.0 * fade) as u8));
+    ui.painter().rect_stroke(
+        card,
+        18.0,
+        Stroke::new(1.0, Color32::from_rgba_unmultiplied(255, 255, 255, (70.0 * fade) as u8)),
+        StrokeKind::Inside,
+    );
+    // 标题
+    ui.painter().text(
+        Pos2::new(card.min.x + 20.0, card.min.y + 30.0),
+        Align2::LEFT_CENTER,
+        title,
+        Tokens::semibold(15.0),
+        Color32::from_rgba_unmultiplied(245, 247, 250, (255.0 * fade) as u8),
+    );
+    // 正文（自动换行）
+    let body_rect = Rect::from_min_size(Pos2::new(card.min.x + 20.0, card.min.y + 52.0), Vec2::new(width - 40.0, 70.0));
+    ui.put(
+        body_rect,
+        egui::Label::new(egui::RichText::new(body).size(12.5).color(Color32::from_rgba_unmultiplied(196, 202, 212, (255.0 * fade) as u8))),
+    );
+    // 「知道了」
+    let btn = Rect::from_min_size(Pos2::new(card.min.x + 20.0, card.max.y - 48.0), Vec2::new(width - 40.0, 32.0));
+    if button(ui, &t, btn, "知道了", true) {
+        close_notice(ui);
+    }
+    if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+        close_notice(ui);
+    }
+}
+
 fn panel_inner(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
     // 每次**重新打开**云端面板都拉一次列表（切进来就算），不依赖上一次的缓存：
     // 否则杀后台重进后列表是空的，用户得手动点「刷新」。
@@ -411,7 +483,11 @@ fn panel_inner(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
                 ui.data_mut(|d| d.remove::<egui::TextureHandle>(Id::new("ours-account-avatar-tex")));
                 app.ui.status = "已登录".to_string();
             }
-            Event::LoginFailed(message) => set(ui, MESSAGE, message),
+            Event::LoginFailed(message) => {
+                // 明确指出原因的错误一律弹窗，不再塞进按钮下面那行小字。
+                show_notice(ui, "登录失败", &message);
+                set(ui, MESSAGE, String::new());
+            }
             Event::Profile(profile) => {
                 set(ui, PROFILE, profile.clone());
                 fill_fields(ui, &profile);
@@ -433,7 +509,7 @@ fn panel_inner(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
                 set(ui, EDITING, false);
                 cloud::save_banned(&reason);
                 ui.data_mut(|d| d.remove::<egui::TextureHandle>(Id::new("ours-account-avatar-tex")));
-                app.ui.status = reason;
+                show_notice(ui, "账号已被停用", &reason);
             }
             Event::Projects(list) => {
                 set(ui, PROJECTS, list);
@@ -473,7 +549,7 @@ fn panel_inner(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
                 ui.data_mut(|d| d.remove::<egui::TextureHandle>(Id::new("ours-account-avatar-tex")));
                 set(ui, PANEL, 0_u8);
                 set(ui, MESSAGE, String::new());
-                app.ui.status = "账号异常，请重新登录".to_string();
+                show_notice(ui, "账号异常", "登录已失效，请重新登录");
             }
         }
     }
@@ -534,6 +610,8 @@ fn panel_inner(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
         4 => cloud_panel(app, ui, full),
         _ => {}
     }
+    // 弹窗必须最后画：登录面板、资料卡、云端面板都要被它压住。
+    notice_panel(app, ui, full);
 }
 
 fn scrim(ui: &egui::Ui, full: Rect) {
@@ -669,15 +747,15 @@ fn auth_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
         }
     }
 
+    // 这里不再画橙色小字：错误统一由 notice_panel 弹窗呈现。
     let message = temp::<String>(ui, MESSAGE);
-    let shown = if !banned.is_empty() { banned.clone() } else { message };
-    if !shown.is_empty() {
+    if !message.is_empty() {
         ui.painter().text(
             Pos2::new(card.center().x, card.min.y + 178.0),
             Align2::CENTER_CENTER,
-            shown,
+            message,
             Tokens::ui(11.5),
-            t.warning,
+            t.text_dim,
         );
     }
 
