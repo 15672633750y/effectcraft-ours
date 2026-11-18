@@ -139,7 +139,7 @@ jobs:
               "    filters.insert(0, '{ actions = [\"android.intent.action.VIEW\"], "
               "categories = [\"android.intent.category.DEFAULT\", \"android.intent.category.BROWSABLE\"], "
               "data = [{ scheme = \"content\", host = \"*\", mime_type = \"*/*\" }, "
-              '{ scheme = "file", mime_type = "*/*" }] }')\n'
+              "{ scheme = \"file\", mime_type = \"*/*\" }] }')\n"
           )
           if 'Catch-all VIEW' in s:
               print('catch-all VIEW filter already added')
