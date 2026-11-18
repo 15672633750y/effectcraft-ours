@@ -383,7 +383,8 @@ pub fn save_profile(token: String, profile: Profile) {
     spawn(move || {
         let body = serde_json::json!({
             "display_name": profile.nickname.clone(),
-            "prefs": profile.to_prefs(),
+            // 用户明确要求字段放 prefs_json.profile（文档里写的是 prefs，后端两个都收）。
+            "prefs_json": profile.to_prefs(),
         })
         .to_string();
         match request("PUT", "/me", Some(&token), Some(&body)) {

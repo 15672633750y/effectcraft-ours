@@ -95,6 +95,79 @@ fn logged_in(ui: &egui::Ui) -> bool {
     !token(ui).is_empty()
 }
 
+/// 本地头像 texture（`<config>/avatar.png`），解码失败就 None → 退回昵称首字。
+fn avatar_texture(ui: &egui::Ui) -> Option<egui::TextureHandle> {
+    if let Some(handle) = get::<egui::TextureHandle>(ui, "ours-account-avatar-tex") {
+        return Some(handle);
+    }
+    let bytes = std::fs::read(cloud::avatar_path()).ok()?;
+    let image = image::load_from_memory(&bytes).ok()?.to_rgba8();
+    let (w, h) = image.dimensions();
+    if w == 0 || h == 0 {
+        return None;
+    }
+    let color = egui::ColorImage::from_rgba_unmultiplied([w as usize, h as usize], image.as_raw());
+    let handle = ui.ctx().load_texture("ours-account-avatar", color, egui::TextureOptions::LINEAR);
+    set(ui, "ours-account-avatar-tex", handle.clone());
+    Some(handle)
+}
+
+/// 贴一张 texture：`Painter::image(texture_id, rect, uv, tint)`（签名对着 egui 源码核对过）。
+fn paint_texture(ui: &egui::Ui, texture: &egui::TextureHandle, rect: Rect) {
+    let uv = Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
+    ui.painter().image(texture.id(), rect, uv, Color32::WHITE);
+}
+
+/// 圆形头像：有本地图就贴图，否则昵称首字 + 主题色底。
+fn paint_avatar(ui: &egui::Ui, r: Rect, t: &Tokens, profile: &Profile) {
+    let radius = r.width().min(r.height()) * 0.5;
+    ui.painter().circle_filled(r.center(), radius, t.accent);
+    match avatar_texture(ui) {
+        Some(texture) => {
+            let side = radius * std::f32::consts::SQRT_2;
+            paint_texture(ui, &texture, Rect::from_center_size(r.center(), Vec2::splat(side)));
+        }
+        None => {
+            ui.painter().text(
+                r.center(),
+                Align2::CENTER_CENTER,
+                initial(profile),
+                Tokens::ui((radius * 0.95).max(10.0)),
+                Color32::from_rgb(16, 18, 22),
+            );
+        }
+    }
+}
+
+/// "1990-01-02" → (1990, 1, 2)；坏数据给一个安全默认值。
+fn parse_birthday(text: &str) -> (i32, i32, i32) {
+    let parts: Vec<i32> = text.split('-').filter_map(|p| p.trim().parse().ok()).collect();
+    match parts.as_slice() {
+        [y, m, d] => ((*y).clamp(1900, 2030), (*m).clamp(1, 12), (*d).clamp(1, 31)),
+        _ => (1990, 1, 1),
+    }
+}
+
+/// 一个 +/- 调节器（用作年/月/日）。
+fn stepper(ui: &mut egui::Ui, t: &Tokens, r: Rect, value: &mut i32, min: i32, max: i32) -> bool {
+    let btn = 22.0;
+    let minus = Rect::from_min_size(r.min, Vec2::new(btn, r.height()));
+    let plus = Rect::from_min_size(Pos2::new(r.max.x - btn, r.min.y), Vec2::new(btn, r.height()));
+    let mid = Rect::from_min_max(Pos2::new(r.min.x + btn, r.min.y), Pos2::new(r.max.x - btn, r.max.y));
+    let mut changed = false;
+    if button(ui, t, minus, "-", false) {
+        *value = (*value - 1).max(min);
+        changed = true;
+    }
+    if button(ui, t, plus, "+", false) {
+        *value = (*value + 1).min(max);
+        changed = true;
+    }
+    ui.painter().rect_filled(mid, 4.0, t.field_bg);
+    ui.painter().text(mid.center(), Align2::CENTER_CENTER, format!("{value}"), Tokens::ui(12.5), t.text);
+    changed
+}
+
 fn initial(profile: &Profile) -> String {
     profile
         .nickname
@@ -128,9 +201,8 @@ fn slot_inner(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Painter, x:
         let profile = temp::<Profile>(ui, PROFILE);
         let r = Rect::from_center_size(Pos2::new(x + 13.0, cy), Vec2::splat(26.0));
         let resp = ui.interact(r, Id::unique("ours-account-slot"), Sense::click());
-        // 没有头像图片时用昵称首字 + 主题色底（用户定的占位方案）。
-        p.circle_filled(r.center(), 13.0, if resp.hovered() { t.accent_hover } else { t.accent });
-        p.text(r.center(), Align2::CENTER_CENTER, initial(&profile), Tokens::ui(13.0), Color32::from_rgb(16, 18, 22));
+        // 有 `<config>/avatar.png` 就贴图，否则昵称首字 + 主题色底。
+        paint_avatar(ui, r, &t, &profile);
         app.auto.add("account.slot", r, "账号");
         resp
     } else {
@@ -148,6 +220,11 @@ fn slot_inner(app: &mut EffectcraftApp, ui: &mut egui::Ui, p: &egui::Painter, x:
         if logged_in(ui) {
             let profile = temp::<Profile>(ui, PROFILE);
             fill_fields(ui, &profile);
+            // 打开资料卡时拉一次 GET /me 刷新显示（失败只提示，不动本地编辑）。
+            let token = token(ui);
+            if !token.is_empty() {
+                cloud::fetch_me(token);
+            }
         }
         set(ui, MESSAGE, String::new());
     }
@@ -379,31 +456,68 @@ fn auth_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
 fn profile_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
     let t = app.tokens;
     scrim(ui, full);
-    let card = card(&t, ui, full, 320.0, 336.0, "我的资料");
+    let card = card(&t, ui, full, 340.0, 452.0, "我的资料");
     let left = card.min.x + 18.0;
     let width = card.width() - 36.0;
     let row = |y: f32| Rect::from_min_size(Pos2::new(left, card.min.y + y), Vec2::new(width, 30.0));
 
-    // 头像：昵称首字 + 主题色（有本地图片的版本留到下一期）。
-    let avatar = Pos2::new(card.center().x, card.min.y + 74.0);
-    ui.painter().circle_filled(avatar, 22.0, t.accent);
+    // 头像：有本地 avatar.png 就贴图，否则昵称首字。
     let profile = temp::<Profile>(ui, PROFILE);
-    ui.painter().text(avatar, Align2::CENTER_CENTER, initial(&profile), Tokens::semibold(18.0), Color32::from_rgb(16, 18, 22));
+    paint_avatar(ui, Rect::from_center_size(Pos2::new(card.center().x, card.min.y + 72.0), Vec2::splat(48.0)), &t, &profile);
     ui.painter().text(
         Pos2::new(card.center().x, card.min.y + 104.0),
         Align2::CENTER_CENTER,
-        "头像：先用昵称首字，上传稍后支持",
+        if avatar_texture(ui).is_some() { "头像：本地 avatar.png" } else { "头像：昵称首字（放 avatar.png 可换图）" },
         Tokens::ui(10.5),
         t.text_faint,
     );
 
+    // 昵称
     field(ui, &t, row(122.0), NICK, "昵称", false);
-    field(ui, &t, row(160.0), GENDER, "性别", false);
-    field(ui, &t, row(198.0), BIRTH, "生日（1990-01-02）", false);
-    field(ui, &t, row(236.0), SIGN, "个性签名", false);
 
-    // 之前只能靠 Esc 或「退出登录」离开资料卡，用户反映「取消不了」——补一个关闭按钮。
-    if button(ui, &t, Rect::from_min_size(Pos2::new(left, card.min.y + 278.0), Vec2::new(88.0, 30.0)), "保存", true) {
+    // 性别：男 / 女 / 保密（三选一，选中用主题色）
+    let gender = temp::<String>(ui, GENDER);
+    let gy = card.min.y + 162.0;
+    let gap = 6.0;
+    let gw = (width - gap * 2.0) / 3.0;
+    for (i, label) in ["男", "女", "保密"].iter().enumerate() {
+        let r = Rect::from_min_size(Pos2::new(left + i as f32 * (gw + gap), gy), Vec2::new(gw, 28.0));
+        if button(ui, &t, r, label, gender == *label) {
+            set(ui, GENDER, label.to_string());
+        }
+    }
+
+    // 生日：年 / 月 / 日 三个调节器（不引第三方日期控件）
+    let (mut year, mut month, mut day) = parse_birthday(&temp::<String>(ui, BIRTH));
+    let by = card.min.y + 200.0;
+    let unit_w = (width - gap * 2.0) / 3.0;
+    let mut birth_changed = false;
+    birth_changed |= stepper(ui, &t, Rect::from_min_size(Pos2::new(left, by), Vec2::new(unit_w, 28.0)), &mut year, 1900, 2030);
+    birth_changed |= stepper(ui, &t, Rect::from_min_size(Pos2::new(left + unit_w + gap, by), Vec2::new(unit_w, 28.0)), &mut month, 1, 12);
+    birth_changed |= stepper(ui, &t, Rect::from_min_size(Pos2::new(left + (unit_w + gap) * 2.0, by), Vec2::new(unit_w, 28.0)), &mut day, 1, 31);
+    if birth_changed {
+        set(ui, BIRTH, format!("{year:04}-{month:02}-{day:02}"));
+    }
+
+    // 个性签名：多行
+    {
+        let mut sign = temp::<String>(ui, SIGN);
+        let rect = Rect::from_min_size(Pos2::new(left, card.min.y + 238.0), Vec2::new(width, 76.0));
+        let edit = egui::TextEdit::multiline(&mut sign)
+            .hint_text("个性签名")
+            .text_color(t.text)
+            .font(Tokens::ui(12.5))
+            .margin(egui::Margin::symmetric(8, 6))
+            .desired_rows(3);
+        if ui.put(rect, edit).changed() {
+            set(ui, SIGN, sign);
+        }
+    }
+
+    // 保存 / 关闭 / 退出登录
+    let btn_y = card.min.y + 326.0;
+    let bw = (width - gap * 2.0) / 3.0;
+    if button(ui, &t, Rect::from_min_size(Pos2::new(left, btn_y), Vec2::new(bw, 30.0)), "保存", true) {
         let edited = Profile {
             nickname: temp::<String>(ui, NICK).trim().to_string(),
             gender: temp::<String>(ui, GENDER).trim().to_string(),
@@ -419,11 +533,11 @@ fn profile_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
             cloud::save_profile(token, edited);
         }
     }
-    if button(ui, &t, Rect::from_min_size(Pos2::new(left + 96.0, card.min.y + 278.0), Vec2::new(88.0, 30.0)), "关闭", false) {
+    if button(ui, &t, Rect::from_min_size(Pos2::new(left + bw + gap, btn_y), Vec2::new(bw, 30.0)), "关闭", false) {
         set(ui, PANEL, 0_u8);
         set(ui, MESSAGE, String::new());
     }
-    if button(ui, &t, Rect::from_min_size(Pos2::new(left + 192.0, card.min.y + 278.0), Vec2::new(88.0, 30.0)), "退出登录", false) {
+    if button(ui, &t, Rect::from_min_size(Pos2::new(left + (bw + gap) * 2.0, btn_y), Vec2::new(bw, 30.0)), "退出登录", false) {
         cloud::logout();
         set(ui, TOKEN, String::new());
         set(ui, PROFILE, Profile::default());
@@ -434,7 +548,7 @@ fn profile_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
     let message = temp::<String>(ui, MESSAGE);
     if !message.is_empty() {
         ui.painter().text(
-            Pos2::new(card.center().x, card.min.y + 316.0),
+            Pos2::new(card.center().x, card.min.y + 400.0),
             Align2::CENTER_CENTER,
             message,
             Tokens::ui(11.0),
