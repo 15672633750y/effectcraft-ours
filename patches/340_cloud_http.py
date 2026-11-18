@@ -91,6 +91,8 @@ pub enum Event {
     Failed(String),
     /// token 过期：已经清掉本地 token，界面回到未登录。
     SessionExpired,
+    /// 账号被封禁：token 已清掉，带上后端给的原因原文。
+    Banned(String),
 }
 
 fn events() -> &'static Mutex<Vec<Event>> {
@@ -309,9 +311,29 @@ fn post_auth(path: &str, username: &str, password: &str) -> Result<(u16, String)
             last = "人机校验没通过，正在重试…".to_string();
             continue;
         }
+        // 账号被停用：这类响应不能重试，也不能当成「密码错」。
+        if api == "ACCOUNT_BANNED" {
+            clear_token();
+            return Err(banned_text(&value));
+        }
         return Ok((code, response));
     }
     Err(if last.is_empty() { "人机校验连续失败，请稍后再试".to_string() } else { last })
+}
+
+/// 封禁提示：后端给的 reason 原文优先，没有就退回 message，最后才用兜底文案。
+fn banned_text(value: &serde_json::Value) -> String {
+    let reason = value["reason"]
+        .as_str()
+        .or_else(|| value["error"]["reason"].as_str())
+        .or_else(|| value["message"].as_str())
+        .or_else(|| value["error"]["message"].as_str())
+        .unwrap_or("该账号已被停用");
+    if reason.contains("停用") || reason.contains("封") {
+        reason.to_string()
+    } else {
+        format!("该账号已被停用：{reason}")
+    }
 }
 
 /// 登录失败时给用户的一句话（不泄露账号是否存在）。
@@ -366,7 +388,13 @@ pub fn login(username: String, password: String) {
                     push(Event::LoginFailed(login_hint(code, &value)));
                 }
             }
-            Err(err) => push(Event::LoginFailed(err)),
+            Err(err) => {
+                if err.contains("已被停用") {
+                    push(Event::Banned(err));
+                } else {
+                    push(Event::LoginFailed(err));
+                }
+            }
         }
     });
 }
@@ -387,7 +415,13 @@ pub fn register(username: String, password: String) {
                     push(Event::LoginFailed(login_hint(code, &value)));
                 }
             }
-            Err(err) => push(Event::LoginFailed(err)),
+            Err(err) => {
+                if err.contains("已被停用") {
+                    push(Event::Banned(err));
+                } else {
+                    push(Event::LoginFailed(err));
+                }
+            }
         }
     });
 }

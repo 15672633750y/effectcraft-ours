@@ -77,6 +77,7 @@ const CROP_SRC: &str = "ours-account-crop-src";
 const CROP_TEX: &str = "ours-account-crop-tex";
 const CROP_POS: &str = "ours-account-crop-pos";
 const CROP_RATIO: &str = "ours-account-crop-ratio";
+const BANNED: &str = "ours-account-banned";
 
 /// 文件对话框是异步的，回调可能从任意线程来：只把路径丢进这里，UI 线程下一帧再处理。
 fn pending_avatar() -> &'static std::sync::Mutex<Option<String>> {
@@ -384,6 +385,18 @@ fn panel_inner(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
                 app.ui.status = "资料已保存".to_string();
             }
             Event::SaveFailed(message) | Event::Failed(message) => set(ui, MESSAGE, message),
+            Event::Banned(reason) => {
+                // 清掉本地 token 与资料，并把「封禁原因」记下来给登录面板显示。
+                set(ui, TOKEN, String::new());
+                set(ui, USERNAME, String::new());
+                set(ui, PROFILE, Profile::default());
+                set(ui, BANNED, reason.clone());
+                set(ui, PANEL, 0_u8);
+                set(ui, MESSAGE, String::new());
+                set(ui, EDITING, false);
+                ui.data_mut(|d| d.remove::<egui::TextureHandle>(Id::new("ours-account-avatar-tex")));
+                app.ui.status = "账号异常，请重新登录".to_string();
+            }
             Event::SessionExpired => {
                 set(ui, TOKEN, String::new());
                 set(ui, USERNAME, String::new());
@@ -532,12 +545,19 @@ fn auth_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
 
     let user_value = temp::<String>(ui, USER);
     let pass_value = temp::<String>(ui, PASS);
+    // 被封禁时不显示「注册」：这个账号状态只能由后台处理，注册也没用，
+    // 而且原因直接显示出来（后端 reason 原文）。
+    let banned = temp::<String>(ui, BANNED);
     let mut submit = None;
-    if button(ui, &t, row(130.0, 132.0), "登录", true) {
+    if banned.is_empty() {
+        if button(ui, &t, row(130.0, 132.0), "登录", true) {
+            submit = Some(true);
+        }
+        if button(ui, &t, Rect::from_min_size(Pos2::new(left + 140.0, card.min.y + 130.0), Vec2::new(132.0, 30.0)), "注册", false) {
+            submit = Some(false);
+        }
+    } else if button(ui, &t, row(130.0, width), "登录", true) {
         submit = Some(true);
-    }
-    if button(ui, &t, Rect::from_min_size(Pos2::new(left + 140.0, card.min.y + 130.0), Vec2::new(132.0, 30.0)), "注册", false) {
-        submit = Some(false);
     }
     if let Some(as_login) = submit {
         let name = user_value.trim().to_string();
@@ -556,11 +576,12 @@ fn auth_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
     }
 
     let message = temp::<String>(ui, MESSAGE);
-    if !message.is_empty() {
+    let shown = if !banned.is_empty() { banned.clone() } else { message };
+    if !shown.is_empty() {
         ui.painter().text(
             Pos2::new(card.center().x, card.min.y + 178.0),
             Align2::CENTER_CENTER,
-            message,
+            shown,
             Tokens::ui(11.5),
             t.warning,
         );
