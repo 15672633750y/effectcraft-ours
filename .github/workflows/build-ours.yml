@@ -96,6 +96,11 @@ jobs:
               raise SystemExit('file_associations anchor missing')
           PY
 
+      - name: Add the ImportShim trampoline
+        run: |
+          cp tools/ImportShim.java "$GITHUB_WORKSPACE/ImportShim.java"
+          python3 tools/patch_builder_import_shim.py artcraft
+
       - name: Apply our patches (none yet)
         run: |
           set -euo pipefail
@@ -241,6 +246,8 @@ jobs:
           fi
 
       - name: Build the APK
+        env:
+          IMPORT_SHIM_JAVA: ${{ github.workspace }}/ImportShim.java
         run: |
           set -o pipefail
           cd artcraft
