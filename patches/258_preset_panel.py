@@ -15,6 +15,7 @@ FN = r'''
 /// EFFECTCRAFT_OURS_PRESET_PANEL_V1 — 预设库窗口：列出 DCIM/EffectCraft/Presets 里的预设。
 /// 可拖动；整块面板吃掉点击（不会穿到下面的时间线）；套用结果如实显示。
 fn preset_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: egui::Rect) {
+    let t = app.tokens;
     let open_id = egui::Id::unique("ours-preset-open");
     if !ui.ctx().data(|d| d.get_temp::<bool>(open_id).unwrap_or(false)) {
         return;
