@@ -115,6 +115,10 @@ jobs:
               '    # above is skipped, which kept the app out of the system share sheet entirely.\n'
               "    filters.append('{ actions = [\"android.intent.action.SEND\", \"android.intent.action.SEND_MULTIPLE\"], "
               "categories = [\"android.intent.category.DEFAULT\"], data = [{ mime_type = \"*/*\" }] }')\n"
+              # 有些文件管理器发 ACTION_SEND 时 type 为空；只声明 mimeType 的 filter 不匹配这种 intent，
+              # 所以再挂一条完全不带 data 的 SEND（无 data 的 filter 才能匹配无 type 的 intent）。
+              "    filters.append('{ actions = [\"android.intent.action.SEND\", \"android.intent.action.SEND_MULTIPLE\"], "
+              "categories = [\"android.intent.category.DEFAULT\"] }')\n"
           )
           if 'Always advertise ACTION_SEND' in s:
               print('SEND filter already added')
