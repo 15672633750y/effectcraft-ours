@@ -16,23 +16,24 @@ MARKER = "EFFECTCRAFT_OURS_FFX_IMPORT_V1"
 
 FUNC = r'''
 
+/// 预设里能识别的效果名 → 我们的效果 id。
+const FFX_KNOWN: [(&str, &str); 10] = [
+    ("S_VintageColor3Strip", "S_VintageColor3Strip"),
+    ("S_VintageColor2Strip", "org.effectcraft.compat.sapphire.vintagecolor2strip"),
+    ("S_Vignette", "S_Vignette"),
+    ("S_Glow", "S_Glow"),
+    ("S_Rays", "S_Rays"),
+    ("S_TextureFlux", "S_TextureFlux"),
+    ("S_DropShadow", "S_DropShadow"),
+    // AE 内置效果：预设里常见，映射到我们已有的实现
+    ("ADBE HUE SATURATION", "ec.color.huesaturation"),
+    ("ADBE Sharpen", "ec.blur.sharpen"),
+    ("ADBE Unsharp Mask2", "ec.blur.unsharp"),];
+
 /// The effects an `.ffx` preset names, in the order they first appear, as our effect ids.
 fn ffx_effect_ids(text: &str) -> Vec<&'static str> {
-    const KNOWN: [(&str, &str); 10] = [
-        ("S_VintageColor3Strip", "S_VintageColor3Strip"),
-        ("S_VintageColor2Strip", "org.effectcraft.compat.sapphire.vintagecolor2strip"),
-        ("S_Vignette", "S_Vignette"),
-        ("S_Glow", "S_Glow"),
-        ("S_Rays", "S_Rays"),
-        ("S_TextureFlux", "S_TextureFlux"),
-        ("S_DropShadow", "S_DropShadow"),
-        // AE 内置效果：预设里常见，映射到我们已有的实现
-        ("ADBE HUE SATURATION", "ec.color.huesaturation"),
-        ("ADBE Sharpen", "ec.blur.sharpen"),
-        ("ADBE Unsharp Mask2", "ec.blur.unsharp"),
-    ];
     let mut found: Vec<(&str, usize)> = Vec::new();
-    for (name, id) in KNOWN {
+    for (name, id) in FFX_KNOWN {
         // 预设里同一个效果可能出现多次（例如三条彩放两份）：按出现次数逐个应用
         let bytes = text.as_bytes();
         let mut from = 0usize;
@@ -50,8 +51,35 @@ fn ffx_effect_ids(text: &str) -> Vec<&'static str> {
     found.into_iter().map(|(id, _)| id).collect()
 }
 
+/// 预设 XML 里出现过的效果名（`<Effect name="…" matchName="…">` 的两种属性都算）。
+/// 用来告诉用户「缺哪些」——即使我们一个都认不出来，也能把名字报出来。
+fn ffx_effect_names(text: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for raw in text.split('<').skip(1) {
+        let head: String = raw.chars().take_while(|c| *c != '>').collect();
+        let lower = head.to_ascii_lowercase();
+        if !(lower.starts_with("effect") || lower.starts_with("filter")) {
+            continue;
+        }
+        for key in ["name", "matchname", "match_name"] {
+            let needle = format!("{key}=\"");
+            let lower_head = head.to_ascii_lowercase();
+            if let Some(at) = lower_head.find(&needle) {
+                let value: String = head[at + needle.len()..].chars().take_while(|c| *c != '"').collect();
+                let value = value.trim().to_string();
+                if !value.is_empty() && !out.contains(&value) {
+                    out.push(value);
+                }
+            }
+        }
+    }
+    out
+}
+
 /// Apply a preset's effects to the selected layer. Returns how many were added.
-pub(crate) fn apply_ffx(s: &mut Session, path: &str) -> Result<usize> {
+/// The two-tuple is `(applied, missing)`: `missing` lists the preset's effect names this build does
+/// not have, so the panel can say what is absent instead of reporting a silent success.
+pub(crate) fn apply_ffx(s: &mut Session, path: &str) -> Result<(usize, Vec<String>)> {
     let bytes = s.services.read_file(path).map_err(|e| EngineError::Other(format!("cannot read {path}: {e}")))?;
     let text = String::from_utf8_lossy(&bytes);
     let ids = ffx_effect_ids(&text);
@@ -66,10 +94,24 @@ pub(crate) fn apply_ffx(s: &mut Session, path: &str) -> Result<usize> {
             Err(_) => unknown.push(id),
         }
     }
-    if applied == 0 {
-        return Err(EngineError::Other(format!("{path}: 效果无法应用（先选中一个图层）")));
+    // 我们认识并能应用的名字
+    let known: Vec<String> = FFX_KNOWN
+        .iter()
+        .flat_map(|(name, _)| {
+            let mut both = vec![name.to_string()];
+            both.push(name.to_ascii_lowercase());
+            both
+        })
+        .collect();
+    let mut missing: Vec<String> = Vec::new();
+    for name in ffx_effect_names(&text) {
+        let lower = name.to_ascii_lowercase();
+        let matched = known.iter().any(|k| lower.contains(&k.to_ascii_lowercase()) || k.eq_ignore_ascii_case(&name));
+        if !matched && !missing.contains(&name) {
+            missing.push(name);
+        }
     }
-    Ok(applied)
+    Ok((applied, missing))
 }
 '''
 
@@ -87,7 +129,7 @@ FILE_NEW = '''    // EFFECTCRAFT_OURS_IMPORT_EXT_V1 — 剪映/CapCut 草稿与 
     paths = media_paths;
     for preset in ffx {
         match super::import_ext::apply_ffx(s, &preset) {
-            Ok(n) => inserted_effects.push((preset, n)),
+            Ok((n, _missing)) => inserted_effects.push((preset, n)),
             Err(e) => errors.push(e.to_string()),
         }
     }

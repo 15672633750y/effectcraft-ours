@@ -68,8 +68,9 @@ fn apply_preset(s: &mut Session, p: &Value) -> Result<Value> {
     if path.is_empty() {
         return Err(bad("ours.applyPreset", "no path"));
     }
-    let n = super::import_ext::apply_ffx(s, &path)?;
-    Ok(json!({ "effects": n }))
+    // 不能只回一个数字：面板要能把「缺哪些效果」说清楚。
+    let (applied, missing) = super::import_ext::apply_ffx(s, &path)?;
+    Ok(json!({ "effects": applied, "missing": missing }))
 }
 '''
 
