@@ -72,7 +72,11 @@ const BIRTH: &str = "ours-account-birth";
 const SIGN: &str = "ours-account-sign";
 const FETCHED: &str = "ours-account-fetched";
 const USERNAME: &str = "ours-account-username";
-const AVATAR_QUEUED: &str = "ours-account-avatar-queued";
+const EDITING: &str = "ours-account-editing";
+const CROP_SRC: &str = "ours-account-crop-src";
+const CROP_TEX: &str = "ours-account-crop-tex";
+const CROP_POS: &str = "ours-account-crop-pos";
+const CROP_RATIO: &str = "ours-account-crop-ratio";
 
 /// 文件对话框是异步的，回调可能从任意线程来：只把路径丢进这里，UI 线程下一帧再处理。
 fn pending_avatar() -> &'static std::sync::Mutex<Option<String>> {
@@ -180,12 +184,25 @@ fn paint_circle_texture(ui: &egui::Ui, texture: &egui::TextureHandle, center: Po
     ui.painter().add(egui::Shape::mesh(mesh));
 }
 
+/// 读一张图：按**字节**嗅探格式，不依赖文件名后缀（SAF 的 staged 副本经常没有扩展名，
+/// 而且 image 只开了 png/jpeg 两个 decoder，所以 webp 之类本来就读不了）。
+fn load_picture(path: &str) -> Option<image::DynamicImage> {
+    let bytes = std::fs::read(path).ok()?;
+    image::load_from_memory(&bytes).ok()
+}
+
 /// 选好的图 → 中心裁正方形（不拉伸）→ 缩到 256×256 → 存成 `<config>/avatar/<username>.png`。
+#[allow(dead_code)]
 fn save_avatar(source: &str, username: &str) -> bool {
-    let Ok(image) = image::open(source) else {
+    let Some(image) = load_picture(source) else {
         return false;
     };
     // resize_to_fill 就是「中心裁正方形再缩放」，不会拉伸变形。
+    store_avatar(image, username)
+}
+
+/// 裁好的图直接落盘。
+fn store_avatar(image: image::DynamicImage, username: &str) -> bool {
     let square = image.resize_to_fill(256, 256, image::imageops::FilterType::Lanczos3);
     if std::fs::create_dir_all(cloud::avatar_dir()).is_err() {
         return false;
@@ -390,10 +407,15 @@ fn panel_inner(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
     // 上一帧文件对话框选好了图：裁成 256×256 存到 <config>/avatar/<username>.png，
     // 再清掉 texture 缓存让界面立刻换图（不用重启）。
     if let Some(path) = take_pending_avatar() {
-        let username = temp::<String>(ui, USERNAME);
-        if !username.is_empty() && save_avatar(&path, &username) {
-            ui.data_mut(|d| d.remove::<egui::TextureHandle>(Id::new("ours-account-avatar-tex")));
-            set(ui, MESSAGE, "头像已更新".to_string());
+        if temp::<String>(ui, USERNAME).is_empty() {
+            set(ui, MESSAGE, "请先登录再换头像".to_string());
+        } else if load_picture(&path).is_some() {
+            // 先别裁：进裁剪页让用户自己调取景，确认后才落盘。
+            ui.data_mut(|d| d.remove::<egui::TextureHandle>(Id::new(CROP_TEX)));
+            set(ui, CROP_SRC, path);
+            set(ui, CROP_POS, Vec2::new(0.5, 0.5));
+            set(ui, CROP_RATIO, 0.85_f32);
+            set(ui, PANEL, 3_u8);
         } else {
             set(ui, MESSAGE, "这个图片读不了，换一张试试".to_string());
         }
@@ -401,6 +423,7 @@ fn panel_inner(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
     match temp::<u8>(ui, PANEL) {
         1 => auth_panel(app, ui, full),
         2 => profile_panel(app, ui, full),
+        3 => crop_panel(app, ui, full),
         _ => {}
     }
 }
@@ -458,7 +481,10 @@ fn paint_eye(p: &egui::Painter, center: Pos2, open: bool, color: Color32) {
 }
 
 fn button(ui: &mut egui::Ui, t: &Tokens, r: Rect, label: &str, primary: bool) -> bool {
-    let resp = ui.interact(r, egui::Id::new(("ours-account-btn", label)), Sense::click());
+    // Id 里必须带上位置：三个生日 stepper 的 "-"/"+" 文字相同，只用 label 会撞成同一个
+    // widget，表现就是「只有第一个能点，日期改不了」。
+    let id = egui::Id::new(("ours-account-btn", label, r.min.x as i32, r.min.y as i32));
+    let resp = ui.interact(r, id, Sense::click());
     let fill = if primary {
         if resp.hovered() { t.accent_hover } else { t.accent }
     } else if resp.hovered() {
@@ -549,15 +575,148 @@ fn auth_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
     app.auto.add("account.auth", later, "稍后再说");
 }
 
+/// 从字节加载一张 texture（按内容嗅探格式），用于裁剪页显示原图。
+fn picture_texture(ui: &egui::Ui, path: &str, key: &str) -> Option<egui::TextureHandle> {
+    if let Some(handle) = get::<egui::TextureHandle>(ui, key) {
+        return Some(handle);
+    }
+    let image = load_picture(path)?;
+    let rgba = image.to_rgba8();
+    let (w, h) = rgba.dimensions();
+    if w == 0 || h == 0 {
+        return None;
+    }
+    let color = egui::ColorImage::from_rgba_unmultiplied([w as usize, h as usize], rgba.as_raw());
+    let handle = ui.ctx().load_texture(key, color, egui::TextureOptions::LINEAR);
+    set(ui, key, handle.clone());
+    Some(handle)
+}
+
+/// 裁剪页：显示原图，用户可以拖方框、改大小，确认后按方框逐像素裁切再缩到 256×256。
+fn crop_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
+    let t = app.tokens;
+    let src = temp::<String>(ui, CROP_SRC);
+    if src.is_empty() {
+        set(ui, PANEL, 2_u8);
+        return;
+    }
+    scrim(ui, full);
+    let card = card(&t, ui, full, 380.0, 520.0, "调整头像");
+    let left = card.min.x + 16.0;
+    let width = card.width() - 32.0;
+    let Some(texture) = picture_texture(ui, &src, CROP_TEX) else {
+        set(ui, MESSAGE, "这个图片读不了，换一张试试".to_string());
+        set(ui, PANEL, 2_u8);
+        return;
+    };
+    let size = texture.size_vec2();
+    // 原图等比放进卡片上部
+    let stage = Rect::from_min_size(Pos2::new(left, card.min.y + 44.0), Vec2::new(width, 330.0));
+    let scale = (stage.width() / size.x).min(stage.height() / size.y);
+    let shown = Vec2::new(size.x * scale, size.y * scale);
+    let image_rect = Rect::from_center_size(stage.center(), shown);
+    ui.painter().rect_filled(image_rect.expand(1.0), 4.0, t.field_bg);
+    paint_texture(ui, &texture, image_rect);
+
+    // 方框：位置用相对原图的比例，大小是短边的比例
+    let mut ratio = get::<f32>(ui, CROP_RATIO).unwrap_or(0.85).clamp(0.2, 1.0);
+    let mut pos = get::<Vec2>(ui, CROP_POS).unwrap_or(Vec2::new(0.5, 0.5));
+    let short = shown.x.min(shown.y);
+    let side = short * ratio;
+    let centre = image_rect.min + Vec2::new(pos.x * shown.x, pos.y * shown.y);
+    let frame = Rect::from_center_size(centre, Vec2::splat(side));
+
+    // 拖动方框
+    let drag = ui.interact(image_rect, Id::unique("ours-account-crop-drag"), Sense::drag());
+    if drag.dragged() {
+        let d = drag.drag_delta();
+        pos.x = (pos.x + d.x / shown.x.max(1.0)).clamp(0.0, 1.0);
+        pos.y = (pos.y + d.y / shown.y.max(1.0)).clamp(0.0, 1.0);
+        set(ui, CROP_POS, pos);
+    }
+    // 方框外的四块压暗，中心留亮，直观看出裁的是什么
+    let shade = Color32::from_black_alpha(150);
+    let p = ui.painter();
+    p.rect_filled(Rect::from_min_max(image_rect.min, Pos2::new(image_rect.max.x, frame.min.y)), 0.0, shade);
+    p.rect_filled(Rect::from_min_max(Pos2::new(image_rect.min.x, frame.max.y), image_rect.max), 0.0, shade);
+    p.rect_filled(Rect::from_min_max(Pos2::new(image_rect.min.x, frame.min.y), Pos2::new(frame.min.x, frame.max.y)), 0.0, shade);
+    p.rect_filled(Rect::from_min_max(Pos2::new(frame.max.x, frame.min.y), Pos2::new(image_rect.max.x, frame.max.y)), 0.0, shade);
+    p.rect_stroke(frame, 0.0, Stroke::new(1.5, Color32::WHITE), StrokeKind::Inside);
+    p.rect_stroke(frame.shrink(1.0), 0.0, Stroke::new(1.0, t.accent), StrokeKind::Inside);
+
+    // 大小滑块
+    let slider_rect = Rect::from_min_size(Pos2::new(left, card.min.y + 392.0), Vec2::new(width, 24.0));
+    {
+        let mut value = ratio;
+        let changed = ui
+            .put(slider_rect, egui::Slider::new(&mut value, 0.2..=1.0).show_value(false))
+            .changed();
+        if changed {
+            ratio = value;
+            set(ui, CROP_RATIO, ratio);
+        }
+    }
+    ui.painter().text(
+        Pos2::new(card.center().x, card.min.y + 420.0),
+        Align2::CENTER_CENTER,
+        "拖动图片移动位置，下面的滑杆调整取景范围",
+        Tokens::ui(10.5),
+        t.text_faint,
+    );
+
+    // 确定 / 取消
+    let btn_y = card.min.y + 444.0;
+    let bw = (width - 8.0) / 2.0;
+    if button(ui, &t, Rect::from_min_size(Pos2::new(left, btn_y), Vec2::new(bw, 30.0)), "确定", true) {
+        let username = temp::<String>(ui, USERNAME);
+        // 闭包返回 Option<bool>：里面用 `?` 提前退出，外面 unwrap_or(false) 收口。
+        let done = (|| -> Option<bool> {
+            let image = load_picture(&src)?;
+            let (w, h) = (image.width() as f32, image.height() as f32);
+            let short_px = w.min(h);
+            let side_px = (short_px * ratio).max(8.0);
+            let cx = pos.x * w;
+            let cy = pos.y * h;
+            let x = (cx - side_px * 0.5).clamp(0.0, (w - side_px).max(0.0));
+            let y = (cy - side_px * 0.5).clamp(0.0, (h - side_px).max(0.0));
+            let cropped = image.crop_imm(x as u32, y as u32, side_px as u32, side_px as u32);
+            Some(store_avatar(cropped, &username))
+        })()
+        .unwrap_or(false);
+        if done {
+            ui.data_mut(|d| d.remove::<egui::TextureHandle>(Id::new("ours-account-avatar-tex")));
+            ui.data_mut(|d| d.remove::<egui::TextureHandle>(Id::new(CROP_TEX)));
+            set(ui, CROP_SRC, String::new());
+            set(ui, MESSAGE, "头像已更新".to_string());
+        } else {
+            set(ui, MESSAGE, "这个图片读不了，换一张试试".to_string());
+        }
+        set(ui, PANEL, 2_u8);
+    }
+    if button(ui, &t, Rect::from_min_size(Pos2::new(left + bw + 8.0, btn_y), Vec2::new(bw, 30.0)), "取消", false) {
+        ui.data_mut(|d| d.remove::<egui::TextureHandle>(Id::new(CROP_TEX)));
+        set(ui, CROP_SRC, String::new());
+        set(ui, PANEL, 2_u8);
+    }
+}
+
+/// 只读的一行：左边小标签，右边值。
+fn plain_row(ui: &egui::Ui, t: &Tokens, left: f32, y: f32, label: &str, value: &str) {
+    ui.painter().text(Pos2::new(left, y), Align2::LEFT_CENTER, label, Tokens::ui(11.5), t.text_dim);
+    let shown = if value.trim().is_empty() { "—" } else { value };
+    ui.painter().text(Pos2::new(left + 62.0, y), Align2::LEFT_CENTER, shown, Tokens::ui(12.5), t.text);
+}
+
 fn profile_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
     let t = app.tokens;
+    let editing = get::<bool>(ui, EDITING).unwrap_or(false);
     scrim(ui, full);
-    let card = card(&t, ui, full, 340.0, 452.0, "我的资料");
+    let card = card(&t, ui, full, 340.0, 452.0, if editing { "编辑资料" } else { "我的资料" });
     let left = card.min.x + 18.0;
     let width = card.width() - 36.0;
     let row = |y: f32| Rect::from_min_size(Pos2::new(left, card.min.y + y), Vec2::new(width, 30.0));
 
-    // 头像：点圆形区域 → 换图（点击判定在圆内，不是方形外接框）。
+    // 头像：点圆形区域 → 换图（点击判定在圆内，不是方形外接框）。只读时也能点。
     let profile = temp::<Profile>(ui, PROFILE);
     let avatar_rect = Rect::from_center_size(Pos2::new(card.center().x, card.min.y + 72.0), Vec2::splat(48.0));
     let (avatar_center, avatar_radius) = paint_avatar(ui, avatar_rect, &t, &profile);
@@ -576,40 +735,37 @@ fn profile_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
     ui.painter().text(
         Pos2::new(card.center().x, card.min.y + 104.0),
         Align2::CENTER_CENTER,
-        "点头像更换（256×256 本地保存）",
+        "点头像更换",
         Tokens::ui(10.5),
         t.text_faint,
     );
 
-    // 昵称
-    field(ui, &t, row(122.0), NICK, "昵称", false);
-
-    // 性别：男 / 女 / 保密（三选一，选中用主题色）
-    let gender = temp::<String>(ui, GENDER);
-    let gy = card.min.y + 162.0;
     let gap = 6.0;
-    let gw = (width - gap * 2.0) / 3.0;
-    for (i, label) in ["男", "女", "保密"].iter().enumerate() {
-        let r = Rect::from_min_size(Pos2::new(left + i as f32 * (gw + gap), gy), Vec2::new(gw, 28.0));
-        if button(ui, &t, r, label, gender == *label) {
-            set(ui, GENDER, label.to_string());
+    if editing {
+        // 昵称
+        field(ui, &t, row(122.0), NICK, "昵称", false);
+        // 性别：男 / 女 / 保密
+        let gender = temp::<String>(ui, GENDER);
+        let gy = card.min.y + 162.0;
+        let gw = (width - gap * 2.0) / 3.0;
+        for (i, label) in ["男", "女", "保密"].iter().enumerate() {
+            let r = Rect::from_min_size(Pos2::new(left + i as f32 * (gw + gap), gy), Vec2::new(gw, 28.0));
+            if button(ui, &t, r, label, gender == *label) {
+                set(ui, GENDER, label.to_string());
+            }
         }
-    }
-
-    // 生日：年 / 月 / 日 三个调节器（不引第三方日期控件）
-    let (mut year, mut month, mut day) = parse_birthday(&temp::<String>(ui, BIRTH));
-    let by = card.min.y + 200.0;
-    let unit_w = (width - gap * 2.0) / 3.0;
-    let mut birth_changed = false;
-    birth_changed |= stepper(ui, &t, Rect::from_min_size(Pos2::new(left, by), Vec2::new(unit_w, 28.0)), &mut year, 1900, 2030);
-    birth_changed |= stepper(ui, &t, Rect::from_min_size(Pos2::new(left + unit_w + gap, by), Vec2::new(unit_w, 28.0)), &mut month, 1, 12);
-    birth_changed |= stepper(ui, &t, Rect::from_min_size(Pos2::new(left + (unit_w + gap) * 2.0, by), Vec2::new(unit_w, 28.0)), &mut day, 1, 31);
-    if birth_changed {
-        set(ui, BIRTH, format!("{year:04}-{month:02}-{day:02}"));
-    }
-
-    // 个性签名：多行
-    {
+        // 生日：年 / 月 / 日
+        let (mut year, mut month, mut day) = parse_birthday(&temp::<String>(ui, BIRTH));
+        let by = card.min.y + 200.0;
+        let unit_w = (width - gap * 2.0) / 3.0;
+        let mut birth_changed = false;
+        birth_changed |= stepper(ui, &t, Rect::from_min_size(Pos2::new(left, by), Vec2::new(unit_w, 28.0)), &mut year, 1900, 2030);
+        birth_changed |= stepper(ui, &t, Rect::from_min_size(Pos2::new(left + unit_w + gap, by), Vec2::new(unit_w, 28.0)), &mut month, 1, 12);
+        birth_changed |= stepper(ui, &t, Rect::from_min_size(Pos2::new(left + (unit_w + gap) * 2.0, by), Vec2::new(unit_w, 28.0)), &mut day, 1, 31);
+        if birth_changed {
+            set(ui, BIRTH, format!("{year:04}-{month:02}-{day:02}"));
+        }
+        // 个性签名：多行
         let mut sign = temp::<String>(ui, SIGN);
         let rect = Rect::from_min_size(Pos2::new(left, card.min.y + 238.0), Vec2::new(width, 76.0));
         let edit = egui::TextEdit::multiline(&mut sign)
@@ -621,38 +777,78 @@ fn profile_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
         if ui.put(rect, edit).changed() {
             set(ui, SIGN, sign);
         }
-    }
-
-    // 保存 / 关闭 / 退出登录
-    let btn_y = card.min.y + 326.0;
-    let bw = (width - gap * 2.0) / 3.0;
-    if button(ui, &t, Rect::from_min_size(Pos2::new(left, btn_y), Vec2::new(bw, 30.0)), "保存", true) {
-        let edited = Profile {
-            nickname: temp::<String>(ui, NICK).trim().to_string(),
-            gender: temp::<String>(ui, GENDER).trim().to_string(),
-            birthday: temp::<String>(ui, BIRTH).trim().to_string(),
-            signature: temp::<String>(ui, SIGN).trim().to_string(),
-        };
-        let token = token(ui);
-        if token.is_empty() {
-            set(ui, MESSAGE, "登录已失效，请重新登录".to_string());
-        } else {
-            set(ui, PROFILE, edited.clone());
-            set(ui, MESSAGE, "正在保存…".to_string());
-            cloud::save_profile(token, edited);
+    } else {
+        // 只读：一眼看完，不出现输入框
+        let nick = temp::<String>(ui, NICK);
+        let gender = temp::<String>(ui, GENDER);
+        let birth = temp::<String>(ui, BIRTH);
+        let sign = temp::<String>(ui, SIGN);
+        let rows = [
+            ("昵称", nick.as_str()),
+            ("性别", gender.as_str()),
+            ("生日", birth.as_str()),
+            ("签名", sign.as_str()),
+        ];
+        for (i, (label, value)) in rows.iter().enumerate() {
+            let y = card.min.y + 130.0 + i as f32 * 34.0;
+            ui.painter().rect_filled(
+                Rect::from_min_size(Pos2::new(left, y - 14.0), Vec2::new(width, 28.0)),
+                4.0,
+                t.field_bg,
+            );
+            let clipped: String = value.chars().take(28).collect();
+            plain_row(ui, &t, left + 8.0, y, label, &clipped);
         }
     }
-    if button(ui, &t, Rect::from_min_size(Pos2::new(left + bw + gap, btn_y), Vec2::new(bw, 30.0)), "关闭", false) {
-        set(ui, PANEL, 0_u8);
-        set(ui, MESSAGE, String::new());
+
+    // 按钮：只读时「编辑 / 关闭 / 退出登录」，编辑时「保存 / 取消 / 退出登录」
+    let btn_y = card.min.y + 326.0;
+    let bw = (width - gap * 2.0) / 3.0;
+    if editing {
+        if button(ui, &t, Rect::from_min_size(Pos2::new(left, btn_y), Vec2::new(bw, 30.0)), "保存", true) {
+            let edited = Profile {
+                nickname: temp::<String>(ui, NICK).trim().to_string(),
+                gender: temp::<String>(ui, GENDER).trim().to_string(),
+                birthday: temp::<String>(ui, BIRTH).trim().to_string(),
+                signature: temp::<String>(ui, SIGN).trim().to_string(),
+            };
+            let token = token(ui);
+            if token.is_empty() {
+                set(ui, MESSAGE, "登录已失效，请重新登录".to_string());
+            } else {
+                set(ui, PROFILE, edited.clone());
+                set(ui, MESSAGE, "正在保存…".to_string());
+                cloud::save_profile(token, edited);
+            }
+            set(ui, EDITING, false);
+        }
+        if button(ui, &t, Rect::from_min_size(Pos2::new(left + bw + gap, btn_y), Vec2::new(bw, 30.0)), "取消", false) {
+            // 丢弃这次编辑：把输入框恢复成已保存的资料
+            let profile = temp::<Profile>(ui, PROFILE);
+            fill_fields(ui, &profile);
+            set(ui, EDITING, false);
+            set(ui, MESSAGE, String::new());
+        }
+    } else {
+        if button(ui, &t, Rect::from_min_size(Pos2::new(left, btn_y), Vec2::new(bw, 30.0)), "编辑", true) {
+            let profile = temp::<Profile>(ui, PROFILE);
+            fill_fields(ui, &profile);
+            set(ui, EDITING, true);
+            set(ui, MESSAGE, String::new());
+        }
+        if button(ui, &t, Rect::from_min_size(Pos2::new(left + bw + gap, btn_y), Vec2::new(bw, 30.0)), "关闭", false) {
+            set(ui, PANEL, 0_u8);
+            set(ui, MESSAGE, String::new());
+        }
     }
     if button(ui, &t, Rect::from_min_size(Pos2::new(left + (bw + gap) * 2.0, btn_y), Vec2::new(bw, 30.0)), "退出登录", false) {
         cloud::logout();
         set(ui, TOKEN, String::new());
         set(ui, USERNAME, String::new());
         set(ui, PROFILE, Profile::default());
-        ui.data_mut(|d| d.remove::<egui::TextureHandle>(Id::new("ours-account-avatar-tex")));
+        set(ui, EDITING, false);
         set(ui, PANEL, 0_u8);
+        ui.data_mut(|d| d.remove::<egui::TextureHandle>(Id::new("ours-account-avatar-tex")));
         app.ui.status = "已退出登录".to_string();
     }
 
@@ -666,9 +862,9 @@ fn profile_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
             t.warning,
         );
     }
-    let esc = ui.input(|i| i.key_pressed(egui::Key::Escape));
-    if esc {
+    if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
         set(ui, PANEL, 0_u8);
+        set(ui, EDITING, false);
         set(ui, MESSAGE, String::new());
     }
 }
