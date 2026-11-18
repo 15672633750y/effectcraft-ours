@@ -362,41 +362,170 @@ fn draw_ease_curve(p: &egui::Painter, r: Rect, kind: u8, color: egui::Color32) {
 
 /// A curved undo (or, mirrored, redo) arrow drawn with lines, so it never depends on a font glyph.
 
+/// 插件目录：.wasm/.zip 放这里，.jsx/.js 放脚本目录。
+fn plugin_dirs() -> [std::path::PathBuf; 2] {
+    [
+        std::path::PathBuf::from("/storage/emulated/0/Download/EffectCraftPlugins"),
+        std::path::PathBuf::from("/storage/emulated/0/Download/EffectCraftScripts"),
+    ]
+}
+
+/// 目录里已经放进来的插件文件（名字, 后缀）。
+fn installed_plugins() -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = Vec::new();
+    for dir in plugin_dirs() {
+        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            let ext = name.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
+            if !matches!(ext.as_str(), "wasm" | "jsx" | "js" | "zip") {
+                continue;
+            }
+            out.push((name, ext));
+        }
+    }
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    out
+}
+
 fn plugin_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
     let id = egui::Id::new("ours-plugin-open");
     let mut open = ctx.data(|d| d.get_temp::<bool>(id).unwrap_or(false));
     if !open {
         return;
     }
-    let mut close = false;
+    let help_id = egui::Id::new("ours-plugin-help");
+    let mut help = ctx.data(|d| d.get_temp::<bool>(help_id).unwrap_or(false));
+    let t = app.tokens;
+    let style = ctx.style_of(ctx.theme());
+    // 材质与「快捷」面板一致：半透明底 + 1px 亮边 + 圆角 16
+    let frame = crate::panel_style::frame(&style);
+    let max_h = ctx.content_rect().height() * 0.6;
     egui::Window::new("导入插件")
-        .default_pos(egui::pos2(100.0, 150.0))
-        .default_width(430.0)
+        .open(&mut open)
+        .frame(frame)
+        .default_width(380.0)
+        .max_height(max_h)
+        .collapsible(false)
+        .resizable(false)
         .show(ctx, |ui| {
-            ui.heading("能装的格式");
-            ui.label("• .wasm —— EffectCraft 效果插件（唯一能真正跑的效果格式）");
-            ui.label("• .jsx / .js —— AE 脚本，装好后在 文件 → 脚本 里运行");
-            ui.label("• .zip —— 里面是上面两种时会解开安装");
-            ui.separator();
-            ui.heading("怎么装");
-            ui.label("把文件放进手机这两个文件夹（没有就新建）：");
-            ui.label("  Download/EffectCraftPlugins —— .wasm / .zip");
-            ui.label("  Download/EffectCraftScripts —— .jsx / .js");
-            ui.label("也可以直接放进 Download 根目录，同样会自动装。");
-            ui.label("然后完全退出 App 再打开，会自动装好。");
-            ui.separator();
-            ui.heading("装不了的格式");
-            ui.label("• .aex / .dll / CEP 面板（Adobe 电脑版插件）手机跑不了，装了也不会出现在效果列表。");
-            ui.separator();
-            if ui.button("知道了").clicked() {
-                close = true;
+            ui.spacing_mut().item_spacing.y = 6.0;
+            ui.label(egui::RichText::new("把 .wasm / .jsx / .zip 拖进来，或点下面的框选文件").size(12.0).color(t.text_dim));
+            // —— 拖放区 ——
+            let width = ui.available_width();
+            let (drop, resp) = ui.allocate_exact_size(egui::vec2(width, 72.0), Sense::click());
+            let accent = t.accent;
+            let stroke_color = if resp.hovered() { accent } else { t.field_border };
+            ui.painter().rect_stroke(drop, 10.0, egui::Stroke::new(1.5, stroke_color), StrokeKind::Inside);
+            ui.painter().rect_filled(drop, 10.0, egui::Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), if resp.hovered() { 20 } else { 0 }));
+            ui.painter().text(drop.center(), egui::Align2::CENTER_CENTER, "拖入或点击选择文件", Tokens::ui(12.0), t.text_dim);
+            if resp.hovered() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
             }
+            if resp.clicked() {
+                if let Some(spawn) = app.hooks.file_dialog_async.as_ref() {
+                    let dialog = crate::FileDialog::Open {
+                        exts: vec!["wasm".into(), "jsx".into(), "js".into(), "zip".into()],
+                        many: false,
+                    };
+                    let done: crate::DialogDone = Box::new(|paths| {
+                        if let Ok(mut slot) = pending_plugin().lock() {
+                            *slot = paths.into_iter().next();
+                        }
+                    });
+                    spawn(dialog, done);
+                } else {
+                    app.ui.status = "这个平台没有文件选择器".to_string();
+                }
+            }
+            ui.label(egui::RichText::new("支持 .wasm / .jsx / .zip").size(12.0).color(t.text_faint));
+            // —— 已安装 ——
+            ui.add_space(6.0);
+            ui.label(egui::RichText::new("已安装").size(13.0).color(t.text_dim));
+            let list = installed_plugins();
+            if list.is_empty() {
+                ui.label(egui::RichText::new("还没有插件，放进上面两个目录即可").size(11.0).color(t.text_faint));
+            }
+            for (name, ext) in list.iter().take(3) {
+                let (row, rresp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), crate::panel_style::ROW_H), Sense::hover());
+                ui.painter().rect_filled(row, 8.0, t.field_bg);
+                ui.painter().circle_filled(egui::pos2(row.min.x + 14.0, row.center().y), 4.0, accent);
+                ui.painter().text(egui::pos2(row.min.x + 26.0, row.center().y), egui::Align2::LEFT_CENTER, name, Tokens::ui(12.5), t.text);
+                ui.painter().text(egui::pos2(row.max.x - 10.0, row.center().y), egui::Align2::RIGHT_CENTER, ext, Tokens::ui(10.5), t.text_faint);
+                if rresp.hovered() {
+                    app.auto.add("plugin.row", row, name);
+                }
+            }
+            // —— 底部按钮 ——
+            ui.add_space(8.0);
+            let half = (ui.available_width() - 8.0) / 2.0;
+            ui.horizontal(|ui| {
+                let scan = egui::Button::new(egui::RichText::new("扫描并安装").size(13.0).color(egui::Color32::from_rgb(8, 10, 12)))
+                    .fill(accent)
+                    .corner_radius(10.0)
+                    .min_size(egui::vec2(half, crate::panel_style::BUTTON_H));
+                if ui.add(scan).clicked() {
+                    match crate::menus::invoke(app, ctx, "effect.plugins.load", serde_json::json!({"path": "/storage/emulated/0/Download/EffectCraftPlugins"})) {
+                        Ok(_) => app.ui.status = "插件已扫描".to_string(),
+                        Err(e) => app.ui.status = format!("扫描失败：{}", crate::i18n::tr(&e)),
+                    }
+                }
+                let help_btn = egui::Button::new(egui::RichText::new("插件说明").size(13.0).color(t.text))
+                    .fill(egui::Color32::TRANSPARENT)
+                    .stroke(egui::Stroke::new(1.0, t.field_border))
+                    .corner_radius(10.0)
+                    .min_size(egui::vec2(half, crate::panel_style::BUTTON_H));
+                if ui.add(help_btn).clicked() {
+                    help = true;
+                }
+            });
         });
-    if close {
-        open = false;
+    // —— 二级：插件说明（原来那一大段文字折叠到这里） ——
+    if help {
+        egui::Window::new("插件说明")
+            .open(&mut help)
+            .default_width(380.0)
+            .max_height(ctx.content_rect().height() * 0.6)
+            .collapsible(false)
+            .resizable(false)
+            .show(ctx, |ui| {
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    ui.label("• .wasm —— EffectCraft 效果插件（唯一能真正跑的效果格式）");
+                    ui.label("• .jsx / .js —— AE 脚本，装好后在 文件 → 脚本 里运行");
+                    ui.label("• .zip —— 里面是上面两种时会解开安装");
+                    ui.separator();
+                    ui.label("把文件放进：");
+                    ui.label("  Download/EffectCraftPlugins —— .wasm / .zip");
+                    ui.label("  Download/EffectCraftScripts —— .jsx / .js");
+                    ui.label("也可以直接放进 Download 根目录；然后完全退出 App 再打开。");
+                    ui.separator();
+                    ui.label("• .aex / .dll / CEP 面板（Adobe 电脑版插件）手机跑不了。");
+                });
+            });
     }
-    ctx.data_mut(|d| d.insert_temp(id, open));
+    // 选好的插件文件 → 安装
+    if let Some(path) = pending_plugin().lock().ok().and_then(|mut slot| slot.take()) {
+        let name = std::path::Path::new(&path)
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+        match crate::menus::invoke(app, ctx, "effect.plugins.load", serde_json::json!({"path": path})) {
+            Ok(_) => app.ui.status = format!("已安装 {name}"),
+            Err(e) => app.ui.status = format!("安装失败：{e}"),
+        }
+    }
+    ctx.data_mut(|d| {
+        d.insert_temp(id, open);
+        d.insert_temp(help_id, help);
+    });
 }
+
+/// 文件对话框选好的插件路径（回调可能来自任意线程）→ 下一帧再装。
+fn pending_plugin() -> &'static std::sync::Mutex<Option<String>> {
+    static PENDING: std::sync::OnceLock<std::sync::Mutex<Option<String>>> = std::sync::OnceLock::new();
+    PENDING.get_or_init(|| std::sync::Mutex::new(None))
+}
+
 fn draw_history_arrow(p: &egui::Painter, r: Rect, mirror: bool, color: egui::Color32) {
     // Fixed size, centred on the button, so it lines up with the neighbouring buttons and the
     // pair is an exact mirror of itself.

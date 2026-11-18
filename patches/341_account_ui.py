@@ -636,11 +636,11 @@ fn card(t: &Tokens, ui: &egui::Ui, full: Rect, width: f32, height: f32, title: &
     let w = width.min(full.width() - 24.0);
     let card = Rect::from_center_size(full.center(), Vec2::new(w, height));
     // 和「快捷」面板同一套材质：半透明深底 + 白色细边 + 14 圆角（不要不透明底板）。
-    ui.painter().rect_filled(card, 14.0, Color32::from_rgba_unmultiplied(12, 12, 14, 135));
+    ui.painter().rect_filled(card, crate::panel_style::RADIUS, crate::panel_style::bg());
     ui.painter().rect_stroke(
         card,
-        14.0,
-        Stroke::new(1.0, Color32::from_rgba_unmultiplied(255, 255, 255, 90)),
+        crate::panel_style::RADIUS,
+        Stroke::new(1.0, crate::panel_style::border()),
         StrokeKind::Inside,
     );
     ui.painter().text(
@@ -900,7 +900,7 @@ fn cloud_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
 
         // 列表
         let list_top = card.min.y + 88.0;
-        let row_h = 46.0;
+        let row_h = crate::panel_style::ROW_H + 6.0;
         let visible = ((card.max.y - 96.0 - list_top) / row_h).max(1.0) as usize;
         let loading = get::<bool>(ui, CLOUD_LOADING).unwrap_or(false);
         if list.is_empty() {

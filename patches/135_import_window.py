@@ -360,7 +360,7 @@ fn import_row(
     sub: &str,
 ) {
     let width = ui.available_width();
-    let (rect, resp) = ui.allocate_exact_size(vec2(width, 52.0), Sense::click());
+    let (rect, resp) = ui.allocate_exact_size(vec2(width, 46.0), Sense::click());
     let accent = t.accent;
     let fill = if resp.is_pointer_button_down_on() {
         import_tint(accent, 36)
@@ -400,7 +400,7 @@ fn import_row(
 /// 不支持的条目：同样的行样式，整体 40% 透明，右侧「敬请期待」。
 fn import_disabled_row(ui: &mut egui::Ui, t: &Tokens, title: &str) {
     let width = ui.available_width();
-    let (rect, _) = ui.allocate_exact_size(vec2(width, 52.0), Sense::hover());
+    let (rect, _) = ui.allocate_exact_size(vec2(width, 46.0), Sense::hover());
     let p = ui.painter();
     p.rect_filled(rect, 10.0, import_tint(t.field_bg, 92));
     let icon_rect = egui::Rect::from_center_size(egui::pos2(rect.min.x + 32.0, rect.center().y), vec2(32.0, 32.0));
@@ -433,13 +433,8 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
     let t = app.tokens;
     let style = ctx.style_of(ctx.theme());
     // 和「快捷键」面板**完全相同**的材质：rgba(12,12,14,130) 半透明底 + 白色 90 细边 + 圆角 14。
-    let bg = Color32::from_rgba_unmultiplied(12, 12, 14, 130);
-    let border = Color32::from_rgba_unmultiplied(255, 255, 255, 90);
-    let frame = egui::Frame::window(&style)
-        .fill(bg)
-        .corner_radius(14.0)
-        .inner_margin(egui::Margin::same(16))
-        .stroke(egui::Stroke::new(1.0, border));
+    // 统一走「快捷键」面板的基准（panel_style.rs），不在各处写死。
+    let frame = crate::panel_style::frame(&style);
     egui::Window::new(egui::RichText::new("导入").size(16.0).strong())
         .open(&mut open)
         .frame(frame)
@@ -466,12 +461,12 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
                     .color(Color32::from_rgb(8, 10, 12)),
             )
             .fill(accent)
-            .corner_radius(12.0);
+            .corner_radius(crate::panel_style::RADIUS);
             let row = ui.available_width();
             // 「导入文件…」5 个字 @14px ≈ 70px，再 +48 的内边距 = 118；上限不超过行宽。
             let mask = 118.0_f32;
-            let (slot, _) = ui.allocate_exact_size(vec2(row, 44.0), Sense::hover());
-            let target = egui::Rect::from_center_size(slot.center(), vec2(mask.min(row), 44.0));
+            let (slot, _) = ui.allocate_exact_size(vec2(row, crate::panel_style::BUTTON_H), Sense::hover());
+            let target = egui::Rect::from_center_size(slot.center(), vec2(mask.min(row), crate::panel_style::BUTTON_H));
             if ui.put(target, button).clicked() {
                 pick_any(app);
             }

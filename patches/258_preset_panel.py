@@ -21,7 +21,9 @@ fn preset_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: egui::Rect) {
     }
     let pos_id = egui::Id::unique("ours-preset-pos");
     let notice_id = egui::Id::unique("ours-preset-notice");
-    let size = egui::vec2(280.0, 380.0);
+    let scroll_id = egui::Id::unique("ours-preset-scroll");
+    // 限高 60vh，内容超出就在面板内滚动（和「快捷键」面板同一套圆角/材质）。
+    let size = egui::vec2(280.0, (full.height() * 0.6).min(380.0));
     let mut top_left = ui
         .ctx()
         .data(|d| d.get_temp::<egui::Pos2>(pos_id))
@@ -38,8 +40,8 @@ fn preset_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: egui::Rect) {
     }
     let r = egui::Rect::from_min_size(top_left, size);
     let p = ui.painter().with_clip_rect(full);
-    p.rect_filled(r, 14.0, egui::Color32::from_rgba_unmultiplied(12, 12, 14, 238));
-    p.rect_stroke(r, 14.0, egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(255, 255, 255, 90)), egui::StrokeKind::Inside);
+    p.rect_filled(r, crate::panel_style::RADIUS, crate::panel_style::bg());
+    p.rect_stroke(r, crate::panel_style::RADIUS, egui::Stroke::new(1.0, crate::panel_style::border()), egui::StrokeKind::Inside);
     p.text(r.center_top() + egui::vec2(0.0, 22.0), egui::Align2::CENTER_CENTER, "预设库", Tokens::ui(13.0), egui::Color32::from_rgb(242, 243, 247));
     p.text(
         r.center_top() + egui::vec2(0.0, 38.0),
@@ -62,15 +64,34 @@ fn preset_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: egui::Rect) {
     }
 
     let mut notice: Option<String> = ui.ctx().data(|d| d.get_temp::<String>(notice_id));
-    let mut y = r.min.y + 54.0;
-    for item in list.iter().take(7) {
+    // 滚轮：只在指针落在面板内时响应，避免抢时间线的滚动。
+    let mut scroll = ui.ctx().data(|d| d.get_temp::<f32>(scroll_id)).unwrap_or(0.0);
+    if body.hovered() {
+        let delta = ui.input(|i| i.smooth_scroll_delta.y);
+        if delta.abs() > 0.0 {
+            scroll = (scroll - delta).clamp(0.0, (list.len() as f32 * 50.0 - (size.y - 110.0)).max(0.0));
+            ui.ctx().data_mut(|d| d.insert_temp(scroll_id, scroll));
+        }
+    }
+    let view = egui::Rect::from_min_max(
+        egui::pos2(r.min.x + 8.0, r.min.y + 50.0),
+        egui::pos2(r.max.x - 8.0, r.max.y - 34.0),
+    );
+    let mut y = view.min.y - scroll;
+    for item in list.iter() {
         let name = item.get("name").and_then(|v| v.as_str()).unwrap_or("");
         let path = item.get("path").and_then(|v| v.as_str()).unwrap_or("");
         let kind = item.get("kind").and_then(|v| v.as_str()).unwrap_or("");
         // .gp 不是「不支持」：237_gp_presets 会解析它的 JSON 参数并套用，238 补几何参数。
         // 之前这里硬编码成 `kind != "gp"` 才导致点不了。
         let supported = true;
-        let row = egui::Rect::from_min_size(egui::pos2(r.min.x + 14.0, y), egui::vec2(size.x - 28.0, 30.0));
+        let row = egui::Rect::from_min_size(egui::pos2(r.min.x + 14.0, y), egui::vec2(size.x - 28.0, crate::panel_style::ROW_H));
+        // 滚出视口的行直接跳过（自绘面板没有 clip，手动剔除）。
+        if row.max.y < view.min.y || row.min.y > view.max.y {
+            y += crate::panel_style::ROW_H + 6.0;
+            continue;
+        }
+        let p = ui.painter().with_clip_rect(view);
         p.rect_filled(row, 8.0, egui::Color32::from_rgba_unmultiplied(255, 255, 255, if supported { 18 } else { 8 }));
         let text_color = if supported {
             egui::Color32::from_rgb(235, 237, 242)
@@ -115,7 +136,7 @@ fn preset_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: egui::Rect) {
                 }
             }
         }
-        y += 34.0;
+        y += crate::panel_style::ROW_H + 6.0;
     }
 
     // 结果提示：贴在面板底部
