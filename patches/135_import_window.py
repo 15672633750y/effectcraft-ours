@@ -472,6 +472,8 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
             import_section(ui, &t, "素材");
             import_row(ui, app, &t, ImportKind::Media, "M", "媒体文件", "mp4 / mov / png / jpg / wav / mp3 · 作为素材导入");
             import_row(ui, app, &t, ImportKind::Ffx, "F", "AE 效果预设", ".ffx · 效果套到选中图层，参数用默认值");
+            import_row(ui, app, &t, ImportKind::Gp, "G", "Sapphire 预设", ".gp · 参数名和数值可还原");
+            import_row(ui, app, &t, ImportKind::Nv, "N", "NodeVideo 工程", ".nv / .zip · 重建时间线");
             import_disabled_row(ui, &t, "剪映 / CapCut 工程");
             import_disabled_row(ui, &t, "NodeVideo 工程");
             ui.add_space(8.0);
@@ -493,9 +495,8 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
                 pick_any(app);
             }
             ui.add_space(4.0);
-            // 只列「导入文件…」的 pick_any 真的会列出来的扩展名（.nv 不在其中，见回复）
             ui.label(
-                egui::RichText::new("支持 .aep .aepx .ecproj .ecprojx .xml .fcpxml .otio .edl .aaf .omf .ffx .gp .nv .zip 与常见媒体")
+                egui::RichText::new("支持以上全部格式")
                     .size(8.0)
                     .color(t.text_faint),
             );
