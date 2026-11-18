@@ -22,11 +22,12 @@ A_OLD = """    java_sources = 'java_sources = "java"\\n' if saf else ''"""
 A_NEW = '''    java_sources = 'java_sources = "java"\\n'
     # ImportShim lives in templates/android and must be compiled for every app that wants
     # "Open with" support, not only for the ones with a full SAF recipe.
-    shim_java_dir = staging_dir / "java" / Path(*pkg.split("."))
+    _shim_pkg = packagename if packagename else f"com.artcraft.{app}"
+    shim_java_dir = staging_dir / "java" / Path(*_shim_pkg.split("."))
     shim_java_dir.mkdir(parents=True, exist_ok=True)
     _shim_src = Path(__import__("os").environ["IMPORT_SHIM_JAVA"]).read_text(encoding="utf-8")
     (shim_java_dir / "ImportShim.java").write_text(
-        _shim_src.replace("__PACKAGE__", pkg), encoding="utf-8"
+        _shim_src.replace("__PACKAGE__", _shim_pkg), encoding="utf-8"
     )'''
 
 # --- 3. the second activity ---------------------------------------------------------------
