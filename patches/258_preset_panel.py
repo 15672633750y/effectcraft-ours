@@ -89,7 +89,7 @@ fn preset_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: egui::Rect) {
         .hint_text("搜索预设…")
         .text_color(egui::Color32::from_rgb(238, 240, 245))
         .font(Tokens::ui(11.0))
-        .frame(false)
+        .frame(egui::Frame::NONE)
         .margin(egui::Margin::symmetric(2, 9));
     if ui.put(text_rect, edit).changed() {
         ui.ctx().data_mut(|d| d.insert_temp(search_id, query.clone()));
