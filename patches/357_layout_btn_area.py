@@ -17,14 +17,11 @@ FRAME_ANCHOR = "        crate::account_ui::panel(self, ui, full);\n"
 FRAME_INSERT = """        crate::account_ui::panel(self, ui, full);
         // EFFECTCRAFT_OURS_LAYOUT_BTN_AREA_V1 — 「布局」放在 Middle 层、贴预览面板右下角：
         // Foreground 的预设库/导入/云端面板会盖住它（以前它最后绘制，永远最上层）。
-        let preview_rect = self
-            .dock_rects
-            .iter()
-            .rev()
-            .find(|(k, _)| *k == crate::PanelKind::Preview)
-            .map(|(_, r)| *r);
-        if let Some(rect) = preview_rect {
-            let pos = egui::pos2(rect.max.x - 44.0 - 8.0, rect.max.y - 26.0 - 8.0);
+        // 先保证「不消失」：用屏幕右侧固定锚点，不依赖 dock_rects（那条路取不到就不画）。
+        // 预览面板右下角是下一轮的优化项。
+        let screen = ui.ctx().screen_rect();
+        {
+            let pos = egui::pos2(screen.max.x - 44.0 - 8.0, screen.max.y - 26.0 - 40.0);
             egui::Area::new(egui::Id::unique("ours-layout-btn"))
                 .order(egui::Order::Middle)
                 .fixed_pos(pos)

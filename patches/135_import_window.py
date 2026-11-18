@@ -407,10 +407,20 @@ fn import_row(
         Tokens::ui(9.0),
         t.text,
     );
+    // 副标题超宽就截断（否则会撑大整个窗口）
+    let avail = (rect.max.x - (icon_rect.max.x + 6.0) - 4.0).max(20.0);
+    let per_char = 4.2_f32;
+    let max_chars = (avail / per_char).floor().max(4.0) as usize;
+    let sub_shown = if sub.chars().count() > max_chars {
+        let head: String = sub.chars().take(max_chars.saturating_sub(1)).collect();
+        format!("{head}…")
+    } else {
+        sub.to_string()
+    };
     p.text(
         egui::pos2(icon_rect.max.x + 6.0, rect.center().y + 5.0),
         egui::Align2::LEFT_CENTER,
-        sub,
+        sub_shown,
         Tokens::ui(7.0),
         t.text_dim,
     );
@@ -463,6 +473,9 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
         .collapsible(false)
         .resizable(false)
         .default_width(196.0)
+        // default_width 只是初始值：副标题太长会把窗口撑开，这里给硬上限。
+        .max_width(196.0)
+        .min_width(196.0)
         .show(ctx, |ui| {
             ui.spacing_mut().item_spacing.y = 4.0;
             import_section(ui, &t, "工程");
