@@ -127,6 +127,27 @@ jobs:
               print('SEND filter added unconditionally (share sheet)')
           else:
               raise SystemExit('SEND anchor missing')
+          # 兜底 filter：文件管理器给的 content:// URI 形如 /document/1000012345，路径里没有扩展名，
+          # pathPattern 必然失配，所以再加一条完全不看扩展名、只要 scheme+mimeType 的 VIEW。
+          # 放在列表最前面（体验上它最先命中），扩展名校验交给 app 侧。
+          catch_anchor = '    filters = [MAIN_FILTER]'
+          catch_block = (
+              '    filters = [MAIN_FILTER]\n'
+              '    # Catch-all VIEW: content URIs from document providers look like\n'
+              '    # content://.../document/1000012345, with no file extension in the path, so every\n'
+              '    # pathPattern-based filter misses. This one matches any content:// or file:// file.\n'
+              "    filters.insert(0, '{ actions = [\"android.intent.action.VIEW\"], "
+              "categories = [\"android.intent.category.DEFAULT\", \"android.intent.category.BROWSABLE\"], "
+              "data = [{ scheme = \"content\", host = \"*\", mime_type = \"*/*\" }, "
+              '{ scheme = "file", mime_type = "*/*" }] }')\n'
+          )
+          if 'Catch-all VIEW' in s:
+              print('catch-all VIEW filter already added')
+          elif s.count(catch_anchor) == 1:
+              s = s.replace(catch_anchor, catch_block.rstrip('\n'), 1)
+              print('catch-all VIEW filter added first')
+          else:
+              raise SystemExit('catch-all anchor missing')
           p.write_text(s, encoding='utf-8')
           PY
 
