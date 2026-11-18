@@ -14,7 +14,7 @@ MARKER = "EFFECTCRAFT_OURS_SELECT_ALL_TILE_V1"
 TILES_OLD = '''        ("多选", "M", "ours.multiSelect", serde_json::json!({})),
     ];'''
 TILES_NEW = '''        ("多选", "M", "ours.multiSelect", serde_json::json!({})),
-        ("全选", "Ctrl+A", "edit.selectAll", serde_json::json!({})),
+        ("全选", "Ctrl+A", "ours.selectAllCtx", serde_json::json!({})),
     ];'''
 
 SIZE_OLD = '    let size = egui::vec2(196.0, 280.0);'

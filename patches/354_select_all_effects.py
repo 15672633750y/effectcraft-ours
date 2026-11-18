@@ -46,9 +46,7 @@ fn select_all_effects(s: &mut Session, _p: &Value) -> Result<Value> {
 
 TILE_OLD = '''        ("全选", "Ctrl+A", "edit.selectAll", serde_json::json!({})),
     ];'''
-TILE_NEW = '''        ("全选", "Ctrl+A", "edit.selectAll", serde_json::json!({})),
-        ("全效", "E", "ours.selectAllEffects", serde_json::json!({})),
-    ];'''
+TILE_NEW = '''    ];'''
 
 
 def main() -> None:
