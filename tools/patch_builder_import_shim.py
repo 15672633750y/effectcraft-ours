@@ -26,11 +26,21 @@ A_NEW = '''    intent_filter_value = file_associations.intent_filter_toml(app)
     _shim_exts = file_associations.ASSOCIATIONS.get(app, [])
     _shim_data = file_associations._by_extension_data(_shim_exts, typed=True)
     shim_filters = (
+        # Catch-all: content URIs look like /document/1000012345 with no extension, so every
+        # pathPattern filter misses. This one takes any content/file document.
         '{ actions = ["android.intent.action.VIEW"], '
         'categories = ["android.intent.category.DEFAULT", "android.intent.category.BROWSABLE"], '
-        'data = [' + _shim_data + '] }, '
+        'data = [{ scheme = "content", host = "*", mime_type = "*/*" }, '
+        '{ scheme = "file", mime_type = "*/*" }] }, '
+        # Precise by-extension match, kept for providers that do keep the name in the path.
+        '{ actions = ["android.intent.action.VIEW"], '
+        'categories = ["android.intent.category.DEFAULT"], data = [' + _shim_data + '] }, '
+        # Share sheet: one typed filter and one data-less filter (the latter is what matches an
+        # ACTION_SEND whose type is empty).
         '{ actions = ["android.intent.action.SEND", "android.intent.action.SEND_MULTIPLE"], '
-        'categories = ["android.intent.category.DEFAULT"], data = [{ mime_type = "*/*" }] }'
+        'categories = ["android.intent.category.DEFAULT"], data = [{ mime_type = "*/*" }] }, '
+        '{ actions = ["android.intent.action.SEND", "android.intent.action.SEND_MULTIPLE"], '
+        'categories = ["android.intent.category.DEFAULT"] }'
     )
     if saf:
 '''
