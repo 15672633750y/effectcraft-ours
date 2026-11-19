@@ -92,8 +92,16 @@ NEW_FN = '''pub(crate) fn import_nodevideo(s: &mut Session, path: &str) -> Optio
             if is_media {
                 media.push(out_path.clone());
             }
-            if is_project && project_json.is_none() {
-                project_json = std::fs::read_to_string(&out_path).ok();
+            if is_project {
+                if project_json.is_none() {
+                    project_json = std::fs::read_to_string(&out_path).ok();
+                }
+                // 186：记下骨架位置，导出时直接用（重写这个函数时不能丢）
+                let _ = std::fs::create_dir_all("/storage/emulated/0/DCIM/EffectCraft");
+                let _ = std::fs::write(
+                    "/storage/emulated/0/DCIM/EffectCraft/.nv-skeleton.txt",
+                    &out_path,
+                );
             }
             if is_aep && extracted_aep.is_none() {
                 extracted_aep = Some(out_path);
