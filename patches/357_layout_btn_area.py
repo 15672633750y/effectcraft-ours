@@ -51,6 +51,17 @@ SCAN_INSERT = """        // EFFECTCRAFT_OURS_FONT_DIR_V1 — 字体目录：DCIM
                 ui.data_mut(|d| d.insert_temp(egui::Id::new("ours-fonts-at"), now));
                 let dir = std::path::Path::new("/storage/emulated/0/DCIM/EffectCraft/Fonts");
                 let _ = std::fs::create_dir_all(dir);
+                if !dir.exists() {
+                    // 没存储权限时静默失败是最糟的：给一次明确提示。
+                    let warned = ui
+                        .data(|d| d.get_temp::<bool>(egui::Id::new("ours-dir-warned")))
+                        .unwrap_or(false);
+                    if !warned {
+                        ui.data_mut(|d| d.insert_temp(egui::Id::new("ours-dir-warned"), true));
+                        self.ui.status =
+                            "无法创建 DCIM/EffectCraft（缺少存储权限），字体与预设将不可用".to_string();
+                    }
+                }
                 let mut loaded: Vec<String> = ui
                     .data(|d| d.get_temp::<Vec<String>>(egui::Id::new("ours-fonts-loaded-list")))
                     .unwrap_or_default();
@@ -116,6 +127,16 @@ SCAN_INSERT = """        // EFFECTCRAFT_OURS_FONT_DIR_V1 — 字体目录：DCIM
                 let dir = std::path::Path::new("/storage/emulated/0/DCIM/EffectCraft/Import");
                 // 目录不存在就建出来：这样 ImportShim 写失败时，用户也能一眼看出目录在不在。
                 let _ = std::fs::create_dir_all(dir);
+                if !dir.exists() {
+                    let warned = ui
+                        .data(|d| d.get_temp::<bool>(egui::Id::new("ours-dir-warned")))
+                        .unwrap_or(false);
+                    if !warned {
+                        ui.data_mut(|d| d.insert_temp(egui::Id::new("ours-dir-warned"), true));
+                        self.ui.status =
+                            "无法创建 DCIM/EffectCraft（缺少存储权限），导入将不可用".to_string();
+                    }
+                }
                 if let Ok(entries) = std::fs::read_dir(dir) {
                     let _ = &done;
                     for entry in entries.flatten() {
