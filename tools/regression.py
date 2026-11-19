@@ -118,6 +118,7 @@ def main() -> int:
     checks.append(("15 AM 左侧竖栏 + 动作接线", 'EFFECTCRAFT_OURS_AM_LEFT_RAIL_V1' in frame and 'EFFECTCRAFT_OURS_RAIL_ACTIONS_V1' in frame))
     checks.append(("15 CapCut 播放条", 'EFFECTCRAFT_OURS_CAPCUT_TRANSPORT_V1' in frame))
     checks.append(("15 工具条导出按钮", 'EFFECTCRAFT_OURS_TRAY_EXPORT_V1' in frame and '"导出", 8' in frame))
+    checks.append(("16 轨道标签色按品牌", 'EFFECTCRAFT_OURS_BRAND_TRACK_COLORS_V1' in frame and '0xA8, 0x55, 0xF7' in frame))
     checks.append(("14 时间线横向滚动条", 'EFFECTCRAFT_OURS_TIMELINE_SCROLLBAR_V1' in frame))
     checks.append(("14 时间线滚动条可点跳", 'EFFECTCRAFT_OURS_TIMELINE_SCROLLBAR_CLICK_V1' in frame))
     checks.append(("13 CapCut 底部是素材库", '"capcut" => Layout' in seg and 'vsplit(Ratio(0.52), tabs(&[Timeline], 0), tabs(&[Project], 0))' in seg))
