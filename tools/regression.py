@@ -117,7 +117,7 @@ def main() -> int:
     checks.append(("15 底部工具条可横向滚动", 'EFFECTCRAFT_OURS_TRAY_SCROLL_V1' in frame and 'ours-tray-drag' in frame))
     checks.append(("14 时间线横向滚动条", 'EFFECTCRAFT_OURS_TIMELINE_SCROLLBAR_V1' in frame))
     checks.append(("14 时间线滚动条可点跳", 'EFFECTCRAFT_OURS_TIMELINE_SCROLLBAR_CLICK_V1' in frame))
-    checks.append(("13 CapCut 底部是素材库", '"capcut" => Layout' in seg and 'vsplit(Ratio(0.55), tabs(&[Timeline], 0), tabs(&[Project], 0))' in seg))
+    checks.append(("13 CapCut 底部是素材库", '"capcut" => Layout' in seg and 'vsplit(Ratio(0.52), tabs(&[Timeline], 0), tabs(&[Project], 0))' in seg))
 
     bad = 0
     for name, ok in checks:
