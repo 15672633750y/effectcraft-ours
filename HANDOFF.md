@@ -465,3 +465,160 @@ POST /auth/login    同上
 
 ### 构建耗时实测
 888=10 分钟、890=17.5 分钟（同一量级改动）→ 免费 runner 波动很大，**缓存是唯一稳定手段**。
+
+---
+
+## 最新状态（2026-11-18 08:25，交接给夜跑会话）
+
+### 已完成、可依赖
+- 后端 v2.3.0 已上线：注册/登录/改密/注销/云存储(KV)/管理面板/人机验证 全部可用
+  - 地址 `https://shimoveaex-api.3264003615.workers.dev`
+  - 冒烟 32 项全过（`云账号/自检/live-check.sh`）
+  - 接口文档：`云账号/客户端对接接口文档.md`（第 3.0 节是验证码流程）
+- CI 编译缓存已修复：真实路径 `artcraft/build/effectcraft/target`（旧的是不存在的路径）
+  - **首次构建仍全量(~20min)，第二次起才 3~6 分钟**
+- 签名别名冲突已修：删掉 workflow 里的 `keytool -changealias`，别名保持 `shimove`（与 310 补丁一致）
+- 222_panic_hook 已验证能编译通过
+- APK 文件名已是 `ShimoveAex-<version>.apk`
+
+### 正在验证（905）
+- 341_account_ui：工具栏账号槽 + 登录面板 + 资料卡
+- 401/402: captcha 自动答题 + 头像本地文件
+- **验收清单**（用户醒来要测的）：
+  1. 帮助→关于→长按版本号 0.8s → 显示「云服务连接成功」
+  2. 工具栏最左显示「登录」
+  3. 点开登录面板，密码框有眼睛
+  4. 注册（验证码应自动答）
+  5. 登录后显示头像/首字母
+  6. 点头像 → 资料卡（昵称/性别/生日/个性签名）
+
+### 未做 / 待办
+1. 邮箱找回密码（等 Resend/Brevo key，免费注册）
+2. 223_share_stale：锚点依赖 210 插入的代码，需重排顺序或改锚点
+3. 布局切换视觉美化（现在功能可用但"太炫"，要改成设置项风格）
+4. 调色优化（用户对 2.72 MAE 仍不满意，需按他的眼睛调，单独一轮）
+
+### 夜跑纪律
+- push 完立刻结束本轮，不要 sleep 等构建
+- 一轮改 3~4 个相关问题再推
+- 失败自己看日志修，连续失败 3 次才发原因
+- 成功只发「run 号 + 链接」
+
+### 两个别浪费时间的事实（2026-11-18 08:40 补）
+1. **APK 一直是 140 MB 左右**。GitHub Actions 里 artifact 显示的 ~51.9 MB 是
+   **zip 压缩包**大小，不是 APK 本身。别每次看到数字变化就怀疑体积。
+2. **编译缓存要第二次构建才命中**：
+   - 第 1 次（推代码的那次）：cache miss，全量 ~20 分钟，结束时才 `Post Cache build output`
+   - 第 2 次起：cache hit，3~6 分钟
+   - 想验证缓存效果，就**不改任何代码空跑一次** workflow，看日志里是否 `Cache restored from key`
+
+---
+
+## 待办：预设库/面板统一（2026-11-19 00:35 记录，一轮做完）
+
+一次推送包含以下 5 条，别分五次构建：
+
+1. **预设库加搜索框**
+   - 位置：标题栏下、列表上，高 36，圆角 8
+   - 占位符「搜索预设…」，输入即过滤（不区分大小写，匹配文件名）
+   - 右侧 × 清空；无结果时显示「没有匹配的预设」
+
+2. **面板尺寸统一到「快捷键」面板基准**
+   - 快捷键面板是用户认可的视觉标准
+   - 宽度、圆角、背景（半透明 + 1px 亮边 + 阴影）、行高 44、
+     内边距 16、按钮高 40 全部照它
+   - 需要对齐：预设库、导入、云端工程、插件、我的资料
+   - 做法：抽成常量/函数，一处改全处生效
+   - 预设库限高 60vh，超出内部滚动
+
+3. **预设库可拖动 + 点击不穿透**
+   - 标题栏整条可拖，面板拦截点击（不能点穿到时间线）
+
+4. **.gp 接回 237 的 apply_gp**
+   - 237_gp_presets.py / 238_gp_geometry.py 早已实现 .gp（JSON 文本，参数可 100% 还原）
+   - 新面板把它标成「不支持」是错的，改回可点
+
+5. **.ffx 的 RIFX 加结构名排除表**
+   - 140_ffx_import.py 的 rifx_effect_names 会扫出 ADBE Effect Parade、
+     ADBE Effect Mask Parade、ADBE Effect Built In Params、ADBE End of path sentinel、
+     ADBE Force CPU GPU、ADBE Group End、ADBE Text Properties/Document/Path Options/
+     More Options/Animators/Animator/Anchor Point Option / ADBE Brightness 等结构名
+   - 这些不是效果，必须过滤掉；只保留能经 effect_map::by_match_name 映射到的名字
+   - 验证：点「奇峰自由文字出场.ffx」不报 ADBE Effect Parade；
+     点「СС 5.ffx」报 CC Unsharp Mask / BCC Unsharp Mask 这类真实名
+
+### 优先级
+```
+调色优化 > 布局视觉 > 预设库/面板统一（以上 5 条）
+```
+
+### 插件功能事实（勿再怀疑）
+- `.wasm` 真的能加载：crates/plugin 用 wasmi 解释器，Android 走
+  `cfg(not(target_arch="wasm32"))` → 自动启用 wasm feature
+- 安装链路：zzzzzzzz_install_scripts.py 启动时把
+  `Download/EffectCraftPlugins` 拷到设置目录的 `Plug-ins/`，上游启动时加载
+- `.jsx` 也能跑（上游脚本引擎 + `Scripts/` 目录）
+- **但至今没有任何人真的放一个 .wasm 进去验证过**，上游仓库也没有示例插件
+
+
+## 布局系统（2026-11-19，goal 第 1-4 轮）
+
+* 五套布局 id：`ae` `capcut` `blurrr` `kuaishou` `jianying`，定义在 `crates/ui-egui/src/dock.rs`
+  的 `ours_layout()`（补丁 335 建立、364 扩充、369 差异化）。
+* 朝向不是真的旋转屏幕，而是**排布方式**：`ae` 是横屏三栏 + 底部时间线；
+  其余四套是竖屏（预览在上、时间线在中、项目/效果控件在下），且彼此结构不同：
+  capcut 底部是项目面板、jianying 只有两栏。
+* 旧的 `classic/simple/pro/minimal` 通过 `ours_normalize_layout()`（补丁 366）迁移到新 id；
+  `classic` 仍然能在 dock 里解析出来，作为切换失败时的兜底。
+* 竖屏布局会显示底部工具条（补丁 365）：导入 / 文字 / 形状 / 预设，全部调用现有命令，
+  打开对话框时自动隐藏。
+* 布局卡片（补丁 330/367/368）：372×108，缩略图按真实 dock 树绘制，每张卡有自己的
+  区域扫光（`with_clip_rect` 裁在卡内），右上角有 横屏/竖屏 角标。
+* **禁止**再"整段搬函数"改动 `import_nodevideo`：219/224 会往函数体里注入
+  `fills` / `adjustments` / `all_nodes`，搬走必漏（997/998/1001/1003 连续编译失败的原因）。
+  只改需要改的那一处早退分支即可。
+* `tools/regression.py` 现在有 23 项，包含布局 id、结构差异、以及上面那几个集合的存在性。
+
+
+## 布局品牌与配色（2026-11-19，第二个 goal）
+
+* 五套布局 id：`ae` `capcut` `blurrr` `kuaishou` `am`（`jianying` 是 `am` 的旧别名，仍可用）。
+* **主题跟着布局走**（补丁 378 + 379，代码在 `frame.rs` 的 `apply_prefs` 之后）：
+  - `capcut` / `kuaishou` / `am` → 强制亮色（`Tokens::from_prefs(ThemeKind::Light)`）
+  - 品牌主色：capcut `#3D9BFF`、快影 `#FF5A5A`、AM `#00D6B4`，同时改写 accent/focus/cti/timecode/hot_text/keyframe_selected
+  - 判断是否需要重建：比较 `tokens.kind` 与 `tokens.accent`（含"曾经被品牌色改过"的检测），不需要新增状态
+* **所有自绘界面的底色都必须跟 tokens 走**，否则亮色布局下会出现黑块：
+  - 工具条：`self.tokens.panel_bg` + `separator` 描边（补丁 380）
+  - 浮层：`panel_style::frame_themed(&style, t.kind.is_light())`（补丁 381）
+  - 曲线编辑器：读 `app.tokens.kind.is_light()`（补丁 382）
+* 切换过场（`frame.rs`）：26px 网格逐格点亮 + 伪随机乱码方块（372）、水平扫描线（376）、布局名打字机 + 闪烁光标 + 乱码字形（374）、选择面板网格背景与 HUD 标题（377）。
+* 竖屏布局隐藏桌面菜单栏、工具栏 34px（373）；工具条按品牌分三种位置：底部（capcut/am）、右侧竖排（kuaishou）、顶部横条（blurrr）（375）。
+* 回归清单 **25 项**，包含布局 id、结构差异、亮色主题同步、品牌主色。
+
+
+## 品牌配色来源（2026-11-19，从 APK 拆出来的）
+
+工具：`python3 tools/brand_palette.py "<apk>" -n 20`（只读 resources.arsc，不需要 apktool）。
+
+用户放在 `DCIM/EffectCraft/实验/` 的四个包：
+`Alight Motion_5.0.83.103719.apk`、`Blurrr_2.6.1-4.2.apk`、`CapCut_20.1.0.apk`、`快影_7.48.0.748003.apk`。
+
+实测取到的关键色（int 颜色条目，按出现次数）：
+
+| 应用 | 关键色 | 次数 |
+|---|---|---|
+| CapCut | `#FFFFFF` / `#FAFBFF` / `#090C14` / `#1C1D21` / **`#00CAE0`** | 73 / 34 / 24 / 18 / 35 |
+| 快影 | `#FFFFFF` / `#222222` / `#666666` / `#E6E6E6` / **`#FF5000`** | 101 / 43 / 27 / 26 / 18 |
+| AM (Alight Motion) | `#1F2238` / `#1E2239` / **`#F16586`** / `#29E59C` / `#03DAC6` | 4 / 3 / 4 / 3 / 3 |
+| Blurrr | `#FFFFFF` / `#F5F5F5` / `#424242` / **`#03DAC6`** / `#3700B3` | 66 / 4 / 3 / 3 / 3 |
+
+映射到布局（`391_palette_v2.py`，用户确认的对应关系：1=CapCut、2=Blurrr、3=AM、4=快影）：
+
+* CapCut 亮色 `#FFFFFF` / 面板 `#FAFBFF` / 文字 `#090C14` / 主色 `#00CAE0`
+* Blurrr 深色 `#0E1014` / 面 `#15181E` / 文字 `#F2F4F8` / 主色 `#03DAC6`
+* AM 深蓝 `#1B1E2F` / 面 `#1F2238` / 文字 `#EDEFF7` / 主色 `#F16586`
+* 快影 深色 `#121212` / 面 `#1C1C1E` / 文字 `#F2F2F2` / 主色 `#FF5000`
+
+**规则**：这些值直接写进 `Tokens`（app_bg/panel_bg/text/separator/field_bg/row_alt/accent/cti/timecode…），
+布局激活时**不读用户主题色**；回到 `ae` 时恢复用户自己的主题（`402_palette_restore_fix.py`）。
+轨道标签色也有各自品牌的一套（`399_brand_track_colors.py`）。
