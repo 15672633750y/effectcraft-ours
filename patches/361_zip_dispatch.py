@@ -157,7 +157,7 @@ NEW_FN = '''pub(crate) fn import_nodevideo(s: &mut Session, path: &str) -> Optio
                 "NodeVideo 工程里没有可导入的图层或素材".to_string()
             });
         }
-        return build_nodevideo_timeline(s, path, &media_dir, nodes);
+        return build_nodevideo_timeline(s, path, &media_dir, &doc);
     }
 
     // .nv 直接给过来
@@ -175,16 +175,23 @@ NEW_FN = '''pub(crate) fn import_nodevideo(s: &mut Session, path: &str) -> Optio
     if nodes.is_empty() {
         return Some("这个 .nv 里没有可导入的图层".to_string());
     }
-    build_nodevideo_timeline(s, path, &media_dir, nodes)
+    build_nodevideo_timeline(s, path, &media_dir, &doc)
 }
 
 /// 把收集到的 NodeVideo 媒体节点变成 OTIO 时间线并交给官方导入器。
-fn build_nodevideo_timeline<'a>(
+fn build_nodevideo_timeline(
     s: &mut Session,
     path: &str,
     media_dir: &str,
-    nodes: Vec<&'a Value>,
+    doc: &Value,
 ) -> Option<String> {
+    // 219/215 等补丁在旧函数体里定义过这几个集合；重写时在这里补齐，尾部代码照旧使用。
+    let mut nodes: Vec<&Value> = Vec::new();
+    collect_media_nodes(doc, &mut nodes);
+    let mut fills: Vec<&Value> = Vec::new();
+    collect_fill_nodes(doc, &mut fills);
+    let mut adjustments: Vec<&Value> = Vec::new();
+    collect_adjustment_nodes(doc, &mut adjustments);
 '''
 
 TAIL_KEEP = '''    let rate = 30.0f64;
