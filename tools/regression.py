@@ -123,6 +123,7 @@ def main() -> int:
     proj = read(src, "crates/ui-egui/src/panels/project.rs")
     checks.append(("17 音频/蒙版/变速 按钮", 'pick_audio' in proj and '"蒙版", 15' in frame and 'Some(15) =>' in frame and 'Some(16) =>' in frame))
     checks.append(("17 存帧按钮", '"存帧", 17' in frame and 'render.saveCurrentPreview' in frame))
+    checks.append(("17 变速快捷档", '"0.5×", 18' in frame and 'layer.timeStretch' in frame and 'Some(20) =>' in frame))
     checks.append(("14 时间线横向滚动条", 'EFFECTCRAFT_OURS_TIMELINE_SCROLLBAR_V1' in frame))
     checks.append(("14 时间线滚动条可点跳", 'EFFECTCRAFT_OURS_TIMELINE_SCROLLBAR_CLICK_V1' in frame))
     checks.append(("13 CapCut 底部是素材库", '"capcut" => Layout' in seg and 'vsplit(Ratio(0.52), tabs(&[Timeline], 0), tabs(&[Project], 0))' in seg))
