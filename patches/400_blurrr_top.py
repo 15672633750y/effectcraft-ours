@@ -1,0 +1,32 @@
+#!/usr/bin/env python3
+"""Blurrr（图 2）顶部条：撤销 / 重做 / 播放 / 导出，全部真实动作。
+
+原来这里是"播放 / 文字 / 预设"三个格子，和截图不符；截图上方是历史与导出操作。
+"""
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+MARKER = "EFFECTCRAFT_OURS_BLURRR_TOP_V1"
+
+OLD = '} else if ws == "blurrr" {\n                    let strip = egui::Rect::from_min_size(\n                        egui::pos2(screen.min.x + 8.0, screen.min.y + 6.0),\n                        egui::vec2(screen.width() - 16.0, 42.0),\n                    );\n                    ui.painter().rect_filled(strip, 12.0, self.tokens.panel_bg);\n                    ui.painter().rect_stroke(\n                        strip,\n                        12.0,\n                        egui::Stroke::new(1.0, self.tokens.separator),\n                        egui::StrokeKind::Inside,\n                    );\n                    let cw = strip.width() / 3.0;\n                    for i in 0..3u64 {\n                        let cell = egui::Rect::from_min_size(\n                            egui::pos2(strip.min.x + cw * i as f32, strip.min.y),\n                            egui::vec2(cw, strip.height()),\n                        );\n                        let (label, glyph) = match i {\n                            0 => ("播放", "\\u{25b6}"),\n                            1 => ("文字", "T"),\n                            _ => ("预设", "\\u{2605}"),\n                        };\n                        let resp = ui.interact(\n                            cell,\n                            egui::Id::unique(("ours-top", i)),\n                            egui::Sense::click(),\n                        );\n                        let hot = resp.hovered();\n                        if hot {\n                            ui.painter().rect_filled(\n                                cell.shrink(3.0),\n                                10.0,\n                                accent.gamma_multiply(0.16),\n                            );\n                        }\n                        ui.painter().text(\n                            egui::pos2(cell.center().x, cell.center().y - 7.0),\n                            egui::Align2::CENTER_CENTER,\n                            glyph,\n                            Tokens::ui(17.0),\n                            if hot { accent } else { text_c },\n                        );\n                        ui.painter().text(\n                            egui::pos2(cell.center().x, cell.center().y + 11.0),\n                            egui::Align2::CENTER_CENTER,\n                            label,\n                            Tokens::ui(9.0),\n                            dim_c,\n                        );\n                        if resp.clicked() {\n                            fired = Some(if i == 0 { 4 } else if i == 1 { 1 } else { 3 });\n                        }\n                    }\n'
+
+NEW = '} else if ws == "blurrr" {\n                    // EFFECTCRAFT_OURS_BLURRR_TOP_V1 — 图 2 顶部：撤销 / 重做 / 播放 / 导出（都真实）\n                    let strip = egui::Rect::from_min_size(\n                        egui::pos2(screen.min.x + 8.0, screen.min.y + 6.0),\n                        egui::vec2(screen.width() - 16.0, 44.0),\n                    );\n                    ui.painter().rect_filled(strip, 12.0, self.tokens.panel_bg);\n                    ui.painter().rect_stroke(\n                        strip,\n                        12.0,\n                        egui::Stroke::new(1.0, self.tokens.separator),\n                        egui::StrokeKind::Inside,\n                    );\n                    let undo_ready = !self.session.history.undo.is_empty();\n                    let redo_ready = !self.session.history.redo.is_empty();\n                    let items: [(&str, &str, u8, bool); 4] = [\n                        ("\\u{27f2}", "撤销", 10, undo_ready),\n                        ("\\u{27f3}", "重做", 11, redo_ready),\n                        ("\\u{25b6}", "播放", 12, true),\n                        ("\\u{2191}", "导出", 13, true),\n                    ];\n                    let cw = strip.width() / items.len() as f32;\n                    for (i, (glyph, label, code, ready)) in items.iter().enumerate() {\n                        let cell = egui::Rect::from_min_size(\n                            egui::pos2(strip.min.x + cw * i as f32, strip.min.y),\n                            egui::vec2(cw, strip.height()),\n                        );\n                        let resp = ui.interact(\n                            cell,\n                            egui::Id::unique(("ours-blurrr-top", *code as u64)),\n                            egui::Sense::click(),\n                        );\n                        let hot = resp.hovered();\n                        if hot {\n                            ui.painter().rect_filled(\n                                cell.shrink(3.0),\n                                8.0,\n                                self.tokens.accent.gamma_multiply(0.16),\n                            );\n                        }\n                        ui.painter().text(\n                            egui::pos2(cell.center().x, cell.center().y - 6.0),\n                            egui::Align2::CENTER_CENTER,\n                            *glyph,\n                            Tokens::ui(14.0),\n                            if *ready {\n                                self.tokens.text\n                            } else {\n                                self.tokens.text_faint\n                            },\n                        );\n                        ui.painter().text(\n                            egui::pos2(cell.center().x, cell.center().y + 11.0),\n                            egui::Align2::CENTER_CENTER,\n                            *label,\n                            Tokens::ui(9.0),\n                            dim_c,\n                        );\n                        if resp.clicked() && *ready {\n                            fired = Some(*code);\n                        }\n                    }\n'
+
+
+def main() -> None:
+    root = Path(os.environ["EFFECTCRAFT_DIR"]).resolve()
+    path = root / "crates/ui-egui/src/app/frame.rs"
+    src = path.read_text(encoding="utf-8")
+    if MARKER in src:
+        print("blurrr top already present")
+        return
+    if src.count(OLD) != 1:
+        raise SystemExit(f"anchor: {{src.count(OLD)}}")
+    path.write_text(src.replace(OLD, NEW, 1), encoding="utf-8")
+    print("blurrr top strip: undo / redo / play / export")
+
+
+if __name__ == "__main__":
+    main()
