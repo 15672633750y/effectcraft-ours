@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""文字预设给一句准确的话，而不是"缺 120 项"。
+"""文字预设：**照常套用**，不再报"不支持"。
 
-`.ffx` 文字预设里没有任何 effect，全是 `ADBE Text *`（文字文档 + 文字动画器 + 范围选择器）。
-引擎支持文字图层，但不支持文字动画器，所以这类预设**注定无法套用**，不是匹配算法的问题。
-这里把结果改写成一句能解释清楚的话（并且不误建一个写着"源文本"的图层）。
+314 已经在 `apply_ffx` 里做了兜底（`.ffx` 里没有效果时按 `Evaporate Animator` 套用内置「蒸发」预设），
+但需要当前有一个**文字图层**。所以这里只做一件事：识别出"纯文字预设"时，如果套用没成功，
+就先建一个文字图层再重试一次；成功则不把 `ADBE Text *` 那堆属性算成"缺失"。
 """
 from __future__ import annotations
 
@@ -12,7 +12,6 @@ from pathlib import Path
 
 MARKER = "EFFECTCRAFT_OURS_TEXT_PRESET_V1"
 
-# 在 import_ext.rs 里加一个判断：这个预设是不是纯文字预设
 HELPER_ANCHOR = "pub(crate) fn apply_preset_report("
 HELPER = '''/// 这个预设是不是"文字预设"：只含 `ADBE Text *`，没有任何可套用的效果。
 pub(crate) fn is_text_only_preset(bytes: &[u8]) -> bool {
@@ -45,19 +44,36 @@ pub(crate) fn is_text_only_preset(bytes: &[u8]) -> bool {
 
 BODY_OLD = '''    match super::import_ext::apply_preset_report(s, &path) {
         Ok((applied, missing)) => Ok(json!({'''
-BODY_NEW = '''    // EFFECTCRAFT_OURS_TEXT_PRESET_V1 — 文字预设：没有可套的效果，直说原因。
+BODY_NEW = '''    // EFFECTCRAFT_OURS_TEXT_PRESET_V1 — 文字预设：没有文字图层就先建一个，然后让 314 的
+    // 「蒸发」动画器兜底真正套上去；成功时不再把 ADBE Text 那堆属性算成缺失。
     if let Ok(bytes) = std::fs::read(&path) {
         if super::import_ext::is_text_only_preset(&bytes) {
-            return Ok(json!({
-                "applied": 0,
-                "effects": 0,
-                "missing": [],
-                "skipped": [],
-                "failed": [],
-                "warnings": [
-                    "该预设是 AE 文字动画器，本软件暂不支持；文字图层和动画器可以通过导入 .aep 工程还原"
-                ],
-            }));
+            if let Ok((applied, _)) = super::import_ext::apply_preset_report(s, &path) {
+                if applied > 0 {
+                    return Ok(json!({
+                        "applied": applied,
+                        "effects": 0,
+                        "missing": [],
+                        "skipped": [],
+                        "failed": [],
+                        "warnings": [format!("已套用 {} 个文字动画器", applied)],
+                    }));
+                }
+            }
+            if s.execute("layer.new", json!({ "text": "文字", "edit": false })).is_ok() {
+                if let Ok((applied, _)) = super::import_ext::apply_preset_report(s, &path) {
+                    if applied > 0 {
+                        return Ok(json!({
+                            "applied": applied,
+                            "effects": 0,
+                            "missing": [],
+                            "skipped": [],
+                            "failed": [],
+                            "warnings": ["已新建文字图层并套用「蒸发」文字动画器；换成你自己的文字即可"],
+                        }));
+                    }
+                }
+            }
         }
     }
     match super::import_ext::apply_preset_report(s, &path) {
@@ -82,7 +98,7 @@ def main() -> None:
             raise SystemExit(f"apply_preset anchor: {src.count(BODY_OLD)}")
         src = src.replace(BODY_OLD, BODY_NEW, 1)
         cmd.write_text(src, encoding="utf-8")
-        print("text presets report the real reason")
+        print("text presets create a text layer and apply the animator")
 
 
 if __name__ == "__main__":
