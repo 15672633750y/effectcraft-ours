@@ -40,17 +40,21 @@ INSERT = """        // EFFECTCRAFT_OURS_LAYOUT_BTN_AREA_V1 — 「布局」在�
 # 有文件就按扩展名分发（和导入面板的分支一致），成功后删掉。
 SCAN_ANCHOR = "        // EFFECTCRAFT_OURS_LAYOUT_BTN_AREA_V1 — 「布局」在任何浮层之前绘制，\n"
 
-SCAN_INSERT = """        // EFFECTCRAFT_OURS_FONT_DIR_V1 — 字体目录：DCIM/EffectCraft/Fonts 里的字体启动时自动注册，
-        // 之后在文字图层的字体列表里就能直接选到，不需要每次拖文件。
+SCAN_INSERT = """        // EFFECTCRAFT_OURS_FONT_DIR_V1 — 字体目录：DCIM/EffectCraft/Fonts（和 Presets 同级）。
+        // 每 2 秒扫一次，新丢进去的字体立刻注册，不用重启。
         {
-            let fonts_loaded = ui
-                .data(|d| d.get_temp::<bool>(egui::Id::new("ours-fonts-loaded")))
-                .unwrap_or(false);
-            if !fonts_loaded {
-                ui.data_mut(|d| d.insert_temp(egui::Id::new("ours-fonts-loaded"), true));
+            let now = ui.input(|i| i.time);
+            let last = ui
+                .data(|d| d.get_temp::<f64>(egui::Id::new("ours-fonts-at")))
+                .unwrap_or(0.0);
+            if now - last > 2.0 {
+                ui.data_mut(|d| d.insert_temp(egui::Id::new("ours-fonts-at"), now));
                 let dir = std::path::Path::new("/storage/emulated/0/DCIM/EffectCraft/Fonts");
                 let _ = std::fs::create_dir_all(dir);
-                let mut count = 0usize;
+                let mut loaded: Vec<String> = ui
+                    .data(|d| d.get_temp::<Vec<String>>(egui::Id::new("ours-fonts-loaded-list")))
+                    .unwrap_or_default();
+                let mut added = 0usize;
                 if let Ok(entries) = std::fs::read_dir(dir) {
                     for entry in entries.flatten() {
                         let path = entry.path();
@@ -66,20 +70,26 @@ SCAN_INSERT = """        // EFFECTCRAFT_OURS_FONT_DIR_V1 — 字体目录：DCIM
                             continue;
                         }
                         let p = path.to_string_lossy().to_string();
+                        if loaded.contains(&p) {
+                            continue;
+                        }
                         if crate::menus::invoke(
                             self,
                             ui.ctx(),
                             "ours.addFont",
-                            serde_json::json!({ "path": p }),
+                            serde_json::json!({ "path": p.clone() }),
                         )
                         .is_ok()
                         {
-                            count += 1;
+                            loaded.push(p);
+                            added += 1;
                         }
                     }
                 }
-                if count > 0 {
-                    self.ui.status = format!("已加载 {count} 个字体");
+                if added > 0 {
+                    ui.data_mut(|d| d.insert_temp(egui::Id::new("ours-fonts-loaded-list"), loaded.clone()));
+                    self.ui.status = format!("已加载 {added} 个字体");
+                    ui.ctx().request_repaint();
                 }
             }
         }
