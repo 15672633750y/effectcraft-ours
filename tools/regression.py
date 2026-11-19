@@ -114,6 +114,8 @@ def main() -> int:
     checks.append(("14 滚动条加宽到 12px", 'bar_width: 12.0' in theme_src))
     checks.append(("14 预设库滚动条可拖", 'ours-preset-scrollbar' in frame))
     checks.append(("14 竖屏自绘顶栏", 'fn ours_shell_header' in frame))
+    checks.append(("14 时间线横向滚动条", 'EFFECTCRAFT_OURS_TIMELINE_SCROLLBAR_V1' in frame))
+    checks.append(("14 时间线滚动条可点跳", 'EFFECTCRAFT_OURS_TIMELINE_SCROLLBAR_CLICK_V1' in frame))
     checks.append(("13 CapCut 底部是素材库", '"capcut" => Layout' in seg and 'vsplit(Ratio(0.55), tabs(&[Timeline], 0), tabs(&[Project], 0))' in seg))
 
     bad = 0
