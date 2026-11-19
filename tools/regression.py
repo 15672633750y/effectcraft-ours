@@ -109,6 +109,7 @@ def main() -> int:
     seg = dock[i: dock.find("\n}", i)] if i > 0 else ""
     checks.append(("13 AM 有三栏（预览/时间线/工具）", '"am" | "jianying" => Layout {' in seg))
     checks.append(("13 亮色布局主题同步", 'ThemeKind::Light' in frame))
+    checks.append(("13 品牌主色（capcut/快影/AM）", 'EFFECTCRAFT_OURS_LAYOUT_BRAND_ACCENT_V1' in frame and '0x3d, 0x9b, 0xff' in frame))
     checks.append(("13 CapCut 底部是素材库", '"capcut" => Layout' in seg and 'vsplit(Ratio(0.55), tabs(&[Timeline], 0), tabs(&[Project], 0))' in seg))
 
     bad = 0
