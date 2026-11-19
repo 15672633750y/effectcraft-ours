@@ -20,6 +20,28 @@ ANCHOR = "        shortcut_panel(self, ui, full);\n"
 
 INSERT = """        // EFFECTCRAFT_OURS_LAYOUT_BTN_AREA_V1 — 「布局」在任何浮层之前绘制，
         // 所以预设库/导入/云端/账号面板都会盖住它（以前它最后画，永远最上层）。
+        // EFFECTCRAFT_OURS_IMPORT_REPORT_V1 — 导入结果不再一闪而过，留一块可关闭的显示区。
+        if let Some(msg) = ui.data(|d| d.get_temp::<String>(egui::Id::new("ours-import-report"))) {
+            if !msg.is_empty() {
+                let screen = ui.ctx().content_rect();
+                egui::Area::new(egui::Id::unique("ours-import-report"))
+                    .order(egui::Order::Foreground)
+                    .fixed_pos(egui::pos2(screen.min.x + 16.0, screen.max.y - 150.0))
+                    .show(ui.ctx(), |ui| {
+                        egui::Frame::window(ui.style()).show(ui, |ui| {
+                            ui.set_max_width(460.0);
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new(&msg).size(11.0));
+                                if ui.small_button("\\u{00d7}").clicked() {
+                                    ui.ctx().data_mut(|d| {
+                                        d.insert_temp(egui::Id::new("ours-import-report"), String::new())
+                                    });
+                                }
+                            });
+                        });
+                    });
+            }
+        }
         let layout_crashed =
             ui.data(|d| d.get_temp::<bool>(egui::Id::new("ours-layout-crashed")).unwrap_or(false));
         if !layout_crashed
@@ -155,7 +177,9 @@ SCAN_INSERT = """        // EFFECTCRAFT_OURS_FONT_DIR_V1 — 字体目录：DCIM
                             .to_ascii_lowercase();
                         let p = path.to_string_lossy().to_string();
                         let (cmd, params) = match ext.as_str() {
-                            "aep" | "aepx" => ("file.importAep", serde_json::json!({ "path": p })),
+                            "aep" | "aepx" => {
+                                ("file.importAep", serde_json::json!({ "path": p }))
+                            }
                             "ecproj" | "ecprojx" => {
                                 ("file.importProject", serde_json::json!({ "path": p }))
                             }
@@ -177,15 +201,38 @@ SCAN_INSERT = """        // EFFECTCRAFT_OURS_FONT_DIR_V1 — 字体目录：DCIM
                             .map(|n| n.to_string_lossy().to_string())
                             .unwrap_or_default();
                         self.ui.status = format!("导入中：{name}");
+                        ui.data_mut(|d| {
+                            d.insert_temp(egui::Id::new("ours-import-report"), self.ui.status.clone())
+                        });
                         match crate::menus::invoke(self, ui.ctx(), cmd, params) {
-                            Ok(_) => {
+                            Ok(v) => {
+                                // AEP 里存的是别的电脑的路径：导入后按文件名在 DCIM/EffectCraft 里
+                                // 找同名文件并自动重连，省掉一条条手动 Relink。
+                                if ext == "aep" || ext == "aepx" {
+                                    let _ = crate::menus::invoke(
+                                        self,
+                                        ui.ctx(),
+                                        "file.relinkFootage",
+                                        serde_json::json!({
+                                            "folder": "/storage/emulated/0/DCIM/EffectCraft",
+                                            "wait": true
+                                        }),
+                                    );
+                                }
+                                let _ = v;
                                 self.ui.status = format!("已导入 {name}");
+                                ui.data_mut(|d| {
+                                    d.insert_temp(egui::Id::new("ours-import-report"), self.ui.status.clone())
+                                });
                                 // 不能立刻删：导入命令是异步读文件的，删早了会报
                                 // "cannot read ...: No such file or directory"。
                                 done.push((p_now.clone(), now));
                             }
                             Err(e) => {
                                 self.ui.status = format!("导入失败 {name}：{e}");
+                                ui.data_mut(|d| {
+                                    d.insert_temp(egui::Id::new("ours-import-report"), self.ui.status.clone())
+                                });
                                 let _ = std::fs::remove_file(&path);
                             }
                         }

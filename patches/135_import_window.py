@@ -74,6 +74,8 @@ enum ImportKind {
     Gp,
     /// NodeVideo 工程包：.nv 或 zip
     Nv,
+    /// 字体文件：注册后文字图层能选到
+    Font,
 }
 
 impl ImportKind {
@@ -85,6 +87,7 @@ impl ImportKind {
             ImportKind::Ffx => vec!["ffx"],
             ImportKind::Gp => vec!["gp"],
             ImportKind::Nv => vec!["nv", "zip"],
+            ImportKind::Font => vec!["ttf", "otf", "ttc"],
             ImportKind::Media => vec![
                 "mp4", "mov", "mxf", "mkv", "webm", "png", "jpg", "jpeg", "webp", "tif", "tiff", "wav", "mp3", "flac",
             ],
@@ -99,6 +102,7 @@ impl ImportKind {
             ImportKind::Ffx => "",
             ImportKind::Gp => "",
             ImportKind::Nv => "file.import",
+            ImportKind::Font => "",
             ImportKind::Media => "file.import",
         }
     }
@@ -119,6 +123,8 @@ fn kind_for_ext(ext: &str) -> ImportKind {
         ImportKind::Gp
     } else if lower == "nv" || lower == "zip" {
         ImportKind::Nv
+    } else if lower == "ttf" || lower == "otf" || lower == "ttc" {
+        ImportKind::Font
     } else {
         ImportKind::Media
     }
@@ -166,6 +172,7 @@ fn pick_any(app: &mut EffectcraftApp) {
         ImportKind::Ffx,
         ImportKind::Gp,
         ImportKind::Nv,
+        ImportKind::Font,
     ];
     let mut exts: Vec<String> = Vec::new();
     for kind in all {
@@ -339,6 +346,17 @@ fn dispatch_import(app: &mut EffectcraftApp, ctx: &egui::Context) {
     });
     if kind == ImportKind::Ffx {
         apply_ffx(app, ctx, &path);
+        return;
+    }
+    // 字体：注册到当前会话，文字图层的字体列表里立刻可选。
+    if kind == ImportKind::Font {
+        match crate::menus::invoke(app, ctx, "ours.addFont", serde_json::json!({ "path": path })) {
+            Ok(v) => {
+                let faces = v.get("faces").and_then(|x| x.as_u64()).unwrap_or(0);
+                app.ui.status = format!("已注册字体（{faces} 个字面）");
+            }
+            Err(e) => app.ui.status = format!("字体注册失败：{e}"),
+        }
         return;
     }
     // .gp 走 237 的 apply_gp（参数名/数值都能还原）
@@ -521,6 +539,7 @@ fn import_window(app: &mut EffectcraftApp, ctx: &egui::Context) {
             import_section(ui, &t, "素材");
             import_row(ui, app, &t, ImportKind::Media, "M", "媒体文件", "mp4 / mov / png / jpg / wav / mp3 · 作为素材导入");
             import_row(ui, app, &t, ImportKind::Ffx, "F", "AE 效果预设", ".ffx · 效果套到选中图层，参数用默认值");
+            import_row(ui, app, &t, ImportKind::Font, "T", "字体文件", ".ttf / .otf / .ttc · 注册后文字图层可直接选用");
             ui.add_space(8.0);
             // 主按钮：固定 44 高，居中的胶囊（宽度 = 文字 + 48），圆角 12
             let accent = t.accent;
