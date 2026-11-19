@@ -129,6 +129,7 @@ def main() -> int:
     checks.append(("18 时间伸缩面板 0.01–100", 'fn ours_speed_panel' in frame and '0.01..=100.0' in frame))
     checks.append(("18 dock 加高到 78", 'let h = 78.0;' in frame and 'let cell_w = 88.0_f32;' in frame))
     checks.append(("18 导入面板全局绘制", 'crate::panels::project::import_window(self, ui.ctx());' in frame))
+    checks.append(("19 骨架色随品牌", 'EFFECTCRAFT_OURS_PALETTE_FIELDS_V1' in frame and 't.pasteboard = bg.lerp_to_gamma(text, 0.10);' in frame))
     checks.append(("14 时间线横向滚动条", 'EFFECTCRAFT_OURS_TIMELINE_SCROLLBAR_V1' in frame))
     checks.append(("14 时间线滚动条可点跳", 'EFFECTCRAFT_OURS_TIMELINE_SCROLLBAR_CLICK_V1' in frame))
     checks.append(("13 CapCut 底部是素材库", '"capcut" => Layout' in seg and 'vsplit(Ratio(0.52), tabs(&[Timeline], 0), tabs(&[Project], 0))' in seg))
