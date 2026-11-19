@@ -373,7 +373,15 @@ fn dispatch_import(app: &mut EffectcraftApp, ctx: &egui::Context) {
         serde_json::json!({ "path": path })
     };
     if let Err(e) = crate::menus::invoke(app, ctx, kind.command(), params) {
-        app.ui.status = format!("导入失败：{e}");
+        // .zip 工程包：引擎没有解压能力，明确说清楚而不是丢一个底层错误。
+        let msg = if path.to_ascii_lowercase().ends_with(".zip") {
+            format!("导入失败：.zip 工程包还不支持解压（{e}）；请导入 .nv，或先解压只导入里面的素材")
+        } else {
+            format!("导入失败：{e}")
+        };
+        app.ui.status = msg.clone();
+        // 同时写进常驻结果区，避免一闪而过。
+        ctx.data_mut(|d| d.insert_temp(egui::Id::new("ours-import-report"), msg));
     }
 }
 
