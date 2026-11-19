@@ -192,6 +192,8 @@ fn build_nodevideo_timeline(
     collect_fill_nodes(doc, &mut fills);
     let mut adjustments: Vec<&Value> = Vec::new();
     collect_adjustment_nodes(doc, &mut adjustments);
+    let mut all_nodes: Vec<&Value> = Vec::new();
+    collect_all_nodes(doc, &mut all_nodes);
 '''
 
 TAIL_KEEP = '''    let rate = 30.0f64;
