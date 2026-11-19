@@ -109,7 +109,7 @@ def main() -> int:
     seg = dock[i: dock.find("\n}", i)] if i > 0 else ""
     checks.append(("13 AM 有三栏（预览/时间线/工具）", '"am" | "jianying" => Layout {' in seg))
     checks.append(("13 亮色布局主题同步", 'ThemeKind::Light' in frame))
-    checks.append(("13 品牌主色（capcut/快影/AM）", 'EFFECTCRAFT_OURS_LAYOUT_BRAND_ACCENT_V1' in frame and '0x3d, 0x9b, 0xff' in frame))
+    checks.append(("13 品牌色板（拆包颜色）", 'EFFECTCRAFT_OURS_BRAND_PALETTE_V1' in frame and '0x00, 0xCA, 0xE0' in frame and '0xFF, 0x50, 0x00' in frame))
     theme_src = read(src, "crates/ui-egui/src/theme.rs")
     checks.append(("14 滚动条加宽到 12px", 'bar_width: 12.0' in theme_src))
     checks.append(("14 预设库滚动条可拖", 'ours-preset-scrollbar' in frame))
