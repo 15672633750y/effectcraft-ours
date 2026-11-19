@@ -40,7 +40,50 @@ INSERT = """        // EFFECTCRAFT_OURS_LAYOUT_BTN_AREA_V1 — 「布局」在�
 # 有文件就按扩展名分发（和导入面板的分支一致），成功后删掉。
 SCAN_ANCHOR = "        // EFFECTCRAFT_OURS_LAYOUT_BTN_AREA_V1 — 「布局」在任何浮层之前绘制，\n"
 
-SCAN_INSERT = """        // EFFECTCRAFT_OURS_IMPORT_SHIM_SCAN_V1 — ImportShim 落盘的文件，按扩展名走对应命令
+SCAN_INSERT = """        // EFFECTCRAFT_OURS_FONT_DIR_V1 — 字体目录：DCIM/EffectCraft/Fonts 里的字体启动时自动注册，
+        // 之后在文字图层的字体列表里就能直接选到，不需要每次拖文件。
+        {
+            let fonts_loaded = ui
+                .data(|d| d.get_temp::<bool>(egui::Id::new("ours-fonts-loaded")))
+                .unwrap_or(false);
+            if !fonts_loaded {
+                ui.data_mut(|d| d.insert_temp(egui::Id::new("ours-fonts-loaded"), true));
+                let dir = std::path::Path::new("/storage/emulated/0/DCIM/EffectCraft/Fonts");
+                let _ = std::fs::create_dir_all(dir);
+                let mut count = 0usize;
+                if let Ok(entries) = std::fs::read_dir(dir) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if !path.is_file() {
+                            continue;
+                        }
+                        let ext = path
+                            .extension()
+                            .and_then(|e| e.to_str())
+                            .unwrap_or("")
+                            .to_ascii_lowercase();
+                        if !matches!(ext.as_str(), "ttf" | "otf" | "ttc") {
+                            continue;
+                        }
+                        let p = path.to_string_lossy().to_string();
+                        if crate::menus::invoke(
+                            self,
+                            ui.ctx(),
+                            "ours.addFont",
+                            serde_json::json!({ "path": p }),
+                        )
+                        .is_ok()
+                        {
+                            count += 1;
+                        }
+                    }
+                }
+                if count > 0 {
+                    self.ui.status = format!("已加载 {count} 个字体");
+                }
+            }
+        }
+        // EFFECTCRAFT_OURS_IMPORT_SHIM_SCAN_V1 — ImportShim 落盘的文件，按扩展名走对应命令
         {
             let now = ui.input(|i| i.time);
             let last = ui
