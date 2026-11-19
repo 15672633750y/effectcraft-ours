@@ -89,7 +89,14 @@ SCAN_INSERT = """        // EFFECTCRAFT_OURS_IMPORT_SHIM_SCAN_V1 — ImportShim 
                                 ("file.importTimeline", serde_json::json!({ "path": p }))
                             }
                             "ffx" | "gp" => ("ours.applyPreset", serde_json::json!({ "path": p })),
-                            _ => ("file.import", serde_json::json!({ "paths": [p] })),
+                            "ttf" | "otf" | "ttc" => {
+                                ("ours.addFont", serde_json::json!({ "path": p }))
+                            }
+                            // 媒体：导入素材并顺手建一个和素材同尺寸/帧率/时长的合成。
+                            _ => (
+                                "file.import",
+                                serde_json::json!({ "paths": [p], "newComp": true }),
+                            ),
                         };
                         let name = path
                             .file_name()
