@@ -953,15 +953,11 @@ fn cloud_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
                 cloud::download_project(token.clone(), item.id.clone(), item.name.clone());
                 set(ui, MESSAGE, "正在下载…".to_string());
             }
-            let asking = confirm == item.id;
-            let label = if asking { "确认删除" } else { "删除" };
-            if button(ui, &t, del, label, asking) {
-                if asking {
-                    cloud::delete_project(token.clone(), item.id.clone());
-                    confirm.clear();
-                } else {
-                    confirm = item.id.clone();
-                }
+            // 单击直接删除（原来两段确认容易误以为没生效）
+            let _ = &confirm;
+            if button(ui, &t, del, "删除", false) {
+                cloud::delete_project(token.clone(), item.id.clone());
+                set(ui, MESSAGE, "正在删除…".to_string());
             }
         }
         set(ui, CONFIRM_DELETE, confirm);
