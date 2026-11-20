@@ -133,7 +133,7 @@ def main() -> int:
     checks.append(("19 竖屏设置入口", 'EFFECTCRAFT_OURS_SETTINGS_BUTTON_V1' in frame and 'crate::Dialog::Settings' in frame))
     cloud_src = read(src, "crates/ui-egui/src/cloud.rs")
     acct_src = read(src, "crates/ui-egui/src/account_ui.rs")
-    checks.append(("20 云端 DELETE 真正发出", '"DELETE" => agent.delete(&url),' in cloud_src))
+    checks.append(("20 云端 DELETE 真正发出", 'agent.delete(&url)' in cloud_src and 'CLOUD_REQUEST_ARMS_V2' in cloud_src))
     checks.append(("20 上传前校验落盘与 schema", 'pub fn upload_project_from_path' in cloud_src and 'v.get("schema").is_some()' in cloud_src))
     checks.append(("20 工程名稳定", 'fn cloud_project_name' in acct_src and 'fn cloud_clean_name' not in acct_src))
     checks.append(("20 删除后重新拉列表", 'CLOUD_DELETE_RESYNC_V1' in acct_src))
