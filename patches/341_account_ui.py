@@ -857,11 +857,26 @@ fn start_upload(app: &mut EffectcraftApp, ui: &mut egui::Ui) {
                 .map(|s| s.to_string_lossy().to_string())
                 .filter(|s| !s.is_empty())
                 .unwrap_or_else(|| "我的工程".to_string());
+            let name = cloud_clean_name(&name);
             set(ui, UPLOADING, true);
             cloud::upload_project(token, name, bytes);
         }
         Err(err) => set(ui, MESSAGE, format!("读工程文件失败: {err}")),
     }
+}
+
+
+/// 工程名：把自动保存叠出来的「auto-save N」全去掉，避免每次上传都变成新工程。
+fn cloud_clean_name(stem: &str) -> String {
+    let mut out = String::new();
+    for part in stem.split(" auto-save") {
+        let part = part.trim();
+        if part.is_empty() { continue; }
+        if !out.is_empty() { out.push(' '); }
+        out.push_str(part);
+    }
+    let trimmed = out.trim().trim_end_matches(|c: char| c.is_ascii_digit()).trim();
+    if trimmed.is_empty() { "我的工程".to_string() } else { trimmed.to_string() }
 }
 
 /// 云端工程面板：未登录显示「登录后可用」，登录后是列表 + 上传/刷新。
@@ -977,6 +992,7 @@ fn cloud_panel(app: &mut EffectcraftApp, ui: &mut egui::Ui, full: Rect) {
                             .file_stem()
                             .map(|s| s.to_string_lossy().to_string())
                             .unwrap_or_else(|| "我的工程".to_string());
+                        let name = cloud_clean_name(&name);
                         set(ui, UPLOADING, true);
                         cloud::upload_project(token.clone(), name, bytes);
                     }
