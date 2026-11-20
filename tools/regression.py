@@ -136,6 +136,8 @@ def main() -> int:
     checks.append(("20 云端 DELETE 真正发出", 'agent.delete(&url)' in cloud_src and 'CLOUD_REQUEST_ARMS_V2' in cloud_src))
     checks.append(("20 上传前校验落盘与 schema", 'pub fn upload_project_from_path' in cloud_src and 'v.get("schema").is_some()' in cloud_src))
     checks.append(("20 工程名稳定", 'fn cloud_project_name' in acct_src and 'fn cloud_clean_name' not in acct_src))
+    checks.append(("21 自动保存名先剥离再判断", 'EFFECTCRAFT_OURS_CLOUD_NAME_TOAST_V1' in acct_src and 'lower.starts_with("untitled")' in acct_src))
+    checks.append(("21 下载完成清提示", 'Event::Downloaded(path) => {' in acct_src and acct_src.count('set(ui, CLOUD_LOADING, false);') >= 2))
     checks.append(("20 删除后重新拉列表", 'CLOUD_DELETE_RESYNC_V1' in acct_src))
     checks.append(("14 时间线横向滚动条", 'EFFECTCRAFT_OURS_TIMELINE_SCROLLBAR_V1' in frame))
     checks.append(("14 时间线滚动条可点跳", 'EFFECTCRAFT_OURS_TIMELINE_SCROLLBAR_CLICK_V1' in frame))
