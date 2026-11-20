@@ -43,7 +43,7 @@ CLOUD_RS = r'''//! EFFECTCRAFT_OURS_CLOUD_HTTP_V1 — 账号与资料（只有 H
 use std::sync::{Mutex, OnceLock};
 
 /// 后端地址（Cloudflare Workers）。
-pub const BASE_URL: &str = "https://shimoveaex-api.3264003615.workers.dev";
+pub const BASE_URL: &str = "https://shimoveaex-d1ggbg2thbf67172a-1537568735.ap-shanghai.app.tcloudbase.com/api";
 
 /// 云端工程的一条记录。
 #[derive(Clone, Debug, Default)]
