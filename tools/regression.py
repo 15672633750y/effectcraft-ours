@@ -145,7 +145,7 @@ def main() -> int:
     checks.append(("22 手机自动保存 ≤2 分钟", 'clamp(1, 2) as f64 * 60.0' in read(src, "crates/engine/src/settings/session_settings.rs")))
     checks.append(("22 失焦即自动保存", 'ours-autosave-focus' in frame and '"file.autoSave"' in frame))
     checks.append(("22 工具条保存按钮", '"保存", 21' in frame and 'fn ours_save_target' in frame))
-    checks.append(("23 全选先选图层", '先无条件全选图层' in read(src, "crates/ui-egui/src/menus/invoke.rs")))
+    checks.append(("23 全选按最后面板分派", 'ours-last-focus' in read(src, "crates/ui-egui/src/menus/invoke.rs") and 'ours-last-focus' in frame))
     checks.append(("23 上传名用最近真实工程", 'recent_projects' in acct_src))
     checks.append(("23 自动保存静默", 'Auto-saved' not in read(src, "crates/engine/src/settings/session_settings.rs")))
     checks.append(("20 删除后重新拉列表", 'CLOUD_DELETE_RESYNC_V1' in acct_src))
