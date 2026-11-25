@@ -68,19 +68,42 @@ CRASH_INSERT = '''        // EFFECTCRAFT_OURS_ECPROJ_MIME_V1 — 上次异常退
 def main() -> None:
     root = Path(os.environ["EFFECTCRAFT_DIR"]).resolve()
 
-    # Java 模板在构建器里：EFFECTCRAFT_DIR=<artcraft>/source/effectcraft → <artcraft>/templates/android
-    java = root.parents[2] / "templates/android/SafActivity.java" if len(root.parents) > 2 else root / "nope"
-    if not java.exists():
-        java = root.parents[1] / "templates/android/SafActivity.java" if len(root.parents) > 1 else root / "nope"
-    if not java.exists():
-        java = root.parent / "builder/templates/android/SafActivity.java"
-    if java.exists():
+    # Java 模板在构建器里：EFFECTCRAFT_DIR=<artcraft>/source/effectcraft → <artcraft>/templates/android。
+    # 只认路径里带 artcraft / builder 的候选，避免在本地临时树上误改到真正的构建器。
+    java = None
+    for cand in (
+        root.parents[2] / "templates/android/SafActivity.java" if len(root.parents) > 2 else None,
+        root.parents[1] / "templates/android/SafActivity.java" if len(root.parents) > 1 else None,
+    ):
+        if cand is None or not cand.exists():
+            continue
+        if any(part in ("artcraft", "builder") for part in cand.parts):
+            java = cand
+            break
+    if java is None:
+        print("SafActivity not in this checkout, skipped")
+    if java is not None:
         src = java.read_text(encoding="utf-8")
-        if MARKER not in src:
-            if src.count(JAVA_OLD) != 1:
-                raise SystemExit(f"java anchor: {src.count(JAVA_OLD)}")
-            java.write_text(src.replace(JAVA_OLD, JAVA_NEW, 1), encoding="utf-8")
-            print("SafActivity: .ecproj gets its own mime")
+        # 别的补丁也会改 mimeFor 的尾部（视频/音频扩展），所以不用固定锚点：
+        # 只要还没写过 .ecproj 映射，就插在最后一个 "application/octet-stream" 返回之前。
+        if 'endsWith(".ecproj")' not in src:
+            idx = src.rfind('return "application/octet-stream";')
+            if idx > 0:
+                insert = (
+                    "        // EFFECTCRAFT_OURS_ECPROJ_MIME_V1 — 工程文件用专属 mime：否则 DocumentsUI 会把\n"
+                    "        // application/octet-stream 的默认扩展补成 .bin，保存出来就成了「名字.bin」。\n"
+                    '        if (lower.endsWith(".ecproj") || lower.endsWith(".ecprojx")\n'
+                    '            || lower.endsWith(".ecprj") || lower.endsWith(".aep")) {\n'
+                    '            return "application/x-effectcraft-project";\n'
+                    "        }\n"
+                )
+                src = src[:idx] + insert + src[idx:]
+                java.write_text(src, encoding="utf-8")
+                print("SafActivity: .ecproj gets its own mime")
+            else:
+                print("SafActivity: octet-stream fallback not found, skipped")
+        else:
+            print("SafActivity: .ecproj mime already present")
 
     inv = root / "crates/ui-egui/src/menus/invoke.rs"
     src = inv.read_text(encoding="utf-8")
