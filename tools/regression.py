@@ -149,6 +149,7 @@ def main() -> int:
     checks.append(("24 保存后重命名回 .ecproj", 'EFFECTCRAFT_OURS_SAVE_EXT_V1' in read(src, "crates/ui-egui/src/cloud.rs") or True))
     checks.append(("24 自动保存静默(命令)", 'Auto-saved to' not in read(src, "crates/engine/src/cmd/settings.rs")))
     checks.append(("24 全选效果也选组", 'picked.push((lid, fx.uid));' in read(src, "crates/engine/src/cmd/ours_export.rs")))
+    checks.append(("25 保存直写可见目录", 'EFFECTCRAFT_OURS_PLAIN_SAVE_V1' in frame and 'ours_project_display_name' in read(src, "crates/ui-egui/src/panels/project.rs")))
     checks.append(("24 全选效果有反馈", '已全选 {n} 个效果' in read(src, "crates/ui-egui/src/menus/invoke.rs")))
     checks.append(("24 崩溃后不还原布局", 'ECPROJ_MIME_V1' in frame))
     checks.append(("23 上传名用最近真实工程", 'recent_projects' in acct_src))
